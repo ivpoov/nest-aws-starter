@@ -1,0 +1,38 @@
+{
+  "name": "@nest-aws-starter/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nest build",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main.js",
+    "lint": "biome check src",
+    "test": "vitest run",
+    "test:e2e": "vitest run --config ./test/vitest.e2e.config.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@nestjs/common": "11.1.27",
+    "@nestjs/config": "4.0.4",
+    "@nestjs/core": "11.1.27",
+    "@nestjs/platform-fastify": "11.1.27",
+    "@nestjs/swagger": "11.4.5",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "11.0.23",
+    "@nestjs/testing": "11.1.27",
+    "@swc/cli": "0.8.1",
+    "@swc/core": "1.15.43",
+    "@types/node": "24.13.2",
+    "@types/supertest": "7.2.0",
+    "supertest": "7.2.2",
+    "typescript": "6.0.3",
+    "unplugin-swc": "1.5.9",
+    "vitest": "4.1.9"
+  }
+}
