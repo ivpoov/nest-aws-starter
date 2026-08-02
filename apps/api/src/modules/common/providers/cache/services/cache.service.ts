@@ -39,6 +39,11 @@ export class CacheService {
     await this.invalidation.publishDeleteByPrefix(prefix);
   }
 
+  // Caveats:
+  // - `null` is indistinguishable from a miss — a factory returning null runs on
+  //   every call. Never cache legitimate null; wrap it in an object if needed.
+  // - a lower-tier hit backfills upper tiers with the FULL ttlMs again, so the
+  //   worst-case staleness bound is 2× the L1 TTL — keep L1 TTLs in seconds.
   public async wrap<T>(key: string, ttlMs: number, factory: () => Promise<T>): Promise<T> {
     const cached: T | null = await this.getWithBackfill<T>(key, ttlMs);
 
