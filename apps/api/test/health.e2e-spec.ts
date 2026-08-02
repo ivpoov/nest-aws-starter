@@ -25,6 +25,6 @@ describe('health', () => {
 
     expect(response.body.status).toBe('ok');
     expect(response.body.database).toBe(true);
-    expect(response.body.redis).toBe(false);
+    expect(response.body.redis).toBe(true);
   });
 });
