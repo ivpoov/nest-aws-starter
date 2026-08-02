@@ -2,3 +2,6 @@ packages:
   - "apps/*"
   - "packages/*"
   - "lambdas/*"
+allowBuilds:
+  "@scarf/scarf": false
+  "@swc/core": true
