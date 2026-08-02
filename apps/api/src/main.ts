@@ -1,9 +1,9 @@
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import type { AppConfig } from '@configs/app.config.js';
+import { configureApp } from '@helpers/configure-app.helper.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { RequestContextService } from '@modules/logger/services/request-context.service.js';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
@@ -36,9 +36,7 @@ async function bootstrap(): Promise<void> {
 
   app.useLogger(new CustomLoggerService('App'));
   app.enableShutdownHooks();
-  app.setGlobalPrefix(config.apiPrefix);
-  app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  configureApp(app);
 
   if (config.env !== 'production') {
     const swaggerConfig: Omit<OpenAPIObject, 'paths'> = new DocumentBuilder()
