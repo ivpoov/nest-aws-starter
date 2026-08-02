@@ -1,9 +1,9 @@
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import type { EventBusService } from '@modules/event/services/event-bus.service.js';
-import { NoteStatusEnum } from '@modules/note/enums/note-status.enum.js';
 import type { NoteInterface } from '@modules/note/interfaces/note.interface.js';
 import type { NoteRepositoryInterface } from '@modules/note/interfaces/note-repository.interface.js';
 import { NoteService } from '@modules/note/services/note.service.js';
+import { NoteStatusEnum } from '@nest-aws-starter/shared';
 import { describe, expect, it, vi } from 'vitest';
 
 const note: NoteInterface = {
