@@ -14,5 +14,64 @@ services:
       interval: 5s
       retries: 10
 
+  redis:
+    image: redis:8
+    ports:
+      - "${REDIS_PORT:-6390}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  redis-cluster-0: &redis-cluster-node
+    image: redis:8
+    profiles: ["cluster"]
+    network_mode: host
+    command: redis-server --port 7000 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7000", "ping"]
+      interval: 5s
+      retries: 10
+
+  redis-cluster-1:
+    <<: *redis-cluster-node
+    command: redis-server --port 7001 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7001", "ping"]
+      interval: 5s
+      retries: 10
+
+  redis-cluster-2:
+    <<: *redis-cluster-node
+    command: redis-server --port 7002 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7002", "ping"]
+      interval: 5s
+      retries: 10
+
+  redis-cluster-3:
+    <<: *redis-cluster-node
+    command: redis-server --port 7003 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7003", "ping"]
+      interval: 5s
+      retries: 10
+
+  redis-cluster-init:
+    image: redis:8
+    profiles: ["cluster"]
+    network_mode: host
+    depends_on:
+      redis-cluster-0: { condition: service_healthy }
+      redis-cluster-1: { condition: service_healthy }
+      redis-cluster-2: { condition: service_healthy }
+      redis-cluster-3: { condition: service_healthy }
+    entrypoint:
+      - sh
+      - -c
+      - >
+        redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 127.0.0.1:7003
+        --cluster-replicas 0 --cluster-yes || true
+
 volumes:
   pgdata:
