@@ -6,5 +6,7 @@ overrides:
   find-my-way: ">=9.7.0"
   "@fastify/static": ">=10.1.2"
 allowBuilds:
+  "@prisma/engines": true
   "@scarf/scarf": false
   "@swc/core": true
+  prisma: true
