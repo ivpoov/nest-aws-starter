@@ -14,7 +14,7 @@
     "db:migrate:dev": "prisma migrate dev"
   },
   "dependencies": {
-    "@fastify/static": "9.1.3",
+    "@fastify/static": "10.1.2",
     "@nestjs/common": "11.1.27",
     "@nestjs/config": "4.0.4",
     "@nestjs/core": "11.1.27",
