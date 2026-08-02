@@ -24,7 +24,8 @@ services:
       retries: 10
 
   localstack:
-    image: localstack/localstack:latest
+    # :latest floats to unstable dev builds — pin the stable major line
+    image: localstack/localstack:4
     environment:
       SERVICES: "sqs,sns,ses,lambda"
     ports:
