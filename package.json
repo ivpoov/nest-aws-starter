@@ -10,10 +10,14 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.2",
+    "@commitlint/cli": "21.2.0",
+    "@commitlint/config-conventional": "21.2.0",
+    "husky": "9.1.7",
     "turbo": "2.10.2"
   }
 }
