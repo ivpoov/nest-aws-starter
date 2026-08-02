@@ -1,9 +1,10 @@
 import { NoteResponseDto } from '@modules/note/dtos/responses/note-response.dto.js';
+import type { NoteListResponseInterface } from '@nest-aws-starter/shared';
 import { ApiProperty } from '@nestjs/swagger';
 import { Exclude, Expose, Type } from 'class-transformer';
 
 @Exclude()
-export class NoteListResponseDto {
+export class NoteListResponseDto implements NoteListResponseInterface {
   @ApiProperty({ type: [NoteResponseDto] })
   @Expose()
   @Type(() => NoteResponseDto)

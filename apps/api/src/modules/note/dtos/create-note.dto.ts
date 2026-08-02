@@ -1,9 +1,8 @@
-import { NoteStatusEnum } from '@modules/note/enums/note-status.enum.js';
-import type { CreateNoteDataInterface } from '@modules/note/interfaces/create-note-data.interface.js';
+import { type CreateNoteRequestInterface, NoteStatusEnum } from '@nest-aws-starter/shared';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
-export class CreateNoteDto implements CreateNoteDataInterface {
+export class CreateNoteDto implements CreateNoteRequestInterface {
   @ApiProperty({ type: String, example: 'My note', maxLength: 255 })
   @IsNotEmpty()
   @IsString()

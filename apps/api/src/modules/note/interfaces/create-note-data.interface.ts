@@ -1,4 +1,4 @@
-import { NoteStatusEnum } from '@modules/note/enums/note-status.enum.js';
+import { NoteStatusEnum } from '@nest-aws-starter/shared';
 
 export interface CreateNoteDataInterface {
   readonly title: string;

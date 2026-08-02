@@ -2,12 +2,12 @@ import { Prisma } from '@generated/prisma/client.js';
 import { NoteStatus } from '@generated/prisma/enums.js';
 import type { NoteModel } from '@generated/prisma/models.js';
 import type { CursorPaginationInterface } from '@interfaces/cursor-pagination.interface.js';
-import { NoteStatusEnum } from '@modules/note/enums/note-status.enum.js';
 import type { CreateNoteDataInterface } from '@modules/note/interfaces/create-note-data.interface.js';
 import type { NoteInterface } from '@modules/note/interfaces/note.interface.js';
 import type { NoteRepositoryInterface } from '@modules/note/interfaces/note-repository.interface.js';
 import type { UpdateNoteDataType } from '@modules/note/types/update-note-data.type.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
+import { NoteStatusEnum } from '@nest-aws-starter/shared';
 import { Injectable } from '@nestjs/common';
 
 @Injectable()
