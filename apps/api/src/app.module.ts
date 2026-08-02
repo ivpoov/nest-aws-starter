@@ -7,6 +7,7 @@ import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from '@providers/cache/cache.module.js';
 import { RedisModule } from '@providers/redis/redis.module.js';
 import { S3Module } from '@providers/s3/s3.module.js';
+import { SqsModule } from '@providers/sqs/sqs.module.js';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { S3Module } from '@providers/s3/s3.module.js';
     CacheModule,
     EventModule,
     S3Module,
+    SqsModule,
     HealthModule,
   ],
 })
