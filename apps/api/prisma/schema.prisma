@@ -6,3 +6,20 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum NoteStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model Note {
+  id        String     @id @default(uuid(7))
+  title     String     @db.VarChar(255)
+  body      String     @default("")
+  status    NoteStatus @default(ACTIVE)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([status])
+  @@map("notes")
+}
