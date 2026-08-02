@@ -4,6 +4,10 @@
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
     "lint": {},
     "test": { "dependsOn": ["build"] },
-    "test:e2e": { "dependsOn": ["build"], "cache": false, "env": ["DATABASE_URL"] }
+    "test:e2e": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "env": ["DATABASE_URL", "REDIS_URL", "REDIS_IS_CLUSTER"]
+    }
   }
 }
