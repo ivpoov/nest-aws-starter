@@ -1,8 +1,13 @@
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
+import type { AppConfig } from '@configs/app.config.js';
+import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { RequestContextService } from '@modules/logger/services/request-context.service.js';
+import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { DocumentBuilder, type OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest, HookHandlerDoneFunction } from 'fastify';
 import { AppModule } from './app.module.js';
 
@@ -25,9 +30,27 @@ async function bootstrap(): Promise<void> {
   const app: NestFastifyApplication = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     adapter,
+    { bufferLogs: true },
   );
+  const config: AppConfig = app.get(ConfigService).getOrThrow<AppConfig>('app');
 
-  await app.listen({ port: 3000, host: '0.0.0.0' });
+  app.useLogger(new CustomLoggerService('App'));
+  app.enableShutdownHooks();
+  app.setGlobalPrefix(config.apiPrefix);
+  app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+
+  if (config.env !== 'production') {
+    const swaggerConfig: Omit<OpenAPIObject, 'paths'> = new DocumentBuilder()
+      .setTitle('nest-aws-starter')
+      .setVersion('0.1')
+      .addBearerAuth()
+      .build();
+
+    SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, swaggerConfig));
+  }
+
+  await app.listen({ port: config.port, host: '0.0.0.0' });
 }
 
 void bootstrap();
