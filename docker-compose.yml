@@ -1,0 +1,127 @@
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-starter}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:8
+    ports:
+      - "${REDIS_PORT:-6390}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  localstack:
+    # :latest floats to unstable dev builds — pin the stable major line
+    image: localstack/localstack:4
+    # SELinux hosts: without label:disable the docker.sock mount is unreadable
+    # and the lambda docker executor reports "Docker not available"
+    security_opt:
+      - label:disable
+    environment:
+      SERVICES: "sqs,sns,ses,lambda"
+    ports:
+      - "${LOCALSTACK_PORT:-4567}:4566"
+    volumes:
+      - ./docker/localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh:ro,z
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf localhost:4566/_localstack/health"]
+      interval: 5s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "${MINIO_PORT:-9010}:9000"
+      - "${MINIO_CONSOLE_PORT:-9011}:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    # One-shot; profiled so `up -d --wait` (CI) isn't tripped by its exit-0.
+    # Local: docker compose --profile init up minio-init
+    profiles: ["init"]
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint:
+      - sh
+      - -c
+      - >
+        mc alias set local http://minio:9000 minioadmin minioadmin &&
+        mc mb --ignore-existing local/starter
+
+  redis-cluster-0: &redis-cluster-node
+    image: redis:8
+    profiles: ["cluster"]
+    network_mode: host
+    command: redis-server --port 7000 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7000", "ping"]
+      interval: 5s
+      retries: 10
+
+  redis-cluster-1:
+    <<: *redis-cluster-node
+    command: redis-server --port 7001 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7001", "ping"]
+      interval: 5s
+      retries: 10
+
+  redis-cluster-2:
+    <<: *redis-cluster-node
+    command: redis-server --port 7002 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7002", "ping"]
+      interval: 5s
+      retries: 10
+
+  redis-cluster-3:
+    <<: *redis-cluster-node
+    command: redis-server --port 7003 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7003", "ping"]
+      interval: 5s
+      retries: 10
+
+  redis-cluster-init:
+    image: redis:8
+    profiles: ["cluster"]
+    network_mode: host
+    depends_on:
+      redis-cluster-0: { condition: service_healthy }
+      redis-cluster-1: { condition: service_healthy }
+      redis-cluster-2: { condition: service_healthy }
+      redis-cluster-3: { condition: service_healthy }
+    entrypoint:
+      - sh
+      - -c
+      - >
+        redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 127.0.0.1:7003
+        --cluster-replicas 0 --cluster-yes || true
+
+volumes:
+  pgdata:
+  miniodata:

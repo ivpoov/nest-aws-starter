@@ -1,0 +1,33 @@
+{
+  "$schema": "https://swc.rs/schema.json",
+  "sourceMaps": true,
+  "jsc": {
+    "parser": {
+      "syntax": "typescript",
+      "decorators": true,
+      "dynamicImport": true
+    },
+    "transform": {
+      "legacyDecorator": true,
+      "decoratorMetadata": true
+    },
+    "target": "es2023",
+    "baseUrl": "./",
+    "paths": {
+      "@modules/*": ["src/modules/*"],
+      "@providers/*": ["src/modules/common/providers/*"],
+      "@decorators/*": ["src/modules/common/decorators/*"],
+      "@guards/*": ["src/modules/common/guards/*"],
+      "@helpers/*": ["src/modules/common/helpers/*"],
+      "@constants/*": ["src/modules/common/constants/*"],
+      "@interfaces/*": ["src/modules/common/interfaces/*"],
+      "@configs/*": ["src/configs/*"],
+      "@generated/*": ["src/generated/*"],
+      "@src/*": ["src/*"]
+    }
+  },
+  "module": {
+    "type": "nodenext",
+    "resolveFully": true
+  }
+}

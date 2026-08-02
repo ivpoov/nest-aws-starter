@@ -1,0 +1,7 @@
+import type { UploadFileDataInterface } from '@providers/s3/interfaces/upload-file-data.interface.js';
+
+export interface S3ProviderInterface {
+  upload(data: UploadFileDataInterface): Promise<string>;
+  getPresignedUrl(key: string, expiresInSeconds: number): Promise<string>;
+  delete(key: string): Promise<void>;
+}

@@ -1,0 +1,64 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec biome ci .
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: docker compose up -d --wait
+      - run: pnpm run build
+      - run: pnpm --dir apps/api run db:migrate
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+      - run: pnpm run test
+      - run: pnpm run test:e2e
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+          AWS_REGION: us-east-1
+          S3_ENABLED: "true"
+          S3_ENDPOINT: http://localhost:9010
+          S3_BUCKET_NAME: starter
+          S3_ACCESS_KEY: minioadmin
+          S3_SECRET_KEY: minioadmin
+          AWS_ENDPOINT_URL: http://localhost:4567
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          SQS_ENABLED: "true"
+          SNS_ENABLED: "true"
+          MAIL_ENABLED: "true"
+          MAIL_FROM_ADDRESS: no-reply@example.com
+          LAMBDA_ENABLED: "true"
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - run: pnpm audit --prod --audit-level high

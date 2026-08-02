@@ -1,0 +1,5 @@
+{
+  "name": "@nest-aws-starter/example-lambda",
+  "private": true,
+  "type": "module"
+}
