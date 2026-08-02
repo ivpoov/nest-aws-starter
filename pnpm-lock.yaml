@@ -41,6 +41,9 @@ importers:
       '@nestjs/swagger':
         specifier: 11.4.5
         version: 11.4.5(@nestjs/common@11.1.27(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.27(@nestjs/common@11.1.27(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)
+      fastify:
+        specifier: 5.8.5
+        version: 5.8.5
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2

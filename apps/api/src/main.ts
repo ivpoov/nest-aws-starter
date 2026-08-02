@@ -1,12 +1,30 @@
 import 'reflect-metadata';
+import { randomUUID } from 'node:crypto';
+import { RequestContextService } from '@modules/logger/services/request-context.service.js';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import type { FastifyReply, FastifyRequest, HookHandlerDoneFunction } from 'fastify';
 import { AppModule } from './app.module.js';
 
 async function bootstrap(): Promise<void> {
+  const adapter: FastifyAdapter = new FastifyAdapter();
+
+  adapter
+    .getInstance()
+    .addHook(
+      'onRequest',
+      (request: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction): void => {
+        const headerValue: string | string[] | undefined = request.headers['x-request-id'];
+        const requestId: string = typeof headerValue === 'string' ? headerValue : randomUUID();
+
+        void reply.header('X-Request-Id', requestId);
+        RequestContextService.run(requestId, done);
+      },
+    );
+
   const app: NestFastifyApplication = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter(),
+    adapter,
   );
 
   await app.listen({ port: 3000, host: '0.0.0.0' });
