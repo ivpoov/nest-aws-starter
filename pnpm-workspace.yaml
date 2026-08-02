@@ -2,6 +2,9 @@ packages:
   - "apps/*"
   - "packages/*"
   - "lambdas/*"
+overrides:
+  find-my-way: ">=9.7.0"
+  "@fastify/static": ">=10.1.2"
 allowBuilds:
   "@scarf/scarf": false
   "@swc/core": true
