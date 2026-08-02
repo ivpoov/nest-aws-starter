@@ -7,7 +7,20 @@
     "test:e2e": {
       "dependsOn": ["build"],
       "cache": false,
-      "env": ["DATABASE_URL", "REDIS_URL", "REDIS_IS_CLUSTER"]
+      "env": [
+        "DATABASE_URL",
+        "REDIS_URL",
+        "REDIS_IS_CLUSTER",
+        "AWS_REGION",
+        "AWS_ENDPOINT_URL",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "S3_ENABLED",
+        "S3_ENDPOINT",
+        "S3_BUCKET_NAME",
+        "S3_ACCESS_KEY",
+        "S3_SECRET_KEY"
+      ]
     }
   }
 }
