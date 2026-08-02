@@ -21,7 +21,9 @@
         "S3_ACCESS_KEY",
         "S3_SECRET_KEY",
         "SQS_ENABLED",
-        "SNS_ENABLED"
+        "SNS_ENABLED",
+        "MAIL_ENABLED",
+        "MAIL_FROM_ADDRESS"
       ]
     }
   }
