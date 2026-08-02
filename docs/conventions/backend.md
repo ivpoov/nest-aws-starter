@@ -596,6 +596,10 @@ public async wrap<T>(key: string, ttlMs: number, factory: () => Promise<T>): Pro
 - Keys are namespaced constants, never inline strings:
   `cache-key.constants.ts` per module, format `<module>:<entity>:<id>`.
 - TTL is always explicit. No default TTL, no infinite entries.
+- **`wrap()` treats `null` as a miss** — a factory legitimately returning `null`
+  re-runs on every call. Never cache raw `null`; wrap it (`{ value: null }`).
+- **Backfill re-grants the full TTL** to upper tiers on a lower-tier hit, so the
+  worst-case staleness bound is 2× the L1 TTL. Size L1 TTLs accordingly.
 - Invalidation strategy is stated at the call site (comment): TTL-expiry (default)
   or event-driven delete on write. "It'll expire eventually" is a decision, not
   an accident.
