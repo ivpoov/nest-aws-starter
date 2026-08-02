@@ -49,6 +49,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY: test
           SQS_ENABLED: "true"
           SNS_ENABLED: "true"
+          MAIL_ENABLED: "true"
+          MAIL_FROM_ADDRESS: no-reply@example.com
 
   audit:
     runs-on: ubuntu-latest
