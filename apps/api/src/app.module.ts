@@ -5,6 +5,7 @@ import { PrismaModule } from '@modules/prisma/prisma.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from '@providers/cache/cache.module.js';
+import { HttpClientModule } from '@providers/http-client/http-client.module.js';
 import { LambdaModule } from '@providers/lambda/lambda.module.js';
 import { MailModule } from '@providers/mail/mail.module.js';
 import { RedisModule } from '@providers/redis/redis.module.js';
@@ -24,6 +25,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     SnsModule,
     MailModule,
     LambdaModule,
+    HttpClientModule,
     HealthModule,
   ],
 })
