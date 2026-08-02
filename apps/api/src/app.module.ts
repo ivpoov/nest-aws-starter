@@ -1,4 +1,5 @@
 import { configs } from '@configs/index.js';
+import { EventModule } from '@modules/event/event.module.js';
 import { HealthModule } from '@modules/health/health.module.js';
 import { PrismaModule } from '@modules/prisma/prisma.module.js';
 import { Module } from '@nestjs/common';
@@ -12,6 +13,7 @@ import { RedisModule } from '@providers/redis/redis.module.js';
     PrismaModule,
     RedisModule,
     CacheModule,
+    EventModule,
     HealthModule,
   ],
 })
