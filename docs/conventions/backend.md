@@ -184,7 +184,8 @@ src/modules/note/
 ├── repositories/
 │   └── note-prisma.repository.ts         # the ONLY Prisma zone
 ├── constants/
-│   └── note.constants.ts                 # injection tokens, module error codes
+│   ├── note.constants.ts                 # injection tokens
+│   └── note-errors.constants.ts          # this module's coded errors
 ├── interfaces/
 │   ├── note.interface.ts                 # domain model
 │   ├── note-repository.interface.ts      # repository contract
@@ -361,14 +362,15 @@ always with a hard `limit` cap.
 
 ```typescript
 // services/note.service.ts
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { NOTE_REPOSITORY } from '@modules/note/constants/note.constants';
+import { NOTE_NOT_FOUND } from '@modules/note/constants/note-errors.constants';
 import { NoteRepositoryInterface } from '@modules/note/interfaces/note-repository.interface';
 import { NoteInterface } from '@modules/note/interfaces/note.interface';
 import { CreateNoteDto } from '@modules/note/dtos/create-note.dto';
-import { EventBusService } from '@modules/event/event-bus.service';
-import { CustomLoggerService } from '@modules/logger/custom-logger.service';
-import { NOTE_NOT_FOUND } from '@constants/errors.constants';
+import { EventBusService } from '@modules/event/services/event-bus.service';
+import { CustomLoggerService } from '@modules/logger/services/custom-logger.service';
+import { NotFoundError } from '@modules/common/errors/not-found.error';
 import { PaginationInterface } from '@interfaces/pagination.interface';
 
 @Injectable()
@@ -393,7 +395,7 @@ export class NoteService {
   public async findByIdOrThrow(id: string): Promise<NoteInterface> {
     const note: NoteInterface | null = await this.noteRepository.findById(id);
 
-    if (!note) throw new NotFoundException(NOTE_NOT_FOUND);
+    if (!note) throw new NotFoundError(NOTE_NOT_FOUND);
 
     return note;
   }
@@ -603,25 +605,49 @@ public async wrap<T>(key: string, ttlMs: number, factory: () => Promise<T>): Pro
 
 ## 11. Errors
 
-All errors in `src/modules/common/constants/errors.constants.ts` — coded, never
-inline strings:
+Errors are **coded, module-owned, and transport-agnostic**. Never inline strings,
+never HTTP exceptions in services.
+
+**Constants — one file per module**, `constants/<module>-errors.constants.ts`,
+string codes prefixed with the module name:
 
 ```typescript
-export const NOTE_NOT_FOUND: NotFoundExceptionArgsInterface = {
-  code: 404_301,
+// modules/note/constants/note-errors.constants.ts
+import { ErrorArgsInterface } from '@interfaces/error-args.interface';
+
+export const NOTE_NOT_FOUND: ErrorArgsInterface = {
+  code: 'NOTE_NOT_FOUND',
   details: 'Note not found',
 };
 ```
 
-| Range | HTTP | Exception |
-|---|---|---|
-| 400xxx | 400 | BadRequestException |
-| 401xxx | 401 | UnauthorizedException |
-| 403xxx | 403 | ForbiddenException |
-| 404xxx | 404 | NotFoundException |
-| 409xxx | 409 | ConflictException |
+Deleting a module deletes its codes — nothing central to edit. The `error-codes`
+spec is the registry: it collects every `*errors.constants.ts` and fails CI on a
+duplicate code or a code that differs from its constant name.
 
-Each module owns a hundred-block (note: `x301–x399`), documented next to the constants.
+**Domain errors — services throw meaning, not transport.** `AppError` subclasses
+in `common/errors/` carry a semantic category; the thrown class is the category:
+
+| Domain error | Category | HTTP maps to |
+|---|---|---|
+| `ValidationError` | VALIDATION | 400 |
+| `UnauthorizedError` | UNAUTHORIZED | 401 |
+| `ForbiddenError` | FORBIDDEN | 403 |
+| `NotFoundError` | NOT_FOUND | 404 |
+| `ConflictError` | CONFLICT | 409 |
+| `InternalError` | INTERNAL | 500 |
+
+```typescript
+if (!note) throw new NotFoundError(NOTE_NOT_FOUND);
+```
+
+**Transports map at the edge.** The HTTP `AllExceptionsFilter` owns the only
+category→status map and renders the envelope
+`{ statusCode, code, details, timestamp, path }`. A future WS/gRPC transport adds
+its own filter with its own map — services never change. Nest's own
+`HttpException`s remain legal only in genuinely HTTP-layer code (pipes, guards,
+router) and get generic status-derived codes; anything needing a specific code is
+a domain error.
 
 ## 12. DTOs, entities, permissions, configs
 
@@ -890,4 +916,6 @@ No module merges untested; tests land in the same commit series.
 | `console.log`, silent `catch` | Leveled logger; every catch logs |
 | Endpoint missing auth/throttle/Swagger/Serialize | Full endpoint checklist, every time |
 | Inline error strings | Coded constants |
+| Service throwing `HttpException`/`NotFoundException` | Domain `AppError` (`NotFoundError`, …); transports map at the edge |
+| Feature module adding codes to a shared errors file | Module-owned `<module>-errors.constants.ts` |
 | Feature module importing a feature module | Event bus or core dependency |
