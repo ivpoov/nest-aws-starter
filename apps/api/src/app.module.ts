@@ -1,6 +1,7 @@
 import { configs } from '@configs/index.js';
 import { EventModule } from '@modules/event/event.module.js';
 import { HealthModule } from '@modules/health/health.module.js';
+import { NoteModule } from '@modules/note/note.module.js';
 import { PrismaModule } from '@modules/prisma/prisma.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -27,6 +28,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     LambdaModule,
     HttpClientModule,
     HealthModule,
+    NoteModule,
   ],
 })
 export class AppModule {}
