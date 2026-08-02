@@ -30,6 +30,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@aws-sdk/client-lambda':
+        specifier: 3.1079.0
+        version: 3.1079.0
       '@aws-sdk/client-s3':
         specifier: 3.1079.0
         version: 3.1079.0
@@ -143,6 +146,8 @@ importers:
         specifier: 4.1.9
         version: 4.1.9(@types/node@24.13.2)(vite@8.2.0(@types/node@24.13.2)(jiti@2.6.1)(terser@5.49.0))
 
+  lambdas/example: {}
+
 packages:
 
   '@angular-devkit/core@19.2.24':
@@ -178,6 +183,10 @@ packages:
 
   '@aws-sdk/checksums@3.1000.24':
     resolution: {integrity: sha512-7TWLjypP8kk3savsDBRuhZJx7mBuFFA2136BQhwwLllsAnO4Tmq/p+SXZaNxbuulkzUFz3BZzj0bb4YzexZcNQ==}
+    engines: {node: '>=20.0.0'}
+
+  '@aws-sdk/client-lambda@3.1079.0':
+    resolution: {integrity: sha512-+OT6gfX+seDw4fuKnXNlYLvmtessZpnr7DczK507mX48uQlZbHrRObu7zL5PLNdUiNomlNR/mOz9i+TY28GY8Q==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/client-s3@3.1079.0':
@@ -3792,6 +3801,17 @@ snapshots:
       '@aws-sdk/core': 3.977.4
       '@aws-sdk/types': 3.974.2
       '@smithy/core': 3.31.1
+      '@smithy/types': 4.16.1
+      tslib: 2.8.1
+
+  '@aws-sdk/client-lambda@3.1079.0':
+    dependencies:
+      '@aws-sdk/core': 3.977.4
+      '@aws-sdk/credential-provider-node': 3.972.76
+      '@aws-sdk/types': 3.974.2
+      '@smithy/core': 3.31.1
+      '@smithy/fetch-http-handler': 5.6.13
+      '@smithy/node-http-handler': 4.9.13
       '@smithy/types': 4.16.1
       tslib: 2.8.1
 

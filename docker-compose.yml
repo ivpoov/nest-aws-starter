@@ -26,6 +26,10 @@ services:
   localstack:
     # :latest floats to unstable dev builds — pin the stable major line
     image: localstack/localstack:4
+    # SELinux hosts: without label:disable the docker.sock mount is unreadable
+    # and the lambda docker executor reports "Docker not available"
+    security_opt:
+      - label:disable
     environment:
       SERVICES: "sqs,sns,ses,lambda"
     ports:
