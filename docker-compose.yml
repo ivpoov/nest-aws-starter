@@ -55,6 +55,9 @@ services:
 
   minio-init:
     image: minio/mc:latest
+    # One-shot; profiled so `up -d --wait` (CI) isn't tripped by its exit-0.
+    # Local: docker compose --profile init up minio-init
+    profiles: ["init"]
     depends_on:
       minio: { condition: service_healthy }
     entrypoint:
