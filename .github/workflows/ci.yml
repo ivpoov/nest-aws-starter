@@ -48,6 +48,7 @@ jobs:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
           SQS_ENABLED: "true"
+          SNS_ENABLED: "true"
 
   audit:
     runs-on: ubuntu-latest
