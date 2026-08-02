@@ -51,6 +51,7 @@ jobs:
           SNS_ENABLED: "true"
           MAIL_ENABLED: "true"
           MAIL_FROM_ADDRESS: no-reply@example.com
+          LAMBDA_ENABLED: "true"
 
   audit:
     runs-on: ubuntu-latest
