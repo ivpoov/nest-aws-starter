@@ -49,9 +49,9 @@ export class NoteService {
   }
 
   public async update(id: string, data: UpdateNoteDataType): Promise<NoteInterface> {
-    await this.findByIdOrThrow(id);
+    const note: NoteInterface | null = await this.noteRepository.update(id, data);
 
-    const note: NoteInterface = await this.noteRepository.update(id, data);
+    if (!note) throw new NotFoundError(NOTE_NOT_FOUND);
 
     this.logger.log(`Note updated: ${id}`);
 
@@ -59,8 +59,9 @@ export class NoteService {
   }
 
   public async deleteById(id: string): Promise<void> {
-    await this.findByIdOrThrow(id);
-    await this.noteRepository.deleteById(id);
+    const isDeleted: boolean = await this.noteRepository.deleteById(id);
+
+    if (!isDeleted) throw new NotFoundError(NOTE_NOT_FOUND);
 
     this.logger.log(`Note deleted: ${id}`);
   }
