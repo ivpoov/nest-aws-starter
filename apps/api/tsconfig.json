@@ -5,6 +5,7 @@
     "target": "ES2023",
     "lib": ["ES2023"],
     "strict": true,
+    "strictPropertyInitialization": false,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "esModuleInterop": true,
