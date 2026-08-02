@@ -44,6 +44,10 @@ jobs:
           S3_BUCKET_NAME: starter
           S3_ACCESS_KEY: minioadmin
           S3_SECRET_KEY: minioadmin
+          AWS_ENDPOINT_URL: http://localhost:4567
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          SQS_ENABLED: "true"
 
   audit:
     runs-on: ubuntu-latest
