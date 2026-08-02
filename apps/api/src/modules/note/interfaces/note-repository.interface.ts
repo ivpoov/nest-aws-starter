@@ -7,6 +7,6 @@ export interface NoteRepositoryInterface {
   create(data: CreateNoteDataInterface): Promise<NoteInterface>;
   findById(id: string): Promise<NoteInterface | null>;
   findManyAfter(pagination: CursorPaginationInterface): Promise<NoteInterface[]>;
-  update(id: string, data: UpdateNoteDataType): Promise<NoteInterface>;
-  deleteById(id: string): Promise<void>;
+  update(id: string, data: UpdateNoteDataType): Promise<NoteInterface | null>;
+  deleteById(id: string): Promise<boolean>;
 }

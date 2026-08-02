@@ -27,7 +27,7 @@ function createService(overrides: Partial<NoteRepositoryInterface> = {}): TestSe
     findById: vi.fn().mockResolvedValue(note),
     findManyAfter: vi.fn().mockResolvedValue([note]),
     update: vi.fn().mockResolvedValue(note),
-    deleteById: vi.fn().mockResolvedValue(undefined),
+    deleteById: vi.fn().mockResolvedValue(true),
     ...overrides,
   };
   const emit = vi.fn();
@@ -59,11 +59,24 @@ describe('NoteService', () => {
     }
   });
 
-  it('refuses to delete a missing note', async () => {
-    const { service, repository } = createService({ findById: vi.fn().mockResolvedValue(null) });
+  it('maps a concurrent delete to the domain 404 instead of a 500', async () => {
+    const { service } = createService({ deleteById: vi.fn().mockResolvedValue(false) });
 
-    await expect(service.deleteById('missing-id')).rejects.toBeInstanceOf(NotFoundError);
-    expect(repository.deleteById).not.toHaveBeenCalled();
+    try {
+      await service.deleteById(note.id);
+      expect.unreachable('should have thrown');
+    } catch (caught) {
+      expect(caught).toBeInstanceOf(NotFoundError);
+      expect((caught as NotFoundError).args.code).toBe('NOTE_NOT_FOUND');
+    }
+  });
+
+  it('maps an update of a vanished note to the domain 404', async () => {
+    const { service } = createService({ update: vi.fn().mockResolvedValue(null) });
+
+    await expect(service.update(note.id, { title: 'late update' })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
   });
 
   it('returns a nextCursor only when the page is full', async () => {

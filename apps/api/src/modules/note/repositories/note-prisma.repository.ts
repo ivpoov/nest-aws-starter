@@ -1,3 +1,4 @@
+import { Prisma } from '@generated/prisma/client.js';
 import { NoteStatus } from '@generated/prisma/enums.js';
 import type { NoteModel } from '@generated/prisma/models.js';
 import type { CursorPaginationInterface } from '@interfaces/cursor-pagination.interface.js';
@@ -42,21 +43,41 @@ export class NotePrismaRepository implements NoteRepositoryInterface {
     return notes.map((note: NoteModel): NoteInterface => this.toDomain(note));
   }
 
-  public async update(id: string, data: UpdateNoteDataType): Promise<NoteInterface> {
-    const note: NoteModel = await this.prisma.note.update({
-      where: { id },
-      data: {
-        ...(data.title !== undefined && { title: data.title }),
-        ...(data.body !== undefined && { body: data.body }),
-        ...(data.status !== undefined && { status: this.toPrismaStatus(data.status) }),
-      },
-    });
+  public async update(id: string, data: UpdateNoteDataType): Promise<NoteInterface | null> {
+    try {
+      const note: NoteModel = await this.prisma.note.update({
+        where: { id },
+        data: {
+          ...(data.title !== undefined && { title: data.title }),
+          ...(data.body !== undefined && { body: data.body }),
+          ...(data.status !== undefined && { status: this.toPrismaStatus(data.status) }),
+        },
+      });
 
-    return this.toDomain(note);
+      return this.toDomain(note);
+    } catch (caught) {
+      if (this.isRecordNotFound(caught)) return null;
+
+      throw caught;
+    }
   }
 
-  public async deleteById(id: string): Promise<void> {
-    await this.prisma.note.delete({ where: { id } });
+  public async deleteById(id: string): Promise<boolean> {
+    try {
+      await this.prisma.note.delete({ where: { id } });
+
+      return true;
+    } catch (caught) {
+      if (this.isRecordNotFound(caught)) return false;
+
+      throw caught;
+    }
+  }
+
+  // The single permitted Prisma-error touchpoint: P2025 = record not found,
+  // mapped to a domain-neutral null/false so writes stay atomic (no pre-check race).
+  private isRecordNotFound(caught: unknown): boolean {
+    return caught instanceof Prisma.PrismaClientKnownRequestError && caught.code === 'P2025';
   }
 
   private toDomain(note: NoteModel): NoteInterface {
