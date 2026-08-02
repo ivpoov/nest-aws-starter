@@ -21,7 +21,8 @@
       "@helpers/*": ["src/modules/common/helpers/*"],
       "@constants/*": ["src/modules/common/constants/*"],
       "@interfaces/*": ["src/modules/common/interfaces/*"],
-      "@configs/*": ["src/configs/*"]
+      "@configs/*": ["src/configs/*"],
+      "@generated/*": ["src/generated/*"]
     }
   },
   "module": {
