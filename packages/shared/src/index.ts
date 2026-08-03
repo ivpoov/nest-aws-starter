@@ -1,5 +1,8 @@
 // The single source of truth for every shape that crosses HTTP between apps.
 // Zero runtime dependencies — interfaces, types and string enums only.
+export * from './activities/enums/activity-type.enum.js';
+export * from './activities/interfaces/activity-list-response.interface.js';
+export * from './activities/interfaces/activity-response.interface.js';
 export * from './auth/constants/auth-error-codes.constants.js';
 export * from './auth/enums/oauth-exchange-kind.enum.js';
 export * from './auth/interfaces/add-email-method-request.interface.js';
