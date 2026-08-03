@@ -5,6 +5,7 @@ import { ActivityModule } from '@modules/activity/activity.module.js';
 import { AuthModule } from '@modules/auth/auth.module.js';
 import { CaslModule } from '@modules/casl/casl.module.js';
 import { ThrottlerRedisStorageService } from '@modules/common/services/throttler-redis-storage.service.js';
+import { ContactUsModule } from '@modules/contact-us/contact-us.module.js';
 import { EventModule } from '@modules/event/event.module.js';
 import { HealthModule } from '@modules/health/health.module.js';
 import { NoteModule } from '@modules/note/note.module.js';
@@ -67,6 +68,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     ActivityModule,
     SuspiciousActivityModule,
     StatisticModule,
+    ContactUsModule,
   ],
   providers: [
     // Order matters: throttling runs before authentication.
