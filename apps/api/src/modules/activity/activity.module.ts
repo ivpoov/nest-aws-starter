@@ -5,10 +5,11 @@ import { activityPermissions } from '@modules/activity/permissions/activity.perm
 import { ActivityPrismaRepository } from '@modules/activity/repositories/activity-prisma.repository.js';
 import { ActivityService } from '@modules/activity/services/activity.service.js';
 import { CaslModule } from '@modules/casl/casl.module.js';
+import { UserModule } from '@modules/user/user.module.js';
 import { Module } from '@nestjs/common';
 
 @Module({
-  imports: [CaslModule.forFeature({ permissions: activityPermissions })],
+  imports: [CaslModule.forFeature({ permissions: activityPermissions }), UserModule],
   controllers: [ActivityAdminController],
   providers: [
     ActivityService,

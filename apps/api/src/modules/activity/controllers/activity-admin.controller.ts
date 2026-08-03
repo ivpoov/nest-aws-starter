@@ -10,6 +10,7 @@ import { ActivityService } from '@modules/activity/services/activity.service.js'
 import { UseAbility } from '@modules/casl/decorators/use-ability.decorator.js';
 import { ActionsEnum } from '@modules/casl/enums/actions.enum.js';
 import { AccessGuard } from '@modules/casl/guards/access.guard.js';
+import { UserService } from '@modules/user/services/user.service.js';
 import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { StatusCodes } from 'http-status-codes';
@@ -19,7 +20,10 @@ import { StatusCodes } from 'http-status-codes';
 @UseGuards(AccessGuard)
 @Controller('admin')
 export class ActivityAdminController {
-  constructor(private readonly activityService: ActivityService) {}
+  constructor(
+    private readonly activityService: ActivityService,
+    private readonly userService: UserService,
+  ) {}
 
   @ApiDefaultResponse({ status: StatusCodes.OK, type: ActivityListResponseDto })
   @Serialize(ActivityListResponseDto)
@@ -36,10 +40,12 @@ export class ActivityAdminController {
   @Serialize(ActivityListResponseDto)
   @UseAbility(ActionsEnum.READ, ActivityEntity)
   @Get('users/:id/activities')
-  public findManyForUser(
+  public async findManyForUser(
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: UserActivitiesQueryDto,
   ): Promise<ActivityListInterface> {
+    await this.userService.findByIdForAdminOrThrow(id);
+
     return this.activityService.findMany(
       { cursor: query.cursor, limit: query.limit },
       { ...this.toFilters(query), userId: id },

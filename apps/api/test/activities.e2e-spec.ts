@@ -162,6 +162,15 @@ describe('admin activities', () => {
     }
   });
 
+  it('returns 404 for an unknown user id on the nested endpoint', async () => {
+    const missing = await request(app.getHttpServer())
+      .get(`/api/v1/admin/users/${randomUUID()}/activities`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(404);
+
+    expect(missing.body.code).toBe('USER_NOT_FOUND');
+  });
+
   it('filters by date range', async () => {
     const future = new Date(Date.now() + 60_000).toISOString();
 
