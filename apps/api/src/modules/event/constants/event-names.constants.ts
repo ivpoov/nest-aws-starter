@@ -1,2 +1,9 @@
 export const NOTE_CREATED_EVENT = 'note.created';
 export const USER_OAUTH_REGISTERED_EVENT = 'user.oauth-registered';
+export const USER_REGISTERED_EVENT = 'user.registered';
+export const AUTH_LOGIN_EVENT = 'auth.login';
+export const AUTH_LOGIN_FAILED_EVENT = 'auth.login-failed';
+export const AUTH_LOGOUT_EVENT = 'auth.logout';
+export const AUTH_PASSWORD_CHANGED_EVENT = 'auth.password-changed';
+export const AUTH_METHOD_LINKED_EVENT = 'auth.method-linked';
+export const AUTH_METHOD_UNLINKED_EVENT = 'auth.method-unlinked';
