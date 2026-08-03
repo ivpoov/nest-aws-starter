@@ -8,6 +8,7 @@ import {
 } from '@modules/suspicious-activity/constants/suspicious-activity.constants.js';
 import { AUTH_TEMPORARILY_LOCKED } from '@modules/suspicious-activity/constants/suspicious-activity-errors.constants.js';
 import type { LockoutInterface } from '@modules/suspicious-activity/interfaces/lockout.interface.js';
+import type { LockoutKeyInterface } from '@modules/suspicious-activity/interfaces/lockout-key.interface.js';
 import type { LockoutRecordInterface } from '@modules/suspicious-activity/interfaces/lockout-record.interface.js';
 import type { LockoutRepositoryInterface } from '@modules/suspicious-activity/interfaces/lockout-repository.interface.js';
 import { LockoutScopeEnum } from '@nest-aws-starter/shared';
@@ -90,7 +91,7 @@ export class LoginLockoutService {
     return Buffer.from(`${scope}:${value}`, 'utf8').toString('base64url');
   }
 
-  private decodeKey(key: string): { scope: LockoutScopeEnum; value: string } {
+  private decodeKey(key: string): LockoutKeyInterface {
     const decoded: string = Buffer.from(key, 'base64url').toString('utf8');
     const separatorIndex: number = decoded.indexOf(':');
 

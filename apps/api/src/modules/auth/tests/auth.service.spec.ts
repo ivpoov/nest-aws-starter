@@ -5,6 +5,7 @@ import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js'
 import type { EventBusService } from '@modules/event/services/event-bus.service.js';
 import type { SessionContextInterface } from '@modules/session/interfaces/session-context.interface.js';
 import type { SessionService } from '@modules/session/services/session.service.js';
+import type { NewDeviceCheckInterface } from '@modules/suspicious-activity/interfaces/new-device-check.interface.js';
 import type { LoginLockoutService } from '@modules/suspicious-activity/services/login-lockout.service.js';
 import type { NewDeviceService } from '@modules/suspicious-activity/services/new-device.service.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
@@ -116,16 +117,11 @@ describe('AuthService login', () => {
     const setup = createService();
     const order: string[] = [];
 
-    setup.newDeviceService.check.mockImplementation(
-      async (): Promise<{
-        isNewDevice: boolean;
-        device: string;
-      }> => {
-        order.push('check');
+    setup.newDeviceService.check.mockImplementation(async (): Promise<NewDeviceCheckInterface> => {
+      order.push('check');
 
-        return { isNewDevice: false, device: 'Chrome on Fedora' };
-      },
-    );
+      return { isNewDevice: false, device: 'Chrome on Fedora' };
+    });
     setup.sessionService.createSession.mockImplementation(async () => {
       order.push('createSession');
 
