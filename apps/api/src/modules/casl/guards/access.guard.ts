@@ -23,6 +23,21 @@ export class AccessGuard implements CanActivate {
   ) {}
 
   public canActivate(context: ExecutionContext): boolean {
+    const request: FastifyRequest & { user?: CurrentUserInterface } = context
+      .switchToHttp()
+      .getRequest();
+    const user: CurrentUserInterface | undefined = request.user;
+
+    // Defense in depth, unconditional: applies to EVERY handler on an
+    // @AdminScope() controller, even one without @UseAbility — checked
+    // before the ability-requirement early return below so the guarantee
+    // never depends on a future admin route remembering to add @UseAbility.
+    // No nesting, no privilege re-escalation through the very account
+    // login-as put an admin into.
+    if (user?.actAsBy && this.isAdminRoute(context)) {
+      throw new ForbiddenError(ADMIN_IMPERSONATION_FORBIDDEN);
+    }
+
     const requirement: AbilityRequirementInterface | undefined = this.reflector.get(
       ABILITY_METADATA_KEY,
       context.getHandler(),
@@ -30,19 +45,7 @@ export class AccessGuard implements CanActivate {
 
     if (!requirement) return true;
 
-    const request: FastifyRequest & { user?: CurrentUserInterface } = context
-      .switchToHttp()
-      .getRequest();
-    const user: CurrentUserInterface | undefined = request.user;
-
     if (!user) throw new ForbiddenError(CASL_FORBIDDEN);
-
-    // Defense in depth: an impersonated session must never reach an admin
-    // route, even for an ADMIN target — no nesting, no privilege re-escalation
-    // through the very account login-as put an admin into.
-    if (user.actAsBy && this.isAdminRoute(context)) {
-      throw new ForbiddenError(ADMIN_IMPERSONATION_FORBIDDEN);
-    }
 
     const ability: AppAbilityType = this.abilityFactory.createForUser(user);
 

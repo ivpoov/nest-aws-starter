@@ -16,10 +16,12 @@ const testPermissions: PermissionsType = {
   [UserRoleEnum.ADMIN]: ({ can }) => can(ActionsEnum.MANAGE, TestUserEntity),
 };
 
-function createGuard(isAdminRoute: boolean): AccessGuard {
+function createGuard(isAdminRoute: boolean, hasAbility = true): AccessGuard {
   const reflector = {
     get: vi.fn((key: string) => {
-      if (key === 'casl:ability') return { action: ActionsEnum.MANAGE, subject: TestUserEntity };
+      if (key === 'casl:ability') {
+        return hasAbility ? { action: ActionsEnum.MANAGE, subject: TestUserEntity } : undefined;
+      }
       if (key === 'casl:admin-scope') return isAdminRoute;
 
       return undefined;
@@ -74,6 +76,35 @@ describe('AccessGuard', () => {
       sessionId: 's1',
       actAsBy: 'other-admin',
     };
+
+    expect(guard.canActivate(createContext(user))).toBe(true);
+  });
+
+  // Important fix under test: a handler on an @AdminScope() controller that
+  // has no @UseAbility metadata at all (the `!requirement` early return)
+  // must still deny an impersonated caller — the guarantee cannot depend on
+  // every current and future admin handler remembering @UseAbility.
+  it('denies an impersonated caller on an admin route even without @UseAbility metadata', () => {
+    const guard = createGuard(true, false);
+    const user: CurrentUserInterface = {
+      id: 'admin-1',
+      role: UserRoleEnum.ADMIN,
+      sessionId: 's1',
+      actAsBy: 'other-admin',
+    };
+
+    try {
+      guard.canActivate(createContext(user));
+      expect.unreachable('should have thrown');
+    } catch (caught) {
+      expect(caught).toBeInstanceOf(ForbiddenError);
+      expect((caught as ForbiddenError).args.code).toBe('ADMIN_IMPERSONATION_FORBIDDEN');
+    }
+  });
+
+  it('allows a non-impersonated caller through when there is no @UseAbility metadata', () => {
+    const guard = createGuard(true, false);
+    const user: CurrentUserInterface = { id: 'user-1', role: UserRoleEnum.USER, sessionId: 's1' };
 
     expect(guard.canActivate(createContext(user))).toBe(true);
   });
