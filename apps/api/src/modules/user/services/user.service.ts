@@ -65,6 +65,26 @@ export class UserService {
     this.logger.log(`Linked ${data.type} method to user ${userId}`);
   }
 
+  public async addEmailMethod(userId: string, email: string, passwordHash: string): Promise<void> {
+    await this.userRepository.addEmailMethod(userId, email, passwordHash);
+    this.logger.log(`Linked EMAIL method to user ${userId}`);
+  }
+
+  public async findMethodsByUserId(userId: string): Promise<AuthMethodInterface[]> {
+    return this.userRepository.findMethodsByUserId(userId);
+  }
+
+  public async removeMethod(
+    userId: string,
+    type: CreateOauthMethodDataInterface['type'],
+  ): Promise<boolean> {
+    const isRemoved: boolean = await this.userRepository.removeMethod(userId, type);
+
+    if (isRemoved) this.logger.log(`Unlinked ${type} method from user ${userId}`);
+
+    return isRemoved;
+  }
+
   public async findEmailMethodByUserId(userId: string): Promise<AuthMethodInterface | null> {
     return this.userRepository.findEmailMethodByUserId(userId);
   }

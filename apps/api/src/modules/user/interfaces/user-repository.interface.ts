@@ -17,6 +17,9 @@ export interface UserRepositoryInterface {
     providerAccountId: string,
   ): Promise<AuthMethodInterface | null>;
   addOauthMethod(userId: string, data: CreateOauthMethodDataInterface): Promise<void>;
+  addEmailMethod(userId: string, email: string, passwordHash: string): Promise<void>;
+  findMethodsByUserId(userId: string): Promise<AuthMethodInterface[]>;
+  removeMethod(userId: string, type: CreateOauthMethodDataInterface['type']): Promise<boolean>;
   findEmailMethodByUserId(userId: string): Promise<AuthMethodInterface | null>;
   markEmailVerified(methodId: string): Promise<void>;
   updatePasswordHash(methodId: string, passwordHash: string): Promise<void>;
