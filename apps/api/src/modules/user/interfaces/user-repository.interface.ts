@@ -1,3 +1,5 @@
+import type { AdminUserInterface } from '@modules/user/interfaces/admin-user.interface.js';
+import type { AdminUsersQueryInterface } from '@modules/user/interfaces/admin-users-query.interface.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
 import type { CreateEmailUserDataInterface } from '@modules/user/interfaces/create-email-user-data.interface.js';
 import type { CreateOauthMethodDataInterface } from '@modules/user/interfaces/create-oauth-method-data.interface.js';
@@ -25,4 +27,6 @@ export interface UserRepositoryInterface {
   updatePasswordHash(methodId: string, passwordHash: string): Promise<void>;
   touchMethodLastUsed(methodId: string, now: Date): Promise<void>;
   updateProfile(id: string, data: UpdateProfileDataInterface): Promise<UserInterface | null>;
+  findManyForAdmin(query: AdminUsersQueryInterface): Promise<AdminUserInterface[]>;
+  findByIdForAdmin(id: string): Promise<AdminUserInterface | null>;
 }

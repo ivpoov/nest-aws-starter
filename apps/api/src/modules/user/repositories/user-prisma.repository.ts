@@ -2,6 +2,8 @@ import { Prisma } from '@generated/prisma/client.js';
 import { AuthMethodType } from '@generated/prisma/enums.js';
 import type { AuthMethodModel, UserModel } from '@generated/prisma/models.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
+import type { AdminUserInterface } from '@modules/user/interfaces/admin-user.interface.js';
+import type { AdminUsersQueryInterface } from '@modules/user/interfaces/admin-users-query.interface.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
 import type { CreateEmailUserDataInterface } from '@modules/user/interfaces/create-email-user-data.interface.js';
 import type { CreateOauthMethodDataInterface } from '@modules/user/interfaces/create-oauth-method-data.interface.js';
@@ -192,6 +194,50 @@ export class UserPrismaRepository implements UserRepositoryInterface {
 
       throw caught;
     }
+  }
+
+  public async findManyForAdmin(query: AdminUsersQueryInterface): Promise<AdminUserInterface[]> {
+    const users = await this.prisma.user.findMany({
+      where: query.search
+        ? {
+            OR: [
+              { displayName: { contains: query.search, mode: 'insensitive' } },
+              { authMethods: { some: { email: { contains: query.search, mode: 'insensitive' } } } },
+            ],
+          }
+        : {},
+      include: { authMethods: { select: { type: true, email: true } } },
+      take: query.limit,
+      ...(query.cursor && { cursor: { id: query.cursor }, skip: 1 }),
+      orderBy: { id: 'desc' },
+    });
+
+    return users.map((user): AdminUserInterface => this.toAdminDomain(user));
+  }
+
+  public async findByIdForAdmin(id: string): Promise<AdminUserInterface | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: { authMethods: { select: { type: true, email: true } } },
+    });
+
+    return user ? this.toAdminDomain(user) : null;
+  }
+
+  private toAdminDomain(
+    user: UserModel & { authMethods: Array<{ type: AuthMethodType; email: string | null }> },
+  ): AdminUserInterface {
+    const emailMethod = user.authMethods.find(
+      (method): boolean => method.type === AuthMethodType.EMAIL,
+    );
+
+    return {
+      ...this.toDomain(user),
+      email: emailMethod?.email ?? user.authMethods.find((method) => method.email)?.email ?? null,
+      methodTypes: user.authMethods.map(
+        (method): AuthMethodTypeEnum => AuthMethodTypeEnum[method.type],
+      ),
+    };
   }
 
   private methodToDomain(method: AuthMethodModel): AuthMethodInterface {

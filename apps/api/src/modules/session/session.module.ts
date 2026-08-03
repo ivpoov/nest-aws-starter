@@ -3,10 +3,10 @@ import { SessionController } from '@modules/session/controllers/session.controll
 import { SessionPrismaRepository } from '@modules/session/repositories/session-prisma.repository.js';
 import { SessionService } from '@modules/session/services/session.service.js';
 import { UserModule } from '@modules/user/user.module.js';
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 
 @Module({
-  imports: [UserModule],
+  imports: [forwardRef(() => UserModule)],
   controllers: [SessionController],
   providers: [SessionService, { provide: SESSION_REPOSITORY, useClass: SessionPrismaRepository }],
   exports: [SessionService],
