@@ -1,4 +1,5 @@
 import { configs } from '@configs/index.js';
+import { CaslModule } from '@modules/casl/casl.module.js';
 import { EventModule } from '@modules/event/event.module.js';
 import { HealthModule } from '@modules/health/health.module.js';
 import { NoteModule } from '@modules/note/note.module.js';
@@ -22,6 +23,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     RedisModule,
     CacheModule,
     EventModule,
+    CaslModule,
     S3Module,
     SqsModule,
     SnsModule,

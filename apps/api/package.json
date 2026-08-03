@@ -20,6 +20,7 @@
     "@aws-sdk/client-sns": "3.1079.0",
     "@aws-sdk/client-sqs": "3.1079.0",
     "@aws-sdk/s3-request-presigner": "3.1079.0",
+    "@casl/ability": "7.0.0",
     "@fastify/static": "10.1.2",
     "@nest-aws-starter/shared": "workspace:*",
     "@nestjs/common": "11.1.27",
