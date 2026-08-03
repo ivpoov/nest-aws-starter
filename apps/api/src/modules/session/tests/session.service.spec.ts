@@ -33,21 +33,39 @@ const user: UserInterface = {
 // algorithm is exercised against real key semantics, no Redis needed.
 class FakeTokenRepository implements TokenRepositoryInterface {
   public readonly keys: Map<string, string> = new Map();
+  // Captures the ttlSec each key was last set with — the fake has no real
+  // TTL semantics, so this is how tests assert "the Redis key would have
+  // expired at the right time" without a real Redis clock.
+  public readonly ttlSecByKey: Map<string, number> = new Map();
 
-  public async setAccessToken(userId: string, sessionId: string, token: string): Promise<void> {
+  public async setAccessToken(
+    userId: string,
+    sessionId: string,
+    token: string,
+    ttlSec: number,
+  ): Promise<void> {
     this.keys.set(`${userId}:${sessionId}:access`, token);
+    this.ttlSecByKey.set(`${userId}:${sessionId}:access`, ttlSec);
   }
 
-  public async setRefreshToken(userId: string, sessionId: string, token: string): Promise<void> {
+  public async setRefreshToken(
+    userId: string,
+    sessionId: string,
+    token: string,
+    ttlSec: number,
+  ): Promise<void> {
     this.keys.set(`${userId}:${sessionId}:refresh`, token);
+    this.ttlSecByKey.set(`${userId}:${sessionId}:refresh`, ttlSec);
   }
 
   public async setPreviousRefreshToken(
     userId: string,
     sessionId: string,
     token: string,
+    ttlSec: number,
   ): Promise<void> {
     this.keys.set(`${userId}:${sessionId}:prev`, token);
+    this.ttlSecByKey.set(`${userId}:${sessionId}:prev`, ttlSec);
   }
 
   public async getAccessToken(userId: string, sessionId: string): Promise<string | null> {
@@ -323,6 +341,51 @@ describe('SessionService impersonation', () => {
     const currentUser = await tokenService.verifyAccessToken(refreshed.accessToken);
 
     expect(currentUser.actAsBy).toBeUndefined();
+  });
+
+  it('caps the refresh token Redis TTL at the impersonation window, not the 30-day default', async () => {
+    const { service, tokens } = createService();
+
+    const result = await service.createImpersonatedSession(user, adminId, context);
+
+    expect(tokens.ttlSecByKey.get(`${user.id}:${result.sessionId}:refresh`)).toBe(3_600);
+    expect(tokens.ttlSecByKey.get(`${user.id}:${result.sessionId}:refresh`)).not.toBe(
+      config.refreshTtlSec,
+    );
+  });
+
+  it('keeps the normal refresh token TTL at the configured 30-day default', async () => {
+    const { service, tokens } = createService();
+
+    await service.createSession(user, context);
+
+    expect(tokens.ttlSecByKey.get(`${user.id}:session-1:refresh`)).toBe(config.refreshTtlSec);
+  });
+
+  it('keeps the capped TTL after rotating an impersonated session', async () => {
+    const { service, tokens } = createService();
+    const first = await service.createImpersonatedSession(user, adminId, context);
+
+    await service.refresh(first.tokens.refreshToken);
+
+    expect(tokens.ttlSecByKey.get(`${user.id}:${first.sessionId}:refresh`)).toBe(3_600);
+  });
+
+  // The Critical fix under test: rotate()'s happy path must gate on
+  // activeUntil explicitly, not merely on "the Redis key still exists" — the
+  // fake token repository has no real TTL semantics, so this isolates that
+  // explicit check from Redis's own expiry.
+  it('rejects a refresh once activeUntil has passed, even with the Redis key still present', async () => {
+    const { service, tokens, sessions } = createService();
+    const first = await service.createImpersonatedSession(user, adminId, context);
+
+    await sessions.setActiveUntil(first.sessionId, new Date(Date.now() - 1000));
+
+    await expect(service.refresh(first.tokens.refreshToken)).rejects.toSatisfy(
+      (caught: unknown): boolean =>
+        caught instanceof UnauthorizedError && caught.args.code === 'AUTH_SESSION_EXPIRED',
+    );
+    expect(tokens.keys.has(`${user.id}:${first.sessionId}:refresh`)).toBe(false);
   });
 });
 

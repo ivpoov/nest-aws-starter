@@ -24,6 +24,7 @@ export class TokenService {
   }
 
   public async issuePair(data: IssuePairDataInterface): Promise<TokenPairInterface> {
+    const refreshTtlSec: number = data.refreshTtlSec ?? this.config.refreshTtlSec;
     const accessToken: string = await this.sign(
       {
         role: data.role,
@@ -36,7 +37,7 @@ export class TokenService {
     const refreshToken: string = await this.sign(
       { sessionId: data.sessionId },
       data.userId,
-      this.config.refreshTtlSec,
+      refreshTtlSec,
     );
 
     await this.tokenRepository.setAccessToken(
@@ -49,7 +50,7 @@ export class TokenService {
       data.userId,
       data.sessionId,
       refreshToken,
-      this.config.refreshTtlSec,
+      refreshTtlSec,
     );
 
     return { accessToken, refreshToken, expiresInSec: this.config.accessTtlSec };

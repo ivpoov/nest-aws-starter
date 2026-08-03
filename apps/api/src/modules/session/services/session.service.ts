@@ -191,19 +191,31 @@ export class SessionService {
       this.userService.findByIdOrThrow(claims.userId),
       this.sessionRepository.findById(claims.sessionId),
     ]);
+
+    // Explicit liveness gate, independent of "the Redis key still existed":
+    // rotate() is only ever reached when the presented token matched the
+    // stored one, so without this check a Redis/Postgres TTL mismatch (or a
+    // future config change) could let a session outlive its advertised
+    // activeUntil indefinitely. Impersonated sessions rely on this the most
+    // — activeUntil is their only visibility signal on the sessions pages.
+    if (!session || session.activeUntil.getTime() <= Date.now()) {
+      await this.tokenRepository.deleteAllForSession(claims.userId, claims.sessionId);
+
+      throw new UnauthorizedError(session ? AUTH_SESSION_EXPIRED : AUTH_REFRESH_INVALID);
+    }
+
     // Re-derived from the session row, never trusted from the old token —
     // the source of truth for whether this refresh keeps the impersonation
     // claim alive.
-    const signedAsAdminId: string | null = session?.signedAsAdminId ?? null;
+    const signedAsAdminId: string | null = session.signedAsAdminId;
+    const ttlSec: number = this.ttlSecFor(signedAsAdminId);
     const pair: TokenPairInterface = await this.tokenService.issuePair({
       userId: claims.userId,
       role: user.role,
       sessionId: claims.sessionId,
       actAsBy: signedAsAdminId,
+      refreshTtlSec: ttlSec,
     });
-    const ttlSec: number = signedAsAdminId
-      ? IMPERSONATION_ACTIVE_TTL_SEC
-      : this.config.refreshTtlSec;
 
     await this.tokenRepository.setPreviousRefreshToken(
       claims.userId,
@@ -229,9 +241,7 @@ export class SessionService {
     context: SessionContextInterface,
     signedAsAdminId: string | null,
   ): Promise<CreateSessionResultInterface> {
-    const ttlSec: number = signedAsAdminId
-      ? IMPERSONATION_ACTIVE_TTL_SEC
-      : this.config.refreshTtlSec;
+    const ttlSec: number = this.ttlSecFor(signedAsAdminId);
     const activeUntil: Date = new Date(Date.now() + ttlSec * 1000);
     const session: SessionInterface = await this.sessionRepository.create({
       userId: user.id,
@@ -248,8 +258,16 @@ export class SessionService {
       role: user.role,
       sessionId: session.id,
       actAsBy: signedAsAdminId,
+      refreshTtlSec: ttlSec,
     });
 
     return { session, tokens };
+  }
+
+  // Single source for the refresh TTL / activeUntil window: impersonated
+  // sessions are capped at IMPERSONATION_ACTIVE_TTL_SEC everywhere a TTL is
+  // decided — Redis key, refresh JWT exp, and the Postgres activeUntil.
+  private ttlSecFor(signedAsAdminId: string | null): number {
+    return signedAsAdminId ? IMPERSONATION_ACTIVE_TTL_SEC : this.config.refreshTtlSec;
   }
 }
