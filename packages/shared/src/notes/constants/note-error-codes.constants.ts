@@ -1,1 +1,1 @@
-export const NOTE_ERROR_CODES = ['NOTE_NOT_FOUND'] as const;
+export const NOTE_ERROR_CODES = ['NOTE_NOT_FOUND', 'NOTE_ACCESS_DENIED'] as const;
