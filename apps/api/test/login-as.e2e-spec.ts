@@ -102,10 +102,31 @@ describe('admin login-as', () => {
       .set('authorization', `Bearer ${adminToken}`)
       .expect(201);
 
-    expect(loginAs.body.accessToken).toBeTruthy();
-    expect(loginAs.body.refreshToken).toBeTruthy();
+    expect(loginAs.body.code).toBeTruthy();
+    expect(loginAs.body.accessToken).toBeUndefined();
 
-    const impersonatedToken: string = loginAs.body.accessToken;
+    // The admin UI never sees tokens directly — it opens the web app with
+    // this one-time code, which redeems it through the same public
+    // exchange endpoint OAuth login already uses.
+    const exchanged = await request(app.getHttpServer())
+      .post('/api/v1/auth/oauth/exchange')
+      .send({ code: loginAs.body.code })
+      .expect(200);
+
+    expect(exchanged.body.kind).toBe('LOGIN');
+    expect(exchanged.body.tokens.accessToken).toBeTruthy();
+    expect(exchanged.body.tokens.refreshToken).toBeTruthy();
+
+    // Single-use: the same code cannot be redeemed twice.
+    const reused = await request(app.getHttpServer())
+      .post('/api/v1/auth/oauth/exchange')
+      .send({ code: loginAs.body.code })
+      .expect(401);
+
+    expect(reused.body.code).toBe('OAUTH_EXCHANGE_CODE_INVALID');
+
+    const impersonatedToken: string = exchanged.body.tokens.accessToken;
+    const impersonatedRefreshToken: string = exchanged.body.tokens.refreshToken;
 
     // The token works as a normal session for the TARGET user.
     const me = await request(app.getHttpServer())
@@ -152,7 +173,7 @@ describe('admin login-as', () => {
     // Refresh re-derives the flag from the session row, not the old token.
     const refreshed = await request(app.getHttpServer())
       .post('/api/v1/auth/refresh')
-      .send({ refreshToken: loginAs.body.refreshToken })
+      .send({ refreshToken: impersonatedRefreshToken })
       .expect(200);
 
     const deniedAfterRefresh = await request(app.getHttpServer())
