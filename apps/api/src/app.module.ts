@@ -1,4 +1,5 @@
 import { configs } from '@configs/index.js';
+import { AuthModule } from '@modules/auth/auth.module.js';
 import { CaslModule } from '@modules/casl/casl.module.js';
 import { EventModule } from '@modules/event/event.module.js';
 import { HealthModule } from '@modules/health/health.module.js';
@@ -36,6 +37,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     UserModule,
     TokenModule,
     SessionModule,
+    AuthModule,
     NoteModule,
   ],
 })

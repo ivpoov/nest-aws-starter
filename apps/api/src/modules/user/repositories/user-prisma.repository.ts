@@ -1,7 +1,8 @@
 import { Prisma } from '@generated/prisma/client.js';
 import { AuthMethodType } from '@generated/prisma/enums.js';
-import type { UserModel } from '@generated/prisma/models.js';
+import type { AuthMethodModel, UserModel } from '@generated/prisma/models.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
+import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
 import type { CreateEmailUserDataInterface } from '@modules/user/interfaces/create-email-user-data.interface.js';
 import type { CreateOauthUserDataInterface } from '@modules/user/interfaces/create-oauth-user-data.interface.js';
 import type { UpdateProfileDataInterface } from '@modules/user/interfaces/update-profile-data.interface.js';
@@ -73,6 +74,24 @@ export class UserPrismaRepository implements UserRepositoryInterface {
     };
   }
 
+  public async findEmailMethodByEmail(email: string): Promise<AuthMethodInterface | null> {
+    const method: AuthMethodModel | null = await this.prisma.authMethod.findUnique({
+      where: { type_email: { type: AuthMethodType.EMAIL, email } },
+    });
+
+    return method ? this.methodToDomain(method) : null;
+  }
+
+  public async touchMethodLastUsed(methodId: string, now: Date): Promise<void> {
+    try {
+      await this.prisma.authMethod.update({ where: { id: methodId }, data: { lastUsedAt: now } });
+    } catch (caught) {
+      if (caught instanceof Prisma.PrismaClientKnownRequestError && caught.code === 'P2025') return;
+
+      throw caught;
+    }
+  }
+
   public async updateProfile(
     id: string,
     data: UpdateProfileDataInterface,
@@ -94,6 +113,20 @@ export class UserPrismaRepository implements UserRepositoryInterface {
 
       throw caught;
     }
+  }
+
+  private methodToDomain(method: AuthMethodModel): AuthMethodInterface {
+    return {
+      id: method.id,
+      userId: method.userId,
+      type: AuthMethodTypeEnum[method.type],
+      email: method.email,
+      isEmailVerified: method.isEmailVerified,
+      passwordHash: method.passwordHash,
+      providerAccountId: method.providerAccountId,
+      createdAt: method.createdAt,
+      lastUsedAt: method.lastUsedAt,
+    };
   }
 
   private toDomain(user: UserModel): UserInterface {
