@@ -14,3 +14,8 @@ export const AUTH_INVALID_CREDENTIALS: ErrorArgsInterface = {
   code: 'AUTH_INVALID_CREDENTIALS',
   details: 'Invalid email or password',
 };
+
+export const AUTH_ONE_TIME_TOKEN_INVALID: ErrorArgsInterface = {
+  code: 'AUTH_ONE_TIME_TOKEN_INVALID',
+  details: 'This link is invalid, expired or already used',
+};
