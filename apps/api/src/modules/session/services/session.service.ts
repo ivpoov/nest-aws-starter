@@ -1,4 +1,5 @@
 import { type AuthConfig, authConfig } from '@configs/auth.config.js';
+import { parseDevice } from '@helpers/parse-device.helper.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
@@ -20,7 +21,6 @@ import { TokenService } from '@modules/token/services/token.service.js';
 import type { UserInterface } from '@modules/user/interfaces/user.interface.js';
 import { UserService } from '@modules/user/services/user.service.js';
 import { Inject, Injectable } from '@nestjs/common';
-import { UAParser } from 'ua-parser-js';
 
 @Injectable()
 export class SessionService {
@@ -41,7 +41,7 @@ export class SessionService {
     const activeUntil: Date = new Date(Date.now() + this.config.refreshTtlSec * 1000);
     const session: SessionInterface = await this.sessionRepository.create({
       userId: user.id,
-      device: this.parseDevice(context.userAgent),
+      device: parseDevice(context.userAgent),
       ip: context.ip,
       activeUntil,
     });
@@ -196,15 +196,5 @@ export class SessionService {
       );
 
     return pair;
-  }
-
-  private parseDevice(userAgent: string | null): string {
-    if (!userAgent) return 'Unknown device';
-
-    const parsed = new UAParser(userAgent).getResult();
-    const browser: string = parsed.browser.name ?? 'Unknown browser';
-    const os: string = parsed.os.name ?? 'unknown OS';
-
-    return `${browser} on ${os}`.slice(0, 255);
   }
 }
