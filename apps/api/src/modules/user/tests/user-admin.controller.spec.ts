@@ -1,6 +1,7 @@
 import { ConflictError } from '@modules/common/errors/conflict.error.js';
 import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import type { EventBusService } from '@modules/event/services/event-bus.service.js';
+import type { OauthFlowService } from '@modules/oauth/services/oauth-flow.service.js';
 import type { SessionService } from '@modules/session/services/session.service.js';
 import { UserAdminController } from '@modules/user/controllers/user-admin.controller.js';
 import type { AdminUserInterface } from '@modules/user/interfaces/admin-user.interface.js';
@@ -32,6 +33,7 @@ function createController(): {
   assertCanImpersonate: ReturnType<typeof vi.fn>;
   revokeAllForUser: ReturnType<typeof vi.fn>;
   createImpersonatedSession: ReturnType<typeof vi.fn>;
+  mintExchangeCode: ReturnType<typeof vi.fn>;
   emit: ReturnType<typeof vi.fn>;
 } {
   const findByIdForAdminOrThrow = vi.fn().mockResolvedValue(adminUser);
@@ -55,17 +57,21 @@ function createController(): {
     createImpersonatedSession,
   } as unknown as SessionService;
 
+  const mintExchangeCode = vi.fn().mockResolvedValue('exchange-code-1');
+  const oauthFlowService = { mintExchangeCode } as unknown as OauthFlowService;
+
   const emit = vi.fn();
   const eventBus = { emit } as unknown as EventBusService;
 
   return {
-    controller: new UserAdminController(userService, sessionService, eventBus),
+    controller: new UserAdminController(userService, sessionService, oauthFlowService, eventBus),
     findByIdForAdminOrThrow,
     updateStatus,
     assertNotSelfBlock,
     assertCanImpersonate,
     revokeAllForUser,
     createImpersonatedSession,
+    mintExchangeCode,
     emit,
   };
 }
@@ -139,26 +145,31 @@ describe('UserAdminController.updateStatus', () => {
 });
 
 describe('UserAdminController.loginAs', () => {
-  it('creates an impersonated session and emits admin.login-as', async () => {
-    const { controller, createImpersonatedSession, emit } = createController();
+  it('creates an impersonated session, mints an exchange code and emits admin.login-as', async () => {
+    const { controller, createImpersonatedSession, mintExchangeCode, emit } = createController();
 
-    const tokens = await controller.loginAs(adminId, userId, fakeRequest());
+    const result = await controller.loginAs(adminId, userId, fakeRequest());
 
     expect(createImpersonatedSession).toHaveBeenCalledWith(
       adminUser,
       adminId,
       expect.objectContaining({ ip: '127.0.0.1' }),
     );
+    expect(mintExchangeCode).toHaveBeenCalledWith({
+      accessToken: 'access',
+      refreshToken: 'refresh',
+      expiresInSec: 3_600,
+    });
     expect(emit).toHaveBeenCalledWith('admin.login-as', {
       userId,
       actorId: adminId,
       sessionId: 'session-imp-1',
     });
-    expect(tokens).toEqual({ accessToken: 'access', refreshToken: 'refresh', expiresInSec: 3_600 });
+    expect(result).toEqual({ code: 'exchange-code-1' });
   });
 
   it('aborts before creating a session when the role gate rejects the target', async () => {
-    const { controller, assertCanImpersonate, createImpersonatedSession, emit } =
+    const { controller, assertCanImpersonate, createImpersonatedSession, mintExchangeCode, emit } =
       createController();
 
     assertCanImpersonate.mockImplementation((): void => {
@@ -170,6 +181,7 @@ describe('UserAdminController.loginAs', () => {
     );
 
     expect(createImpersonatedSession).not.toHaveBeenCalled();
+    expect(mintExchangeCode).not.toHaveBeenCalled();
     expect(emit).not.toHaveBeenCalled();
   });
 });
