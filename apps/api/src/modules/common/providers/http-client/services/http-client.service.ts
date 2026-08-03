@@ -42,8 +42,14 @@ export class HttpClientService {
       const response: Response = await fetch(options.url, {
         method: options.method,
         signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-        headers: { 'content-type': 'application/json', ...options.headers },
-        ...(options.body !== undefined && { body: JSON.stringify(options.body) }),
+        headers: {
+          'content-type':
+            options.form !== undefined ? 'application/x-www-form-urlencoded' : 'application/json',
+          ...options.headers,
+        },
+        ...(options.form !== undefined
+          ? { body: new URLSearchParams(options.form).toString() }
+          : options.body !== undefined && { body: JSON.stringify(options.body) }),
       });
 
       this.logger.log(

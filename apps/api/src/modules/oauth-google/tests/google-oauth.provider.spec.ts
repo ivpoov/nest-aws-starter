@@ -79,6 +79,7 @@ describe('GoogleOauthProvider', () => {
     });
     expect(request).toHaveBeenCalledTimes(2);
     expect(request.mock.calls[0]?.[0].url).toBe('https://oauth2.googleapis.com/token');
+    expect(request.mock.calls[0]?.[0].form?.grant_type).toBe('authorization_code');
   });
 
   it('treats missing email_verified as unverified', async () => {
