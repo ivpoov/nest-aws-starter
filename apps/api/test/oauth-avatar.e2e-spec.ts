@@ -11,6 +11,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp } from './app.factory.js';
+import { ensureBucket } from './helpers/ensure-bucket.helper.js';
 
 const redirect = 'http://localhost:5173/auth/callback';
 const PNG_BYTES: Buffer = Buffer.from(
@@ -31,6 +32,7 @@ describe('oauth avatar sync', () => {
   let avatarBaseUrl: string;
 
   beforeAll(async () => {
+    await ensureBucket();
     app = await createTestApp();
     app.get(OauthProviderRegistryService).register(fakeProvider);
 
