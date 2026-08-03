@@ -25,16 +25,19 @@ enum AuthMethodType {
 }
 
 model User {
-  id          String       @id @default(uuid(7))
-  role        UserRole     @default(USER)
-  status      UserStatus   @default(ACTIVE)
-  displayName String       @db.VarChar(120)
-  avatarKey   String? // S3 object key, served via presigned URL
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  authMethods AuthMethod[]
-  sessions    Session[]
-  notes       Note[]
+  id               String       @id @default(uuid(7))
+  role             UserRole     @default(USER)
+  status           UserStatus   @default(ACTIVE)
+  displayName      String       @db.VarChar(120)
+  avatarKey        String? // S3 object key, served via presigned URL
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  authMethods      AuthMethod[]
+  sessions         Session[]
+  // Sessions this user (as an admin) is currently impersonating a target
+  // through — back-relation only, never queried from the User side today.
+  impersonatedByMe Session[]    @relation("SessionSignedAsAdmin")
+  notes            Note[]
 
   @@index([role, status])
   @@map("users")
@@ -64,16 +67,22 @@ model AuthMethod {
 // Postgres, ever: all tokens are TTL'd Redis allowlist keys (see token module);
 // a session is alive iff its Redis refresh key exists.
 model Session {
-  id           String   @id @default(uuid(7))
-  userId       String
-  device       String   @db.VarChar(255) // parsed "Chrome on Fedora"
-  ip           String   @db.VarChar(45)
-  createdAt    DateTime @default(now())
-  lastActiveAt DateTime @default(now())
-  activeUntil  DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String   @id @default(uuid(7))
+  userId          String
+  device          String   @db.VarChar(255) // parsed "Chrome on Fedora"
+  ip              String   @db.VarChar(45)
+  createdAt       DateTime @default(now())
+  lastActiveAt    DateTime @default(now())
+  activeUntil     DateTime
+  // Set only for sessions minted by admin login-as — the token's optional
+  // actAsBy claim is re-derived from this column on every refresh, never
+  // trusted from the old token.
+  signedAsAdminId String?
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  signedAsAdmin   User?    @relation("SessionSignedAsAdmin", fields: [signedAsAdminId], references: [id])
 
   @@index([userId, activeUntil])
+  @@index([signedAsAdminId])
   @@map("sessions")
 }
 
@@ -111,6 +120,7 @@ enum ActivityType {
   USER_UNBLOCKED
   AUTH_SUSPICIOUS_LOGIN
   AUTH_NEW_DEVICE
+  ADMIN_LOGIN_AS
 }
 
 // Append-only audit trail, driven entirely by domain events — no relation to
