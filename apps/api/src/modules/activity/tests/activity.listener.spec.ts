@@ -174,6 +174,20 @@ describe('ActivityListener', () => {
     });
   });
 
+  it('records ADMIN_LOGIN_AS on admin.login-as', async () => {
+    const { listener, record } = createListener();
+    const adminId = '01890a5d-0000-774b-bcce-b30209990003';
+
+    await listener.onAdminLoginAs({ userId, actorId: adminId, sessionId });
+
+    expect(record).toHaveBeenCalledWith({
+      userId,
+      actorId: adminId,
+      sessionId,
+      type: ActivityTypeEnum.ADMIN_LOGIN_AS,
+    });
+  });
+
   it('swallows a repository failure instead of producing an unhandled rejection', async () => {
     const record = vi.fn().mockRejectedValue(new Error('activity table unavailable'));
     const activityService = { record } as unknown as ActivityService;

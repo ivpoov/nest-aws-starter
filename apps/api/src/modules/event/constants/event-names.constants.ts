@@ -11,3 +11,4 @@ export const USER_BLOCKED_EVENT = 'user.blocked';
 export const USER_UNBLOCKED_EVENT = 'user.unblocked';
 export const AUTH_SUSPICIOUS_LOGIN_EVENT = 'auth.suspicious-login';
 export const AUTH_NEW_DEVICE_EVENT = 'auth.new-device';
+export const ADMIN_LOGIN_AS_EVENT = 'admin.login-as';
