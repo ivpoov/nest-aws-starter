@@ -1,5 +1,6 @@
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
 import type { CreateEmailUserDataInterface } from '@modules/user/interfaces/create-email-user-data.interface.js';
+import type { CreateOauthMethodDataInterface } from '@modules/user/interfaces/create-oauth-method-data.interface.js';
 import type { CreateOauthUserDataInterface } from '@modules/user/interfaces/create-oauth-user-data.interface.js';
 import type { UpdateProfileDataInterface } from '@modules/user/interfaces/update-profile-data.interface.js';
 import type { UserInterface } from '@modules/user/interfaces/user.interface.js';
@@ -11,6 +12,11 @@ export interface UserRepositoryInterface {
   findById(id: string): Promise<UserInterface | null>;
   findByAuthEmail(email: string): Promise<UserWithMethodTypesInterface | null>;
   findEmailMethodByEmail(email: string): Promise<AuthMethodInterface | null>;
+  findMethodByProviderAccount(
+    type: CreateOauthMethodDataInterface['type'],
+    providerAccountId: string,
+  ): Promise<AuthMethodInterface | null>;
+  addOauthMethod(userId: string, data: CreateOauthMethodDataInterface): Promise<void>;
   findEmailMethodByUserId(userId: string): Promise<AuthMethodInterface | null>;
   markEmailVerified(methodId: string): Promise<void>;
   updatePasswordHash(methodId: string, passwordHash: string): Promise<void>;

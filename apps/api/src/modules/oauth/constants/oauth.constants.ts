@@ -1,0 +1,4 @@
+export const OAUTH_STORE_REPOSITORY = Symbol('OAUTH_STORE_REPOSITORY');
+
+export const OAUTH_STATE_TTL_SEC = 600;
+export const OAUTH_EXCHANGE_TTL_SEC = 60;
