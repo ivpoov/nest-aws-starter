@@ -11,6 +11,7 @@ import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js';
 import {
   AUTH_LOGIN_EVENT,
+  AUTH_LOGIN_FAILED_EVENT,
   USER_REGISTERED_EVENT,
 } from '@modules/event/constants/event-names.constants.js';
 import { EventBusService } from '@modules/event/services/event-bus.service.js';
@@ -64,17 +65,26 @@ export class AuthService {
 
     if (!method?.passwordHash) {
       await verify(await this.dummyHashPromise, dto.password).catch((): boolean => false);
+      this.eventBus.emit(AUTH_LOGIN_FAILED_EVENT, { email: dto.email, ip: context.ip });
 
       throw new UnauthorizedError(AUTH_INVALID_CREDENTIALS);
     }
 
     const isValid: boolean = await verify(method.passwordHash, dto.password);
 
-    if (!isValid) throw new UnauthorizedError(AUTH_INVALID_CREDENTIALS);
+    if (!isValid) {
+      this.eventBus.emit(AUTH_LOGIN_FAILED_EVENT, { email: dto.email, ip: context.ip });
+
+      throw new UnauthorizedError(AUTH_INVALID_CREDENTIALS);
+    }
 
     const user: UserInterface = await this.userService.findByIdOrThrow(method.userId);
 
-    if (user.status === UserStatusEnum.BLOCKED) throw new ForbiddenError(USER_BLOCKED);
+    if (user.status === UserStatusEnum.BLOCKED) {
+      this.eventBus.emit(AUTH_LOGIN_FAILED_EVENT, { email: dto.email, ip: context.ip });
+
+      throw new ForbiddenError(USER_BLOCKED);
+    }
 
     await this.userService.touchMethodLastUsed(method.id);
     this.logger.log(`User logged in: ${user.id}`);
