@@ -9,3 +9,8 @@ export const USER_BLOCKED: ErrorArgsInterface = {
   code: 'USER_BLOCKED',
   details: 'This account is blocked',
 };
+
+export const USER_AVATAR_TYPE_NOT_ALLOWED: ErrorArgsInterface = {
+  code: 'USER_AVATAR_TYPE_NOT_ALLOWED',
+  details: 'Avatar must be a jpeg, png, webp or gif image',
+};
