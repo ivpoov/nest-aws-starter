@@ -2,9 +2,17 @@ import type {
   AdminUserResponseInterface,
   ApiErrorInterface,
   SessionResponseInterface,
+  UserStatusEnum,
 } from '@nest-aws-starter/shared';
 import { useCallback, useEffect, useState } from 'react';
-import { fetchAdminUser, fetchAdminUserSessions, revokeAdminUserSessions } from '../../apis/users';
+import {
+  fetchAdminUser,
+  fetchAdminUserSessions,
+  loginAsAdminUser,
+  revokeAdminUserSessions,
+  updateAdminUserStatus,
+} from '../../apis/users';
+import { WEB_APP_URL } from '../../constants/web-app.constants';
 import type { UseAdminUserDetailResultInterface } from '../../interfaces/use-admin-user-detail-result.interface';
 import { toApiError } from '../../utils/toApiError';
 
@@ -13,6 +21,8 @@ export function useAdminUserDetail(userId: string | null): UseAdminUserDetailRes
   const [sessions, setSessions] = useState<SessionResponseInterface[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<ApiErrorInterface | null>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState<boolean>(false);
+  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
 
   const reload = useCallback(async (): Promise<void> => {
     if (!userId) return;
@@ -46,11 +56,55 @@ export function useAdminUserDetail(userId: string | null): UseAdminUserDetailRes
     }
   }, [userId, reload]);
 
+  const updateStatus = useCallback(
+    async (status: UserStatusEnum): Promise<void> => {
+      if (!userId) return;
+
+      setIsUpdatingStatus(true);
+
+      try {
+        await updateAdminUserStatus(userId, status);
+        await reload();
+      } catch (caught) {
+        setError(toApiError(caught));
+      } finally {
+        setIsUpdatingStatus(false);
+      }
+    },
+    [userId, reload],
+  );
+
+  const loginAs = useCallback(async (): Promise<void> => {
+    if (!userId) return;
+
+    setIsLoggingIn(true);
+
+    try {
+      const result = await loginAsAdminUser(userId);
+
+      window.open(`${WEB_APP_URL}/auth/callback?code=${result.code}`, '_blank', 'noopener');
+    } catch (caught) {
+      setError(toApiError(caught));
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }, [userId]);
+
   useEffect(() => {
     setUser(null);
     setSessions([]);
     void reload();
   }, [reload]);
 
-  return { user, sessions, isLoading, error, forceLogout };
+  return {
+    user,
+    sessions,
+    isLoading,
+    error,
+    forceLogout,
+    updateStatus,
+    isUpdatingStatus,
+    loginAs,
+    isLoggingIn,
+  };
 }
