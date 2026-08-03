@@ -1,4 +1,4 @@
-import { NoteStatusEnum } from '../enums/note-status.enum.js';
+import type { NoteStatusEnum } from '../enums/note-status.enum.js';
 
 export interface CreateNoteRequestInterface {
   readonly title: string;
