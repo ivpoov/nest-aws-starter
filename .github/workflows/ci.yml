@@ -33,10 +33,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: docker compose up -d --wait
+      # turbo fans out: api tsc+swc, web/admin tsc + vite build, shared tsc
       - run: pnpm run build
       - run: pnpm --dir apps/api run db:migrate
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+      # turbo fans out: api + web + admin vitest suites
       - run: pnpm run test
       - run: pnpm run test:e2e
         env:

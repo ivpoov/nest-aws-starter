@@ -44,6 +44,17 @@ The API listens on `http://localhost:3000` — Swagger UI at
 [`/docs`](http://localhost:3000/docs), health probes at
 `/api/v1/health/live` and `/api/v1/health/ready`.
 
+### Frontends
+
+```bash
+pnpm --dir apps/web run dev      # user app on http://localhost:5173
+pnpm --dir apps/admin run dev    # admin panel on http://localhost:5174
+```
+
+Both apps read `VITE_API_BASE_URL` (see each app's `.env.example`; the default
+targets the local API). The admin panel requires an `ADMIN` account — promote a
+user directly in the database, there is deliberately no promote endpoint.
+
 ### Host ports
 
 Container ports are shifted off the standard ones so the stack coexists with
@@ -79,6 +90,9 @@ both test suites and a dependency audit on every PR.
 
 ```
 apps/api/         # NestJS API — controller → service → repository layering
+apps/web/         # user app — Vite + React + Tailwind + Zustand
+apps/admin/       # admin panel — same stack, role-gated
+packages/shared/  # wire contracts shared by API and frontends
 lambdas/example/  # echo Lambda demonstrating the invoker pattern
 docker/           # compose init scripts
 docs/conventions/ # binding code conventions — read before contributing
