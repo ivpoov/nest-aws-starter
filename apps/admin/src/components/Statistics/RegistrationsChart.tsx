@@ -56,7 +56,12 @@ function renderBody(
   if (isLoading && points.length === 0) return <Loader />;
   if (points.length === 0) return <EmptyState message="No registrations in this range" />;
 
-  return renderChart(points, colors);
+  return (
+    <div className="flex flex-col gap-3">
+      {renderChart(points, colors)}
+      {error ? <p className="text-sm text-danger">{error.details}</p> : null}
+    </div>
+  );
 }
 
 export function RegistrationsChart({

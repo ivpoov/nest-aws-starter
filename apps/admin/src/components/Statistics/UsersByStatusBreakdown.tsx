@@ -44,7 +44,12 @@ function renderBody(
   if (isLoading && items.length === 0) return <Loader />;
   if (items.length === 0) return <EmptyState message="No users yet" />;
 
-  return renderList(items);
+  return (
+    <div className="flex flex-col gap-3">
+      {renderList(items)}
+      {error ? <p className="text-sm text-danger">{error.details}</p> : null}
+    </div>
+  );
 }
 
 export function UsersByStatusBreakdown({

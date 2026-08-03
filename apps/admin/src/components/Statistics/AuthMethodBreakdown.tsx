@@ -70,7 +70,12 @@ function renderBody(
   if (isLoading && items.length === 0) return <Loader />;
   if (items.length === 0) return <EmptyState message="No auth methods yet" />;
 
-  return renderChart(items, colors);
+  return (
+    <div className="flex flex-col gap-3">
+      {renderChart(items, colors)}
+      {error ? <p className="text-sm text-danger">{error.details}</p> : null}
+    </div>
+  );
 }
 
 export function AuthMethodBreakdown({
