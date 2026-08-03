@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { ConfirmInline } from '../ui/ConfirmInline';
+import { Input } from '../ui/Input';
 
 type PendingConfirmType = 'status' | 'login-as' | null;
 
@@ -10,7 +11,7 @@ interface UserActionsPropsInterface {
   readonly status: UserStatusEnum;
   readonly isUpdatingStatus: boolean;
   readonly isLoggingIn: boolean;
-  readonly onToggleStatus: () => void;
+  readonly onToggleStatus: (reason?: string) => void;
   readonly onLoginAs: () => void;
 }
 
@@ -22,15 +23,18 @@ export function UserActions({
   onLoginAs,
 }: UserActionsPropsInterface): ReactElement {
   const [confirming, setConfirming] = useState<PendingConfirmType>(null);
+  const [reason, setReason] = useState<string>('');
   const isBlocked: boolean = status === UserStatusEnum.BLOCKED;
 
   function cancel(): void {
     setConfirming(null);
+    setReason('');
   }
 
   function confirmStatus(): void {
     setConfirming(null);
-    onToggleStatus();
+    onToggleStatus(reason.trim() || undefined);
+    setReason('');
   }
 
   function confirmLoginAs(): void {
@@ -47,7 +51,9 @@ export function UserActions({
         isPending={isUpdatingStatus}
         onConfirm={confirmStatus}
         onCancel={cancel}
-      />
+      >
+        <Input label="Reason (optional)" value={reason} onChange={setReason} />
+      </ConfirmInline>
     );
   }
 

@@ -42,8 +42,12 @@ export function revokeAdminUserSessions(id: string): Promise<RevokedSessionsResp
 export function updateAdminUserStatus(
   id: string,
   status: UserStatusEnum,
+  reason?: string,
 ): Promise<AdminUserResponseInterface> {
-  return apiClient.patch<AdminUserResponseInterface>(`/admin/users/${id}/status`, { status });
+  return apiClient.patch<AdminUserResponseInterface>(`/admin/users/${id}/status`, {
+    status,
+    ...(reason ? { reason } : {}),
+  });
 }
 
 export function loginAsAdminUser(id: string): Promise<LoginAsResponseInterface> {

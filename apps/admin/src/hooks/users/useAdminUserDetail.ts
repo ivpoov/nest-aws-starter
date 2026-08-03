@@ -57,13 +57,13 @@ export function useAdminUserDetail(userId: string | null): UseAdminUserDetailRes
   }, [userId, reload]);
 
   const updateStatus = useCallback(
-    async (status: UserStatusEnum): Promise<void> => {
+    async (status: UserStatusEnum, reason?: string): Promise<void> => {
       if (!userId) return;
 
       setIsUpdatingStatus(true);
 
       try {
-        await updateAdminUserStatus(userId, status);
+        await updateAdminUserStatus(userId, status, reason);
         await reload();
       } catch (caught) {
         setError(toApiError(caught));

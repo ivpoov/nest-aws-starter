@@ -46,9 +46,27 @@ describe('UserDetailDrawer', () => {
     fireEvent.click(screen.getByText('Confirm'));
 
     await waitFor((): void => {
-      expect(usersApi.updateAdminUserStatus).toHaveBeenCalledWith('u-1', 'BLOCKED');
+      expect(usersApi.updateAdminUserStatus).toHaveBeenCalledWith('u-1', 'BLOCKED', undefined);
     });
     await waitFor((): void => expect(onUserChanged).toHaveBeenCalled());
+  });
+
+  it('sends the typed reason when blocking a user', async () => {
+    render(<UserDetailDrawer userId="u-1" onClose={vi.fn()} />);
+
+    fireEvent.click(await screen.findByText('Block user'));
+    fireEvent.change(screen.getByLabelText('Reason (optional)'), {
+      target: { value: 'Repeated ToS violations' },
+    });
+    fireEvent.click(screen.getByText('Confirm'));
+
+    await waitFor((): void => {
+      expect(usersApi.updateAdminUserStatus).toHaveBeenCalledWith(
+        'u-1',
+        'BLOCKED',
+        'Repeated ToS violations',
+      );
+    });
   });
 
   it('cancels the block confirm step without calling the api', async () => {
