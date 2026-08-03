@@ -8,6 +8,7 @@ const scheme = z.object({
   env: z.enum(['development', 'test', 'production']),
   apiPrefix: z.string(),
   trustProxy: z.boolean(),
+  corsOrigins: z.array(z.url()),
 });
 
 export type AppConfig = Required<z.infer<typeof scheme>>;
@@ -18,6 +19,10 @@ export const appConfig = registerAs('app', (): AppConfig => {
     env: (process.env.NODE_ENV ?? 'development') as AppConfig['env'],
     apiPrefix: process.env.API_PREFIX ?? 'api',
     trustProxy: process.env.TRUST_PROXY === 'true',
+    corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:5174')
+      .split(',')
+      .map((origin: string): string => origin.trim())
+      .filter((origin: string): boolean => origin.length > 0),
   };
 
   validateScheme(scheme, config, new Logger('AppConfig'));
