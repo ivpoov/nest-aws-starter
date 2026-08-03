@@ -1,4 +1,4 @@
-import type { AdminUserResponseInterface } from '@nest-aws-starter/shared';
+import { type AdminUserResponseInterface, UserStatusEnum } from '@nest-aws-starter/shared';
 import type { ReactElement } from 'react';
 import { useState } from 'react';
 import { UserDetailDrawer } from '../components/Users/UserDetailDrawer';
@@ -25,14 +25,23 @@ const COLUMNS: Array<TableColumnInterface<AdminUserResponseInterface>> = [
     ),
   },
   { key: 'role', header: 'Role', render: (row): ReactElement => <Badge label={row.role} /> },
-  { key: 'status', header: 'Status', render: (row): ReactElement => <Badge label={row.status} /> },
+  {
+    key: 'status',
+    header: 'Status',
+    render: (row): ReactElement => (
+      <Badge
+        label={row.status}
+        tone={row.status === UserStatusEnum.BLOCKED ? 'negative' : 'neutral'}
+      />
+    ),
+  },
 ];
 
 export function UsersPage(): ReactElement {
   const [search, setSearch] = useState<string>('');
   const [submittedSearch, setSubmittedSearch] = useState<string>('');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const { users, hasMore, isLoading, error, loadMore } = useAdminUsers(submittedSearch);
+  const { users, hasMore, isLoading, error, loadMore, reload } = useAdminUsers(submittedSearch);
 
   if (error && users.length === 0) return <ErrorMessage error={error} />;
 
@@ -65,7 +74,11 @@ export function UsersPage(): ReactElement {
           </Button>
         </div>
       ) : null}
-      <UserDetailDrawer userId={selectedUserId} onClose={(): void => setSelectedUserId(null)} />
+      <UserDetailDrawer
+        userId={selectedUserId}
+        onClose={(): void => setSelectedUserId(null)}
+        onUserChanged={(): void => void reload()}
+      />
     </div>
   );
 }

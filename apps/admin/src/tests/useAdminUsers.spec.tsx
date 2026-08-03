@@ -68,4 +68,22 @@ describe('useAdminUsers', () => {
       expect(usersApi.fetchAdminUsers).toHaveBeenLastCalledWith(20, null, 'igor');
     });
   });
+
+  it('reload refetches the first page, discarding any loaded-more pages', async () => {
+    const { result } = renderHook(() => useAdminUsers(''));
+
+    await waitFor((): void => expect(result.current.isLoading).toBe(false));
+
+    vi.mocked(usersApi.fetchAdminUsers).mockResolvedValue({
+      items: [adminUser('u-3')],
+      nextCursor: null,
+    } as never);
+
+    await act(async (): Promise<void> => {
+      await result.current.reload();
+    });
+
+    expect(usersApi.fetchAdminUsers).toHaveBeenLastCalledWith(20, null, '');
+    expect(result.current.users.map((user): string => user.id)).toEqual(['u-3']);
+  });
 });
