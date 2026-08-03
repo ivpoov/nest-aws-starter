@@ -51,13 +51,13 @@ export function UserDetailDrawer({
     setActiveTab('activity');
   }
 
-  function handleToggleStatus(): void {
+  function handleToggleStatus(reason?: string): void {
     if (!user) return;
 
     const nextStatus: UserStatusEnum =
       user.status === UserStatusEnum.BLOCKED ? UserStatusEnum.ACTIVE : UserStatusEnum.BLOCKED;
 
-    void updateStatus(nextStatus).then(onUserChanged);
+    void updateStatus(nextStatus, reason).then(onUserChanged);
   }
 
   return (

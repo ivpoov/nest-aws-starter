@@ -11,7 +11,7 @@ export interface UseAdminUserDetailResultInterface {
   readonly isLoading: boolean;
   readonly error: ApiErrorInterface | null;
   readonly forceLogout: () => Promise<void>;
-  readonly updateStatus: (status: UserStatusEnum) => Promise<void>;
+  readonly updateStatus: (status: UserStatusEnum, reason?: string) => Promise<void>;
   readonly isUpdatingStatus: boolean;
   readonly loginAs: () => Promise<void>;
   readonly isLoggingIn: boolean;

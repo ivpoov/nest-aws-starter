@@ -47,9 +47,25 @@ describe('useAdminUserDetail', () => {
       await result.current.updateStatus('BLOCKED' as never);
     });
 
-    expect(usersApi.updateAdminUserStatus).toHaveBeenCalledWith('u-1', 'BLOCKED');
+    expect(usersApi.updateAdminUserStatus).toHaveBeenCalledWith('u-1', 'BLOCKED', undefined);
     expect(usersApi.fetchAdminUser).toHaveBeenCalledTimes(2);
     expect(result.current.isUpdatingStatus).toBe(false);
+  });
+
+  it('passes an optional reason through to the api', async () => {
+    const { result } = renderHook(() => useAdminUserDetail('u-1'));
+
+    await waitFor((): void => expect(result.current.isLoading).toBe(false));
+
+    await act(async (): Promise<void> => {
+      await result.current.updateStatus('BLOCKED' as never, 'Repeated ToS violations');
+    });
+
+    expect(usersApi.updateAdminUserStatus).toHaveBeenCalledWith(
+      'u-1',
+      'BLOCKED',
+      'Repeated ToS violations',
+    );
   });
 
   it('surfaces the error envelope when the status update fails', async () => {
