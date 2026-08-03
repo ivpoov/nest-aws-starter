@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router';
 import { AdminGate } from './components/Layout/AdminGate';
 import { AdminLayout } from './components/Layout/AdminLayout';
 import { ActivitiesPage } from './pages/ActivitiesPage';
+import { InboxPage } from './pages/InboxPage';
 import { LoginPage } from './pages/LoginPage';
 import { StatisticsPage } from './pages/StatisticsPage';
 import { UsersPage } from './pages/UsersPage';
@@ -16,6 +17,7 @@ export function App(): ReactElement {
           <Route path="/dashboard" element={<StatisticsPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/activities" element={<ActivitiesPage />} />
+          <Route path="/inbox" element={<InboxPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
