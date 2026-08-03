@@ -97,3 +97,32 @@ model Note {
   @@index([status])
   @@map("notes")
 }
+
+enum ActivityType {
+  USER_REGISTERED
+  USER_OAUTH_REGISTERED
+  AUTH_LOGIN
+  AUTH_LOGIN_FAILED
+  AUTH_LOGOUT
+  AUTH_PASSWORD_CHANGED
+  AUTH_METHOD_LINKED
+  AUTH_METHOD_UNLINKED
+}
+
+// Append-only audit trail, driven entirely by domain events — no relation to
+// User on purpose: rows must survive independently of user lifecycle changes
+// and actorId/userId are both plain references, never enforced FKs.
+model Activity {
+  id        String       @id @default(uuid(7))
+  userId    String?
+  actorId   String?
+  sessionId String?
+  type      ActivityType
+  meta      Json?
+  ip        String?      @db.VarChar(45)
+  createdAt DateTime     @default(now())
+
+  @@index([userId, id])
+  @@index([type, id])
+  @@map("activities")
+}
