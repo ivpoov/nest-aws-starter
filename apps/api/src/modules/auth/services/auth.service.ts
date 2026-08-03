@@ -9,7 +9,10 @@ import type { RegisterDto } from '@modules/auth/dtos/register.dto.js';
 import { ConflictError } from '@modules/common/errors/conflict.error.js';
 import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js';
-import { USER_REGISTERED_EVENT } from '@modules/event/constants/event-names.constants.js';
+import {
+  AUTH_LOGIN_EVENT,
+  USER_REGISTERED_EVENT,
+} from '@modules/event/constants/event-names.constants.js';
 import { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import type { SessionContextInterface } from '@modules/session/interfaces/session-context.interface.js';
@@ -76,7 +79,11 @@ export class AuthService {
     await this.userService.touchMethodLastUsed(method.id);
     this.logger.log(`User logged in: ${user.id}`);
 
-    return this.sessionService.createSession(user, context);
+    const tokens: TokenPairInterface = await this.sessionService.createSession(user, context);
+
+    this.eventBus.emit(AUTH_LOGIN_EVENT, { userId: user.id, ip: context.ip });
+
+    return tokens;
   }
 
   public async refresh(refreshToken: string): Promise<TokenPairInterface> {
