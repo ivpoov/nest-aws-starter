@@ -8,6 +8,7 @@ import { EventModule } from '@modules/event/event.module.js';
 import { HealthModule } from '@modules/health/health.module.js';
 import { NoteModule } from '@modules/note/note.module.js';
 import { OauthModule } from '@modules/oauth/oauth.module.js';
+import { FacebookOauthModule } from '@modules/oauth-facebook/facebook-oauth.module.js';
 import { GoogleOauthModule } from '@modules/oauth-google/google-oauth.module.js';
 import { PrismaModule } from '@modules/prisma/prisma.module.js';
 import { SessionModule } from '@modules/session/session.module.js';
@@ -56,6 +57,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     AuthModule,
     OauthModule,
     GoogleOauthModule,
+    FacebookOauthModule,
     NoteModule,
   ],
   providers: [
