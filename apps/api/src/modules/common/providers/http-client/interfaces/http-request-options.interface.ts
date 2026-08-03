@@ -4,6 +4,7 @@ export interface HttpRequestOptionsInterface {
   readonly method: HttpMethodType;
   readonly url: string;
   readonly body?: object | undefined;
+  readonly form?: Record<string, string> | undefined;
   readonly headers?: Record<string, string> | undefined;
   readonly timeoutMs?: number | undefined;
   readonly retries?: number | undefined;

@@ -24,7 +24,12 @@
         "SNS_ENABLED",
         "MAIL_ENABLED",
         "MAIL_FROM_ADDRESS",
-        "LAMBDA_ENABLED"
+        "LAMBDA_ENABLED",
+        "AUTH_JWT_SECRET",
+        "AUTH_ACCESS_TTL_SEC",
+        "AUTH_REFRESH_TTL_SEC",
+        "AUTH_REFRESH_GRACE_SEC",
+        "TRUST_PROXY"
       ]
     }
   }

@@ -6,7 +6,7 @@ import type { UpdateNoteDataType } from '@modules/note/types/update-note-data.ty
 export interface NoteRepositoryInterface {
   create(data: CreateNoteDataInterface): Promise<NoteInterface>;
   findById(id: string): Promise<NoteInterface | null>;
-  findManyAfter(pagination: CursorPaginationInterface): Promise<NoteInterface[]>;
-  update(id: string, data: UpdateNoteDataType): Promise<NoteInterface>;
-  deleteById(id: string): Promise<void>;
+  findManyAfter(userId: string, pagination: CursorPaginationInterface): Promise<NoteInterface[]>;
+  update(id: string, data: UpdateNoteDataType): Promise<NoteInterface | null>;
+  deleteById(id: string): Promise<boolean>;
 }

@@ -1,10 +1,14 @@
 import type { CursorPaginationInterface } from '@interfaces/cursor-pagination.interface.js';
+import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import { NOTE_CREATED_EVENT } from '@modules/event/constants/event-names.constants.js';
 import { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { NOTE_REPOSITORY } from '@modules/note/constants/note.constants.js';
-import { NOTE_NOT_FOUND } from '@modules/note/constants/note-errors.constants.js';
+import {
+  NOTE_ACCESS_DENIED,
+  NOTE_NOT_FOUND,
+} from '@modules/note/constants/note-errors.constants.js';
 import type { CreateNoteDataInterface } from '@modules/note/interfaces/create-note-data.interface.js';
 import type { NoteInterface } from '@modules/note/interfaces/note.interface.js';
 import type { NoteListInterface } from '@modules/note/interfaces/note-list.interface.js';
@@ -31,16 +35,15 @@ export class NoteService {
     return note;
   }
 
-  public async findByIdOrThrow(id: string): Promise<NoteInterface> {
-    const note: NoteInterface | null = await this.noteRepository.findById(id);
-
-    if (!note) throw new NotFoundError(NOTE_NOT_FOUND);
-
-    return note;
+  public async findByIdOrThrow(id: string, userId: string): Promise<NoteInterface> {
+    return this.findOwnedOrThrow(id, userId);
   }
 
-  public async findMany(pagination: CursorPaginationInterface): Promise<NoteListInterface> {
-    const items: NoteInterface[] = await this.noteRepository.findManyAfter(pagination);
+  public async findMany(
+    userId: string,
+    pagination: CursorPaginationInterface,
+  ): Promise<NoteListInterface> {
+    const items: NoteInterface[] = await this.noteRepository.findManyAfter(userId, pagination);
     const lastItem: NoteInterface | undefined = items[items.length - 1];
     const nextCursor: string | null =
       items.length === pagination.limit && lastItem ? lastItem.id : null;
@@ -48,20 +51,41 @@ export class NoteService {
     return { items, nextCursor };
   }
 
-  public async update(id: string, data: UpdateNoteDataType): Promise<NoteInterface> {
-    await this.findByIdOrThrow(id);
+  public async update(
+    id: string,
+    userId: string,
+    data: UpdateNoteDataType,
+  ): Promise<NoteInterface> {
+    await this.findOwnedOrThrow(id, userId);
 
-    const note: NoteInterface = await this.noteRepository.update(id, data);
+    const note: NoteInterface | null = await this.noteRepository.update(id, data);
+
+    if (!note) throw new NotFoundError(NOTE_NOT_FOUND);
 
     this.logger.log(`Note updated: ${id}`);
 
     return note;
   }
 
-  public async deleteById(id: string): Promise<void> {
-    await this.findByIdOrThrow(id);
-    await this.noteRepository.deleteById(id);
+  public async deleteById(id: string, userId: string): Promise<void> {
+    await this.findOwnedOrThrow(id, userId);
+
+    const isDeleted: boolean = await this.noteRepository.deleteById(id);
+
+    if (!isDeleted) throw new NotFoundError(NOTE_NOT_FOUND);
 
     this.logger.log(`Note deleted: ${id}`);
+  }
+
+  // 404 for a missing note, 403 for someone else's — existence is not leaked
+  // the other way around because note ids are not guessable (UUIDv7).
+  private async findOwnedOrThrow(id: string, userId: string): Promise<NoteInterface> {
+    const note: NoteInterface | null = await this.noteRepository.findById(id);
+
+    if (!note) throw new NotFoundError(NOTE_NOT_FOUND);
+
+    if (note.userId !== userId) throw new ForbiddenError(NOTE_ACCESS_DENIED);
+
+    return note;
   }
 }

@@ -14,6 +14,14 @@ export class DisabledS3ProviderService implements S3ProviderInterface {
     return this.throwDisabled();
   }
 
+  public getPresignedUploadUrl(
+    _key: string,
+    _contentType: string,
+    _expiresInSeconds: number,
+  ): Promise<string> {
+    return this.throwDisabled();
+  }
+
   public delete(_key: string): Promise<void> {
     return this.throwDisabled();
   }

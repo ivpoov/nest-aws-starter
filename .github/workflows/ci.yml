@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -27,16 +27,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: docker compose up -d --wait
+      # turbo fans out: api tsc+swc, web/admin tsc + vite build, shared tsc
       - run: pnpm run build
       - run: pnpm --dir apps/api run db:migrate
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+      # turbo fans out: api + web + admin vitest suites
       - run: pnpm run test
       - run: pnpm run test:e2e
         env:
@@ -55,6 +57,8 @@ jobs:
           MAIL_ENABLED: "true"
           MAIL_FROM_ADDRESS: no-reply@example.com
           LAMBDA_ENABLED: "true"
+          AUTH_JWT_SECRET: ci-only-secret-with-at-least-32-characters
+          TRUST_PROXY: "true"
 
   audit:
     runs-on: ubuntu-latest
