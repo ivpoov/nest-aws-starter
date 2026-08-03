@@ -7,6 +7,7 @@ import type { AuthMethodUnlinkedPayloadInterface } from '@modules/activity/inter
 import type { AuthNewDevicePayloadInterface } from '@modules/activity/interfaces/auth-new-device-payload.interface.js';
 import type { AuthPasswordChangedPayloadInterface } from '@modules/activity/interfaces/auth-password-changed-payload.interface.js';
 import type { AuthSuspiciousLoginPayloadInterface } from '@modules/activity/interfaces/auth-suspicious-login-payload.interface.js';
+import type { ContactReceivedPayloadInterface } from '@modules/activity/interfaces/contact-received-payload.interface.js';
 import type { CreateActivityDataInterface } from '@modules/activity/interfaces/create-activity-data.interface.js';
 import type { UserBlockedPayloadInterface } from '@modules/activity/interfaces/user-blocked-payload.interface.js';
 import type { UserOauthRegisteredPayloadInterface } from '@modules/activity/interfaces/user-oauth-registered-payload.interface.js';
@@ -23,6 +24,7 @@ import {
   AUTH_NEW_DEVICE_EVENT,
   AUTH_PASSWORD_CHANGED_EVENT,
   AUTH_SUSPICIOUS_LOGIN_EVENT,
+  CONTACT_RECEIVED_EVENT,
   USER_BLOCKED_EVENT,
   USER_OAUTH_REGISTERED_EVENT,
   USER_REGISTERED_EVENT,
@@ -158,6 +160,15 @@ export class ActivityListener {
       actorId: payload.actorId,
       sessionId: payload.sessionId,
       type: ActivityTypeEnum.ADMIN_LOGIN_AS,
+    });
+  }
+
+  @OnDomainEvent(CONTACT_RECEIVED_EVENT)
+  public async onContactReceived(payload: ContactReceivedPayloadInterface): Promise<void> {
+    await this.safeRecord({
+      type: ActivityTypeEnum.CONTACT_RECEIVED,
+      ip: payload.ip,
+      meta: { contactMessageId: payload.contactMessageId },
     });
   }
 
