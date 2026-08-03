@@ -4,7 +4,7 @@ interface InputPropsInterface {
   readonly label: string;
   readonly value: string;
   readonly onChange: (value: string) => void;
-  readonly type?: 'text' | 'email' | 'password';
+  readonly type?: 'text' | 'email' | 'password' | 'date';
   readonly error?: string | null;
 }
 
