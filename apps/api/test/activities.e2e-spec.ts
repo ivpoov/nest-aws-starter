@@ -18,15 +18,16 @@ describe('admin activities', () => {
 
   async function registerUser(
     displayName: string,
-  ): Promise<{ email: string; accessToken: string }> {
+  ): Promise<{ email: string; accessToken: string; ip: string }> {
     const email: string = `activity-e2e-${randomUUID()}@example.com`;
+    const ip: string = uniqueIp();
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/register')
-      .set('x-forwarded-for', uniqueIp())
+      .set('x-forwarded-for', ip)
       .send({ displayName, email, password: 'correct-horse-battery' })
       .expect(201);
 
-    return { email, accessToken: response.body.accessToken };
+    return { email, accessToken: response.body.accessToken, ip };
   }
 
   beforeAll(async () => {
@@ -62,11 +63,13 @@ describe('admin activities', () => {
         .expect(401);
     }
 
-    // one successful login for the target (auth.login) — its token stays
-    // live and is what non-admin checks use below
+    // one successful login for the target (auth.login) — same ip as
+    // registration so it does not also produce an AUTH_NEW_DEVICE row, which
+    // would throw off the exact-count pagination assertions below. Its token
+    // stays live and is what non-admin checks use below.
     const relogin = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
-      .set('x-forwarded-for', uniqueIp())
+      .set('x-forwarded-for', target.ip)
       .send({ email: targetEmail, password: 'correct-horse-battery' })
       .expect(200);
 
