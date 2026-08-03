@@ -1,3 +1,4 @@
+import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import type { EventBusService } from '@modules/event/services/event-bus.service.js';
 import type { NoteInterface } from '@modules/note/interfaces/note.interface.js';
@@ -6,8 +7,11 @@ import { NoteService } from '@modules/note/services/note.service.js';
 import { NoteStatusEnum } from '@nest-aws-starter/shared';
 import { describe, expect, it, vi } from 'vitest';
 
+const ownerId = '01890a5d-0000-774b-bcce-b30209990001';
+
 const note: NoteInterface = {
   id: '01890a5d-ac96-774b-bcce-b302099a8057',
+  userId: ownerId,
   title: 'First note',
   body: '',
   status: NoteStatusEnum.ACTIVE,
@@ -41,7 +45,7 @@ describe('NoteService', () => {
   it('creates a note and emits note.created', async () => {
     const { service, emit } = createService();
 
-    const created: NoteInterface = await service.create({ title: 'First note' });
+    const created: NoteInterface = await service.create({ userId: ownerId, title: 'First note' });
 
     expect(created).toEqual(note);
     expect(emit).toHaveBeenCalledWith('note.created', { noteId: note.id });
@@ -51,7 +55,7 @@ describe('NoteService', () => {
     const { service } = createService({ findById: vi.fn().mockResolvedValue(null) });
 
     try {
-      await service.findByIdOrThrow('missing-id');
+      await service.findByIdOrThrow('missing-id', ownerId);
       expect.unreachable('should have thrown');
     } catch (caught) {
       expect(caught).toBeInstanceOf(NotFoundError);
@@ -59,11 +63,32 @@ describe('NoteService', () => {
     }
   });
 
+  it('denies reading, updating and deleting a foreign note', async () => {
+    const { service, repository } = createService();
+    const strangerId = '01890a5d-0000-774b-bcce-b30209990002';
+
+    for (const attempt of [
+      (): Promise<unknown> => service.findByIdOrThrow(note.id, strangerId),
+      (): Promise<unknown> => service.update(note.id, strangerId, { title: 'hijack' }),
+      (): Promise<unknown> => service.deleteById(note.id, strangerId),
+    ]) {
+      const caught: unknown = await attempt()
+        .then(() => null)
+        .catch((error: unknown): unknown => error);
+
+      expect(caught).toBeInstanceOf(ForbiddenError);
+      expect((caught as ForbiddenError).args.code).toBe('NOTE_ACCESS_DENIED');
+    }
+
+    expect(repository.update).not.toHaveBeenCalled();
+    expect(repository.deleteById).not.toHaveBeenCalled();
+  });
+
   it('maps a concurrent delete to the domain 404 instead of a 500', async () => {
     const { service } = createService({ deleteById: vi.fn().mockResolvedValue(false) });
 
     try {
-      await service.deleteById(note.id);
+      await service.deleteById(note.id, ownerId);
       expect.unreachable('should have thrown');
     } catch (caught) {
       expect(caught).toBeInstanceOf(NotFoundError);
@@ -74,26 +99,26 @@ describe('NoteService', () => {
   it('maps an update of a vanished note to the domain 404', async () => {
     const { service } = createService({ update: vi.fn().mockResolvedValue(null) });
 
-    await expect(service.update(note.id, { title: 'late update' })).rejects.toBeInstanceOf(
+    await expect(service.update(note.id, ownerId, { title: 'late update' })).rejects.toBeInstanceOf(
       NotFoundError,
     );
   });
 
-  it('returns a nextCursor only when the page is full', async () => {
+  it('scopes the list to the owner and pages by cursor', async () => {
     const secondNote: NoteInterface = { ...note, id: '01890a5d-ac96-774b-bcce-b302099a9999' };
-    const { service } = createService({
-      findManyAfter: vi.fn().mockResolvedValue([note, secondNote]),
-    });
+    const findManyAfter = vi.fn().mockResolvedValue([note, secondNote]);
+    const { service } = createService({ findManyAfter });
 
-    const fullPage = await service.findMany({ cursor: null, limit: 2 });
+    const fullPage = await service.findMany(ownerId, { cursor: null, limit: 2 });
 
+    expect(findManyAfter).toHaveBeenCalledWith(ownerId, { cursor: null, limit: 2 });
     expect(fullPage.items).toHaveLength(2);
     expect(fullPage.nextCursor).toBe(secondNote.id);
 
     const { service: shortService } = createService({
       findManyAfter: vi.fn().mockResolvedValue([note]),
     });
-    const shortPage = await shortService.findMany({ cursor: null, limit: 2 });
+    const shortPage = await shortService.findMany(ownerId, { cursor: null, limit: 2 });
 
     expect(shortPage.nextCursor).toBeNull();
   });
