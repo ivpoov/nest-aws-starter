@@ -39,7 +39,12 @@ function renderBody(
   if (isLoading && !totals) return <Loader />;
   if (!totals) return <EmptyState message="No statistics available" />;
 
-  return renderTiles(totals);
+  return (
+    <div className="flex flex-col gap-3">
+      {renderTiles(totals)}
+      {error ? <p className="text-sm text-danger">{error.details}</p> : null}
+    </div>
+  );
 }
 
 export function KpiTiles({
