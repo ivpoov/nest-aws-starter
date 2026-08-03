@@ -1,6 +1,12 @@
 import type { CurrentUserInterface } from '@interfaces/current-user.interface.js';
-import { ABILITY_METADATA_KEY } from '@modules/casl/constants/casl.constants.js';
-import { CASL_FORBIDDEN } from '@modules/casl/constants/casl-errors.constants.js';
+import {
+  ABILITY_METADATA_KEY,
+  ADMIN_SCOPE_METADATA_KEY,
+} from '@modules/casl/constants/casl.constants.js';
+import {
+  ADMIN_IMPERSONATION_FORBIDDEN,
+  CASL_FORBIDDEN,
+} from '@modules/casl/constants/casl-errors.constants.js';
 import type { AbilityRequirementInterface } from '@modules/casl/interfaces/ability-requirement.interface.js';
 import { CaslAbilityFactoryService } from '@modules/casl/services/casl-ability-factory.service.js';
 import type { AppAbilityType } from '@modules/casl/types/app-ability.type.js';
@@ -31,6 +37,13 @@ export class AccessGuard implements CanActivate {
 
     if (!user) throw new ForbiddenError(CASL_FORBIDDEN);
 
+    // Defense in depth: an impersonated session must never reach an admin
+    // route, even for an ADMIN target — no nesting, no privilege re-escalation
+    // through the very account login-as put an admin into.
+    if (user.actAsBy && this.isAdminRoute(context)) {
+      throw new ForbiddenError(ADMIN_IMPERSONATION_FORBIDDEN);
+    }
+
     const ability: AppAbilityType = this.abilityFactory.createForUser(user);
 
     if (!ability.can(requirement.action, requirement.subject)) {
@@ -38,5 +51,11 @@ export class AccessGuard implements CanActivate {
     }
 
     return true;
+  }
+
+  // @AdminScope() class marker, not the HTTP path — independent of the
+  // global API prefix/version and explicit at the controller declaration.
+  private isAdminRoute(context: ExecutionContext): boolean {
+    return this.reflector.get(ADMIN_SCOPE_METADATA_KEY, context.getClass()) === true;
   }
 }

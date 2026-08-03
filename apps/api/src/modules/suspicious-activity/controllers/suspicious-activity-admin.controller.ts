@@ -1,5 +1,6 @@
 import { ApiDefaultResponse } from '@decorators/api-default-response.decorator.js';
 import { Serialize } from '@decorators/serialize.decorator.js';
+import { AdminScope } from '@modules/casl/decorators/admin-scope.decorator.js';
 import { UseAbility } from '@modules/casl/decorators/use-ability.decorator.js';
 import { ActionsEnum } from '@modules/casl/enums/actions.enum.js';
 import { AccessGuard } from '@modules/casl/guards/access.guard.js';
@@ -14,6 +15,7 @@ import { StatusCodes } from 'http-status-codes';
 @ApiBearerAuth()
 @ApiTags('Admin suspicious activity')
 @UseGuards(AccessGuard)
+@AdminScope()
 @Controller('admin/suspicious/lockouts')
 export class SuspiciousActivityAdminController {
   constructor(private readonly loginLockoutService: LoginLockoutService) {}

@@ -7,6 +7,7 @@ import { ActivityEntity } from '@modules/activity/entities/activity.entity.js';
 import type { ActivityFiltersInterface } from '@modules/activity/interfaces/activity-filters.interface.js';
 import type { ActivityListInterface } from '@modules/activity/interfaces/activity-list.interface.js';
 import { ActivityService } from '@modules/activity/services/activity.service.js';
+import { AdminScope } from '@modules/casl/decorators/admin-scope.decorator.js';
 import { UseAbility } from '@modules/casl/decorators/use-ability.decorator.js';
 import { ActionsEnum } from '@modules/casl/enums/actions.enum.js';
 import { AccessGuard } from '@modules/casl/guards/access.guard.js';
@@ -18,6 +19,7 @@ import { StatusCodes } from 'http-status-codes';
 @ApiBearerAuth()
 @ApiTags('Admin activities')
 @UseGuards(AccessGuard)
+@AdminScope()
 @Controller('admin')
 export class ActivityAdminController {
   constructor(
