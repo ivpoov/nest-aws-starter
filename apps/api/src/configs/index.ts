@@ -1,6 +1,7 @@
 import { appConfig } from '@configs/app.config.js';
 import { authConfig } from '@configs/auth.config.js';
 import { databaseConfig } from '@configs/database.config.js';
+import { googleOauthConfig } from '@configs/google-oauth.config.js';
 import { lambdaConfig } from '@configs/lambda.config.js';
 import { mailConfig } from '@configs/mail.config.js';
 import { redisConfig } from '@configs/redis.config.js';
@@ -13,6 +14,7 @@ export const configs = [
   appConfig,
   authConfig,
   databaseConfig,
+  googleOauthConfig,
   lambdaConfig,
   mailConfig,
   redisConfig,
