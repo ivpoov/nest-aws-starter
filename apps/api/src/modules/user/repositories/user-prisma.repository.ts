@@ -106,6 +106,42 @@ export class UserPrismaRepository implements UserRepositoryInterface {
     });
   }
 
+  public async addEmailMethod(userId: string, email: string, passwordHash: string): Promise<void> {
+    await this.prisma.authMethod.create({
+      data: { userId, type: AuthMethodType.EMAIL, email, passwordHash },
+    });
+  }
+
+  public async findMethodsByUserId(userId: string): Promise<AuthMethodInterface[]> {
+    const methods: AuthMethodModel[] = await this.prisma.authMethod.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return methods.map(
+      (method: AuthMethodModel): AuthMethodInterface => this.methodToDomain(method),
+    );
+  }
+
+  public async removeMethod(
+    userId: string,
+    type: CreateOauthMethodDataInterface['type'],
+  ): Promise<boolean> {
+    try {
+      await this.prisma.authMethod.delete({
+        where: { userId_type: { userId, type: AuthMethodType[type] } },
+      });
+
+      return true;
+    } catch (caught) {
+      if (caught instanceof Prisma.PrismaClientKnownRequestError && caught.code === 'P2025') {
+        return false;
+      }
+
+      throw caught;
+    }
+  }
+
   public async findEmailMethodByUserId(userId: string): Promise<AuthMethodInterface | null> {
     const method: AuthMethodModel | null = await this.prisma.authMethod.findUnique({
       where: { userId_type: { userId, type: AuthMethodType.EMAIL } },
