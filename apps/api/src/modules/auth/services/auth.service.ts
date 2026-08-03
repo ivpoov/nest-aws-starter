@@ -9,6 +9,8 @@ import type { RegisterDto } from '@modules/auth/dtos/register.dto.js';
 import { ConflictError } from '@modules/common/errors/conflict.error.js';
 import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js';
+import { USER_REGISTERED_EVENT } from '@modules/event/constants/event-names.constants.js';
+import { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import type { SessionContextInterface } from '@modules/session/interfaces/session-context.interface.js';
 import { SessionService } from '@modules/session/services/session.service.js';
@@ -32,6 +34,7 @@ export class AuthService {
   constructor(
     private readonly userService: UserService,
     private readonly sessionService: SessionService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   public async register(
@@ -48,6 +51,7 @@ export class AuthService {
     });
 
     this.logger.log(`Registered user ${user.id}`);
+    this.eventBus.emit(USER_REGISTERED_EVENT, { userId: user.id, ip: context.ip });
 
     return this.sessionService.createSession(user, context);
   }
