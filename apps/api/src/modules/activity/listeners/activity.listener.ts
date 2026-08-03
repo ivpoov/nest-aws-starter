@@ -3,7 +3,9 @@ import type { AuthLoginPayloadInterface } from '@modules/activity/interfaces/aut
 import type { AuthLogoutPayloadInterface } from '@modules/activity/interfaces/auth-logout-payload.interface.js';
 import type { AuthMethodLinkedPayloadInterface } from '@modules/activity/interfaces/auth-method-linked-payload.interface.js';
 import type { AuthMethodUnlinkedPayloadInterface } from '@modules/activity/interfaces/auth-method-unlinked-payload.interface.js';
+import type { AuthNewDevicePayloadInterface } from '@modules/activity/interfaces/auth-new-device-payload.interface.js';
 import type { AuthPasswordChangedPayloadInterface } from '@modules/activity/interfaces/auth-password-changed-payload.interface.js';
+import type { AuthSuspiciousLoginPayloadInterface } from '@modules/activity/interfaces/auth-suspicious-login-payload.interface.js';
 import type { CreateActivityDataInterface } from '@modules/activity/interfaces/create-activity-data.interface.js';
 import type { UserBlockedPayloadInterface } from '@modules/activity/interfaces/user-blocked-payload.interface.js';
 import type { UserOauthRegisteredPayloadInterface } from '@modules/activity/interfaces/user-oauth-registered-payload.interface.js';
@@ -16,7 +18,9 @@ import {
   AUTH_LOGOUT_EVENT,
   AUTH_METHOD_LINKED_EVENT,
   AUTH_METHOD_UNLINKED_EVENT,
+  AUTH_NEW_DEVICE_EVENT,
   AUTH_PASSWORD_CHANGED_EVENT,
+  AUTH_SUSPICIOUS_LOGIN_EVENT,
   USER_BLOCKED_EVENT,
   USER_OAUTH_REGISTERED_EVENT,
   USER_REGISTERED_EVENT,
@@ -24,7 +28,7 @@ import {
 } from '@modules/event/constants/event-names.constants.js';
 import { OnDomainEvent } from '@modules/event/decorators/on-domain-event.decorator.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
-import { ActivityTypeEnum } from '@nest-aws-starter/shared';
+import { ActivityTypeEnum, LockoutScopeEnum } from '@nest-aws-starter/shared';
 import { Injectable } from '@nestjs/common';
 
 // Feature services never call ActivityService directly — they emit domain
@@ -121,6 +125,25 @@ export class ActivityListener {
       userId: payload.userId,
       actorId: payload.actorId,
       type: ActivityTypeEnum.USER_UNBLOCKED,
+    });
+  }
+
+  @OnDomainEvent(AUTH_SUSPICIOUS_LOGIN_EVENT)
+  public async onAuthSuspiciousLogin(payload: AuthSuspiciousLoginPayloadInterface): Promise<void> {
+    await this.safeRecord({
+      type: ActivityTypeEnum.AUTH_SUSPICIOUS_LOGIN,
+      ip: payload.scope === LockoutScopeEnum.IP ? payload.value : null,
+      meta: { scope: payload.scope, value: payload.value },
+    });
+  }
+
+  @OnDomainEvent(AUTH_NEW_DEVICE_EVENT)
+  public async onAuthNewDevice(payload: AuthNewDevicePayloadInterface): Promise<void> {
+    await this.safeRecord({
+      userId: payload.userId,
+      type: ActivityTypeEnum.AUTH_NEW_DEVICE,
+      ip: payload.ip,
+      meta: { device: payload.device },
     });
   }
 
