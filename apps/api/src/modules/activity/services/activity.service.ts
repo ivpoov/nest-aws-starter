@@ -1,7 +1,7 @@
 import type { CursorPaginationInterface } from '@interfaces/cursor-pagination.interface.js';
 import { ACTIVITY_REPOSITORY } from '@modules/activity/constants/activity.constants.js';
-import type { ActivityFiltersInterface } from '@modules/activity/interfaces/activity-filters.interface.js';
 import type { ActivityInterface } from '@modules/activity/interfaces/activity.interface.js';
+import type { ActivityFiltersInterface } from '@modules/activity/interfaces/activity-filters.interface.js';
 import type { ActivityListInterface } from '@modules/activity/interfaces/activity-list.interface.js';
 import type { ActivityRepositoryInterface } from '@modules/activity/interfaces/activity-repository.interface.js';
 import type { CreateActivityDataInterface } from '@modules/activity/interfaces/create-activity-data.interface.js';

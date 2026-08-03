@@ -1,3 +1,12 @@
+import type { AuthLoginFailedPayloadInterface } from '@modules/activity/interfaces/auth-login-failed-payload.interface.js';
+import type { AuthLoginPayloadInterface } from '@modules/activity/interfaces/auth-login-payload.interface.js';
+import type { AuthLogoutPayloadInterface } from '@modules/activity/interfaces/auth-logout-payload.interface.js';
+import type { AuthMethodLinkedPayloadInterface } from '@modules/activity/interfaces/auth-method-linked-payload.interface.js';
+import type { AuthMethodUnlinkedPayloadInterface } from '@modules/activity/interfaces/auth-method-unlinked-payload.interface.js';
+import type { AuthPasswordChangedPayloadInterface } from '@modules/activity/interfaces/auth-password-changed-payload.interface.js';
+import type { UserOauthRegisteredPayloadInterface } from '@modules/activity/interfaces/user-oauth-registered-payload.interface.js';
+import type { UserRegisteredPayloadInterface } from '@modules/activity/interfaces/user-registered-payload.interface.js';
+import { ActivityService } from '@modules/activity/services/activity.service.js';
 import {
   AUTH_LOGIN_EVENT,
   AUTH_LOGIN_FAILED_EVENT,
@@ -9,15 +18,6 @@ import {
   USER_REGISTERED_EVENT,
 } from '@modules/event/constants/event-names.constants.js';
 import { OnDomainEvent } from '@modules/event/decorators/on-domain-event.decorator.js';
-import type { AuthLoginFailedPayloadInterface } from '@modules/activity/interfaces/auth-login-failed-payload.interface.js';
-import type { AuthLoginPayloadInterface } from '@modules/activity/interfaces/auth-login-payload.interface.js';
-import type { AuthLogoutPayloadInterface } from '@modules/activity/interfaces/auth-logout-payload.interface.js';
-import type { AuthMethodLinkedPayloadInterface } from '@modules/activity/interfaces/auth-method-linked-payload.interface.js';
-import type { AuthMethodUnlinkedPayloadInterface } from '@modules/activity/interfaces/auth-method-unlinked-payload.interface.js';
-import type { AuthPasswordChangedPayloadInterface } from '@modules/activity/interfaces/auth-password-changed-payload.interface.js';
-import type { UserOauthRegisteredPayloadInterface } from '@modules/activity/interfaces/user-oauth-registered-payload.interface.js';
-import type { UserRegisteredPayloadInterface } from '@modules/activity/interfaces/user-registered-payload.interface.js';
-import { ActivityService } from '@modules/activity/services/activity.service.js';
 import { ActivityTypeEnum } from '@nest-aws-starter/shared';
 import { Injectable } from '@nestjs/common';
 
