@@ -1,5 +1,5 @@
 import type { ErrorResponseInterface } from '@interfaces/error-response.interface.js';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ErrorResponseDto implements ErrorResponseInterface {
   @ApiProperty({ type: Number, example: 404 })
@@ -10,6 +10,9 @@ export class ErrorResponseDto implements ErrorResponseInterface {
 
   @ApiProperty({ type: String, example: 'Note not found' })
   readonly details: string;
+
+  @ApiPropertyOptional({ type: Object, example: { providers: ['GOOGLE'] } })
+  readonly meta?: Record<string, unknown> | undefined;
 
   @ApiProperty({ type: String, example: '2026-08-02T12:00:00.000Z' })
   readonly timestamp: string;
