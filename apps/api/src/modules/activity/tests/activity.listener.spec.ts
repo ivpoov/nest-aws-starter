@@ -1,6 +1,6 @@
 import { ActivityListener } from '@modules/activity/listeners/activity.listener.js';
 import type { ActivityService } from '@modules/activity/services/activity.service.js';
-import { ActivityTypeEnum, AuthMethodTypeEnum } from '@nest-aws-starter/shared';
+import { ActivityTypeEnum, AuthMethodTypeEnum, LockoutScopeEnum } from '@nest-aws-starter/shared';
 import { describe, expect, it, vi } from 'vitest';
 
 function createListener(): { listener: ActivityListener; record: ReturnType<typeof vi.fn> } {
@@ -131,6 +131,46 @@ describe('ActivityListener', () => {
       userId,
       actorId: sessionId,
       type: ActivityTypeEnum.USER_UNBLOCKED,
+    });
+  });
+
+  it('records AUTH_SUSPICIOUS_LOGIN on auth.suspicious-login for an ip breach', async () => {
+    const { listener, record } = createListener();
+
+    await listener.onAuthSuspiciousLogin({ scope: LockoutScopeEnum.IP, value: '127.0.0.1' });
+
+    expect(record).toHaveBeenCalledWith({
+      type: ActivityTypeEnum.AUTH_SUSPICIOUS_LOGIN,
+      ip: '127.0.0.1',
+      meta: { scope: LockoutScopeEnum.IP, value: '127.0.0.1' },
+    });
+  });
+
+  it('records AUTH_SUSPICIOUS_LOGIN on auth.suspicious-login for an email breach', async () => {
+    const { listener, record } = createListener();
+
+    await listener.onAuthSuspiciousLogin({
+      scope: LockoutScopeEnum.EMAIL,
+      value: 'user@example.com',
+    });
+
+    expect(record).toHaveBeenCalledWith({
+      type: ActivityTypeEnum.AUTH_SUSPICIOUS_LOGIN,
+      ip: null,
+      meta: { scope: LockoutScopeEnum.EMAIL, value: 'user@example.com' },
+    });
+  });
+
+  it('records AUTH_NEW_DEVICE on auth.new-device', async () => {
+    const { listener, record } = createListener();
+
+    await listener.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });
+
+    expect(record).toHaveBeenCalledWith({
+      userId,
+      type: ActivityTypeEnum.AUTH_NEW_DEVICE,
+      ip: '127.0.0.1',
+      meta: { device: 'Chrome on Fedora' },
     });
   });
 
