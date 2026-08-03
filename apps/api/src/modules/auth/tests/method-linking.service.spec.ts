@@ -148,7 +148,7 @@ describe('MethodLinkingService addEmailMethod', () => {
 
 describe('MethodLinkingService unlinkMethod', () => {
   it('removes a linked method when another remains', async () => {
-    const { service, users } = setup([
+    const { service, users, emit } = setup([
       method({}),
       method({ id: 'm-2', type: AuthMethodTypeEnum.GOOGLE, providerAccountId: 'acc' }),
     ]);
@@ -156,6 +156,10 @@ describe('MethodLinkingService unlinkMethod', () => {
     await service.unlinkMethod('u-1', AuthMethodTypeEnum.GOOGLE);
 
     expect(users.removeMethod).toHaveBeenCalledWith('u-1', AuthMethodTypeEnum.GOOGLE);
+    expect(emit).toHaveBeenCalledWith('auth.method-unlinked', {
+      userId: 'u-1',
+      type: AuthMethodTypeEnum.GOOGLE,
+    });
   });
 
   it('rejects unlinking a method that is not linked', async () => {
