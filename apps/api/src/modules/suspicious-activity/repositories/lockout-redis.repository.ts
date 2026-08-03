@@ -2,6 +2,7 @@ import {
   FAILED_LOGIN_WINDOW_SEC,
   LOCKOUT_TTL_SEC,
 } from '@modules/suspicious-activity/constants/suspicious-activity.constants.js';
+import type { LockoutKeyInterface } from '@modules/suspicious-activity/interfaces/lockout-key.interface.js';
 import type { LockoutRecordInterface } from '@modules/suspicious-activity/interfaces/lockout-record.interface.js';
 import type { LockoutRepositoryInterface } from '@modules/suspicious-activity/interfaces/lockout-repository.interface.js';
 import { LockoutScopeEnum } from '@nest-aws-starter/shared';
@@ -98,7 +99,7 @@ export class LockoutRedisRepository implements LockoutRepositoryInterface {
 
   // IPv6 values contain colons, so only the scope segment is a plain split —
   // everything after it (including further colons) is the value.
-  private parseLockKey(key: string): { scope: LockoutScopeEnum; value: string } {
+  private parseLockKey(key: string): LockoutKeyInterface {
     const rest: string = key.slice(`${LOCK_PREFIX}:`.length);
     const separatorIndex: number = rest.indexOf(':');
 
