@@ -2,6 +2,9 @@
 // Zero runtime dependencies — interfaces, types and string enums only.
 export * from './auth/constants/auth-error-codes.constants.js';
 export * from './auth/enums/oauth-exchange-kind.enum.js';
+export * from './auth/interfaces/add-email-method-request.interface.js';
+export * from './auth/interfaces/auth-method-response.interface.js';
+export * from './auth/interfaces/auth-methods-response.interface.js';
 export * from './auth/interfaces/auth-tokens-response.interface.js';
 export * from './auth/interfaces/change-password-request.interface.js';
 export * from './auth/interfaces/forgot-password-request.interface.js';
