@@ -23,9 +23,16 @@ describe('auth (email + password)', () => {
     return `auth-e2e-${randomUUID()}@example.com`;
   }
 
+  // TRUST_PROXY=true in test env: a unique client ip per call keeps the strict
+  // per-ip auth budgets (register 3/min, login 5/min) out of the way.
+  function uniqueIp(): string {
+    return `10.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+  }
+
   async function register(email: string): Promise<{ accessToken: string; refreshToken: string }> {
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/register')
+      .set('x-forwarded-for', uniqueIp())
       .send({ displayName: 'E2E Auth', email, password: 'correct-horse-battery' })
       .expect(201);
 
@@ -47,6 +54,7 @@ describe('auth (email + password)', () => {
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/register')
+      .set('x-forwarded-for', uniqueIp())
       .send({ displayName: 'Again', email, password: 'correct-horse-battery' })
       .expect(409);
 
@@ -67,6 +75,7 @@ describe('auth (email + password)', () => {
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/register')
+      .set('x-forwarded-for', uniqueIp())
       .send({ displayName: 'Clash', email, password: 'correct-horse-battery' })
       .expect(409);
 
@@ -81,11 +90,13 @@ describe('auth (email + password)', () => {
 
     await request(app.getHttpServer())
       .post('/api/v1/auth/login')
+      .set('x-forwarded-for', uniqueIp())
       .send({ email, password: 'correct-horse-battery' })
       .expect(200);
 
     const failed = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
+      .set('x-forwarded-for', uniqueIp())
       .send({ email, password: 'wrong-password-entirely' })
       .expect(401);
 
@@ -95,6 +106,7 @@ describe('auth (email + password)', () => {
   it('does not reveal whether an email exists', async () => {
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
+      .set('x-forwarded-for', uniqueIp())
       .send({ email: uniqueEmail(), password: 'whatever-password' })
       .expect(401);
 
@@ -115,6 +127,7 @@ describe('auth (email + password)', () => {
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
+      .set('x-forwarded-for', uniqueIp())
       .send({ email, password: 'correct-horse-battery' })
       .expect(403);
 
