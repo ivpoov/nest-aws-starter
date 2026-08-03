@@ -1,4 +1,5 @@
 import { ApiDefaultResponse } from '@decorators/api-default-response.decorator.js';
+import { Public } from '@decorators/public.decorator.js';
 import { Serialize } from '@decorators/serialize.decorator.js';
 import { CursorPaginationQueryDto } from '@modules/common/dtos/cursor-pagination-query.dto.js';
 import { CreateNoteDto } from '@modules/note/dtos/create-note.dto.js';
@@ -23,8 +24,9 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { StatusCodes } from 'http-status-codes';
 
-// Auth, permission and throttling guards join every endpoint in v0.2 — the
-// endpoint checklist is completed there.
+// TEMPORARY @Public(): removed by the note-ownership task, which adds CASL
+// abilities and per-route throttling to complete the endpoint checklist.
+@Public()
 @ApiTags('Notes')
 @Controller('notes')
 export class NoteController {

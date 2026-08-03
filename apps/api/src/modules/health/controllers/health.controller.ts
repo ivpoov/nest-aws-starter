@@ -1,11 +1,16 @@
+import { Public } from '@decorators/public.decorator.js';
 import type { HealthStatusInterface } from '@modules/health/interfaces/health-status.interface.js';
 import type { LivenessStatusInterface } from '@modules/health/interfaces/liveness-status.interface.js';
 import { HealthService } from '@modules/health/services/health.service.js';
 import { Controller, Get, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { FastifyReply } from 'fastify';
 import { StatusCodes } from 'http-status-codes';
 
+// Public + unthrottled: load balancers and orchestrators poll these
+@Public()
+@SkipThrottle()
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {

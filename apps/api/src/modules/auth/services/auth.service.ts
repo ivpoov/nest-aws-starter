@@ -79,6 +79,11 @@ export class AuthService {
     return this.sessionService.refresh(refreshToken);
   }
 
+  public async logout(userId: string, sessionId: string): Promise<void> {
+    await this.sessionService.revokeSession(userId, sessionId);
+    this.logger.log(`User logged out: ${userId}`);
+  }
+
   private async assertEmailFree(email: string): Promise<void> {
     const existing: UserWithMethodTypesInterface | null =
       await this.userService.findByAuthEmail(email);
