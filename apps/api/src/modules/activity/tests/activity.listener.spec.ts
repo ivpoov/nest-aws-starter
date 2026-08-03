@@ -110,6 +110,30 @@ describe('ActivityListener', () => {
     });
   });
 
+  it('records USER_BLOCKED on user.blocked', async () => {
+    const { listener, record } = createListener();
+
+    await listener.onUserBlocked({ userId, actorId: sessionId });
+
+    expect(record).toHaveBeenCalledWith({
+      userId,
+      actorId: sessionId,
+      type: ActivityTypeEnum.USER_BLOCKED,
+    });
+  });
+
+  it('records USER_UNBLOCKED on user.unblocked', async () => {
+    const { listener, record } = createListener();
+
+    await listener.onUserUnblocked({ userId, actorId: sessionId });
+
+    expect(record).toHaveBeenCalledWith({
+      userId,
+      actorId: sessionId,
+      type: ActivityTypeEnum.USER_UNBLOCKED,
+    });
+  });
+
   it('swallows a repository failure instead of producing an unhandled rejection', async () => {
     const record = vi.fn().mockRejectedValue(new Error('activity table unavailable'));
     const activityService = { record } as unknown as ActivityService;
