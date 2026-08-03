@@ -107,7 +107,23 @@ describe('UserAdminController.updateStatus', () => {
     await controller.updateStatus(adminId, userId, { status: UserStatusEnum.ACTIVE });
 
     expect(revokeAllForUser).not.toHaveBeenCalled();
-    expect(updateStatus).toHaveBeenCalledWith(userId, UserStatusEnum.ACTIVE, adminId);
+    expect(updateStatus).toHaveBeenCalledWith(userId, UserStatusEnum.ACTIVE, adminId, undefined);
+  });
+
+  it('threads an optional reason through to the service', async () => {
+    const { controller, updateStatus } = createController();
+
+    await controller.updateStatus(adminId, userId, {
+      status: UserStatusEnum.BLOCKED,
+      reason: 'Repeated ToS violations',
+    });
+
+    expect(updateStatus).toHaveBeenCalledWith(
+      userId,
+      UserStatusEnum.BLOCKED,
+      adminId,
+      'Repeated ToS violations',
+    );
   });
 
   it('aborts on self-block before revoking any session', async () => {

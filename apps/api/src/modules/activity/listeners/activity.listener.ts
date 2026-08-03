@@ -118,6 +118,7 @@ export class ActivityListener {
       userId: payload.userId,
       actorId: payload.actorId,
       type: ActivityTypeEnum.USER_BLOCKED,
+      meta: payload.reason ? { reason: payload.reason } : undefined,
     });
   }
 
@@ -127,6 +128,7 @@ export class ActivityListener {
       userId: payload.userId,
       actorId: payload.actorId,
       type: ActivityTypeEnum.USER_UNBLOCKED,
+      meta: payload.reason ? { reason: payload.reason } : undefined,
     });
   }
 
