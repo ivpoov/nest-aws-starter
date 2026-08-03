@@ -1,0 +1,85 @@
+import type {
+  ApiErrorInterface,
+  StatisticsCountBreakdownInterface,
+} from '@nest-aws-starter/shared';
+import type { ReactElement } from 'react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  LabelList,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import type { ChartColorsInterface } from '../../interfaces/chart-colors.interface';
+import { getChartColors } from '../../utils/chartColors';
+import { Card } from '../ui/Card';
+import { EmptyState } from '../ui/EmptyState';
+import { ErrorMessage } from '../ui/ErrorMessage';
+import { Loader } from '../ui/Loader';
+
+interface AuthMethodBreakdownPropsInterface {
+  readonly items: StatisticsCountBreakdownInterface[];
+  readonly isLoading: boolean;
+  readonly error: ApiErrorInterface | null;
+  readonly onRetry: () => void;
+}
+
+// One measure (count) split across nominal categories — a single hue carries
+// the bars; the axis labels already give identity, so no per-bar color.
+function renderChart(
+  items: StatisticsCountBreakdownInterface[],
+  colors: ChartColorsInterface,
+): ReactElement {
+  return (
+    <div className="h-56">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart layout="vertical" data={items}>
+          <CartesianGrid horizontal={false} stroke={colors.edge} />
+          <XAxis
+            type="number"
+            stroke={colors.muted}
+            tick={{ fontSize: 12 }}
+            allowDecimals={false}
+          />
+          <YAxis
+            type="category"
+            dataKey="key"
+            stroke={colors.muted}
+            tick={{ fontSize: 12 }}
+            width={80}
+          />
+          <Bar dataKey="count" fill={colors.accent} radius={[0, 4, 4, 0]} isAnimationActive={false}>
+            <LabelList dataKey="count" position="right" fill={colors.muted} fontSize={12} />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function renderBody(
+  items: StatisticsCountBreakdownInterface[],
+  isLoading: boolean,
+  error: ApiErrorInterface | null,
+  onRetry: () => void,
+  colors: ChartColorsInterface,
+): ReactElement {
+  if (error && items.length === 0) return <ErrorMessage error={error} onRetry={onRetry} />;
+  if (isLoading && items.length === 0) return <Loader />;
+  if (items.length === 0) return <EmptyState message="No auth methods yet" />;
+
+  return renderChart(items, colors);
+}
+
+export function AuthMethodBreakdown({
+  items,
+  isLoading,
+  error,
+  onRetry,
+}: AuthMethodBreakdownPropsInterface): ReactElement {
+  const colors: ChartColorsInterface = getChartColors();
+
+  return <Card title="Auth methods">{renderBody(items, isLoading, error, onRetry, colors)}</Card>;
+}
