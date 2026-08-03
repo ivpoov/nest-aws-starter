@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { NavLink, Outlet } from 'react-router';
+import { Link, NavLink, Outlet } from 'react-router';
 import { useIsImpersonating } from '../../hooks/auth/useIsImpersonating';
 import { useLogout } from '../../hooks/auth/useLogout';
 import { Banner } from '../ui/Banner';
@@ -47,6 +47,11 @@ export function AppLayout(): ReactElement {
       <main className="mx-auto max-w-3xl px-6 py-8">
         <Outlet />
       </main>
+      <footer className="border-t border-edge px-6 py-4 text-center text-sm text-content-muted">
+        <Link to="/contact" className="hover:text-content">
+          Contact us
+        </Link>
+      </footer>
     </div>
   );
 }
