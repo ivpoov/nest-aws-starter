@@ -143,9 +143,7 @@ export class UserService {
     status: UserStatusEnum,
     actorId: string,
   ): Promise<UserInterface> {
-    if (status === UserStatusEnum.BLOCKED && id === actorId) {
-      throw new ConflictError(USER_CANNOT_BLOCK_SELF);
-    }
+    if (status === UserStatusEnum.BLOCKED) this.assertNotSelfBlock(id, actorId);
 
     const user: UserInterface | null = await this.userRepository.updateStatus(id, status);
 
@@ -158,5 +156,13 @@ export class UserService {
     );
 
     return user;
+  }
+
+  // Side-effect-free guard, called by the controller before it revokes
+  // sessions (fail-safe ordering: never revoke a blocker's own live
+  // sessions on a rejected self-block) and again here as the write path's
+  // own defense in depth.
+  public assertNotSelfBlock(id: string, actorId: string): void {
+    if (id === actorId) throw new ConflictError(USER_CANNOT_BLOCK_SELF);
   }
 }

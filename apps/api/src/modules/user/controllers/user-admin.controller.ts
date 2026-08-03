@@ -110,12 +110,20 @@ export class UserAdminController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserStatusDto,
   ): Promise<AdminUserInterface> {
-    await this.userService.updateStatus(id, dto.status, adminId);
+    await this.userService.findByIdForAdminOrThrow(id);
 
+    // Fail-safe ordering: revoke sessions BEFORE flipping the status. If the
+    // revoke throws, nothing has changed yet (status untouched, no event). If
+    // the status write below fails after a successful revoke, the user is
+    // left logged out but still ACTIVE — the safe direction, since it never
+    // leaves a BLOCKED user with live sessions.
     if (dto.status === UserStatusEnum.BLOCKED) {
+      this.userService.assertNotSelfBlock(id, adminId);
       await this.sessionService.revokeAllForUser(id);
-      this.logger.log(`Admin ${adminId} blocked user ${id} and revoked all sessions`);
+      this.logger.log(`Admin ${adminId} revoked all sessions for user ${id} before blocking`);
     }
+
+    await this.userService.updateStatus(id, dto.status, adminId);
 
     return this.userService.findByIdForAdminOrThrow(id);
   }
