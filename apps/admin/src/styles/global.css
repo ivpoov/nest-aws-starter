@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+/* Semantic tokens — components never use raw palette values. */
+:root {
+  --surface: oklch(0.985 0.002 247);
+  --surface-raised: oklch(1 0 0);
+  --content: oklch(0.21 0.03 262);
+  --content-muted: oklch(0.52 0.02 262);
+  --accent: oklch(0.55 0.2 262);
+  --accent-content: oklch(0.99 0 0);
+  --danger: oklch(0.55 0.2 27);
+  --edge: oklch(0.9 0.01 262);
+}
+
+:root[data-theme="dark"] {
+  --surface: oklch(0.18 0.02 262);
+  --surface-raised: oklch(0.23 0.02 262);
+  --content: oklch(0.95 0.01 262);
+  --content-muted: oklch(0.68 0.02 262);
+  --accent: oklch(0.68 0.16 262);
+  --accent-content: oklch(0.15 0.02 262);
+  --danger: oklch(0.68 0.18 27);
+  --edge: oklch(0.32 0.02 262);
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-content: var(--content);
+  --color-content-muted: var(--content-muted);
+  --color-accent: var(--accent);
+  --color-accent-content: var(--accent-content);
+  --color-danger: var(--danger);
+  --color-edge: var(--edge);
+}
+
+body {
+  @apply bg-surface text-content antialiased;
+}
