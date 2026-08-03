@@ -33,6 +33,8 @@ export * from './users/constants/user-error-codes.constants.js';
 export * from './users/enums/auth-method-type.enum.js';
 export * from './users/enums/user-role.enum.js';
 export * from './users/enums/user-status.enum.js';
+export * from './users/interfaces/admin-user-list-response.interface.js';
+export * from './users/interfaces/admin-user-response.interface.js';
 export * from './users/interfaces/avatar-upload-request.interface.js';
 export * from './users/interfaces/avatar-upload-response.interface.js';
 export * from './users/interfaces/update-profile-request.interface.js';
