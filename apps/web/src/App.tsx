@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { AppLayout } from './components/Layout/AppLayout';
 import { AuthGate } from './components/Layout/AuthGate';
+import { ContactPage } from './pages/ContactPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { MethodsPage } from './pages/MethodsPage';
@@ -22,6 +23,7 @@ export function App(): ReactElement {
       <Route path="/email/verify" element={<VerifyEmailPage />} />
       <Route path="/password/forgot" element={<ForgotPasswordPage />} />
       <Route path="/password/reset" element={<ResetPasswordPage />} />
+      <Route path="/contact" element={<ContactPage />} />
       <Route element={<AuthGate />}>
         <Route element={<AppLayout />}>
           <Route path="/notes" element={<NotesPage />} />
