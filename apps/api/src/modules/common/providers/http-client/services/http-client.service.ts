@@ -8,6 +8,7 @@ import {
   IDEMPOTENT_METHODS,
 } from '@providers/http-client/constants/http-client.constants.js';
 import { HTTP_REQUEST_FAILED } from '@providers/http-client/constants/http-client-errors.constants.js';
+import type { HttpDownloadResultInterface } from '@providers/http-client/interfaces/http-download-result.interface.js';
 import type { HttpRequestOptionsInterface } from '@providers/http-client/interfaces/http-request-options.interface.js';
 import type { HttpRequestOutcomeType } from '@providers/http-client/types/http-request-outcome.type.js';
 
@@ -31,6 +32,31 @@ export class HttpClientService {
     }
 
     throw new InternalError(HTTP_REQUEST_FAILED);
+  }
+
+  public async download(
+    url: string,
+    maxBytes: number,
+    allowedContentTypes: readonly string[],
+  ): Promise<HttpDownloadResultInterface> {
+    const response: Response = await fetch(url, {
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    }).catch((caught: unknown): never => {
+      this.logger.warn(`GET ${url} download failed: ${String(caught)}`);
+
+      throw new InternalError(HTTP_REQUEST_FAILED);
+    });
+    const contentType: string = response.headers.get('content-type') ?? '';
+
+    if (!response.ok || !allowedContentTypes.includes(contentType.split(';')[0] ?? '')) {
+      throw new InternalError(HTTP_REQUEST_FAILED);
+    }
+
+    const body: Buffer = Buffer.from(await response.arrayBuffer());
+
+    if (body.byteLength > maxBytes) throw new InternalError(HTTP_REQUEST_FAILED);
+
+    return { contentType: contentType.split(';')[0] ?? contentType, body };
   }
 
   private async performRequest<T>(
