@@ -7,6 +7,7 @@ import { redisConfig } from '@configs/redis.config.js';
 import { s3Config } from '@configs/s3.config.js';
 import { snsConfig } from '@configs/sns.config.js';
 import { sqsConfig } from '@configs/sqs.config.js';
+import { webAppConfig } from '@configs/web-app.config.js';
 
 export const configs = [
   appConfig,
@@ -18,4 +19,5 @@ export const configs = [
   s3Config,
   snsConfig,
   sqsConfig,
+  webAppConfig,
 ];

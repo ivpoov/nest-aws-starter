@@ -7,3 +7,8 @@ export const ARGON2_OPTIONS = {
   timeCost: 2,
   parallelism: 1,
 } as const;
+
+export const ONE_TIME_TOKEN_REPOSITORY = Symbol('ONE_TIME_TOKEN_REPOSITORY');
+
+export const VERIFY_EMAIL_TTL_SEC = 86_400;
+export const RESET_PASSWORD_TTL_SEC = 3_600;
