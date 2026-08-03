@@ -9,3 +9,5 @@ export const AUTH_METHOD_LINKED_EVENT = 'auth.method-linked';
 export const AUTH_METHOD_UNLINKED_EVENT = 'auth.method-unlinked';
 export const USER_BLOCKED_EVENT = 'user.blocked';
 export const USER_UNBLOCKED_EVENT = 'user.unblocked';
+export const AUTH_SUSPICIOUS_LOGIN_EVENT = 'auth.suspicious-login';
+export const AUTH_NEW_DEVICE_EVENT = 'auth.new-device';
