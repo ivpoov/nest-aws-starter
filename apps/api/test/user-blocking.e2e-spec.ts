@@ -114,7 +114,7 @@ describe('admin user blocking', () => {
     const blocked = await request(app.getHttpServer())
       .patch(`/api/v1/admin/users/${userId}/status`)
       .set('authorization', `Bearer ${adminToken}`)
-      .send({ status: 'BLOCKED' })
+      .send({ status: 'BLOCKED', reason: 'Repeated ToS violations' })
       .expect(200);
 
     expect(blocked.body.status).toBe('BLOCKED');
@@ -142,7 +142,7 @@ describe('admin user blocking', () => {
     expect(loginBlocked.body.code).toBe('USER_BLOCKED');
   });
 
-  it('records a USER_BLOCKED activity row', async () => {
+  it('records a USER_BLOCKED activity row with the reason in meta', async () => {
     const activities = await request(app.getHttpServer())
       .get(`/api/v1/admin/activities?type=USER_BLOCKED&userId=${userId}`)
       .set('authorization', `Bearer ${adminToken}`)
@@ -151,13 +151,14 @@ describe('admin user blocking', () => {
     expect(activities.body.items.length).toBeGreaterThanOrEqual(1);
     expect(activities.body.items[0].userId).toBe(userId);
     expect(activities.body.items[0].actorId).toBe(adminId);
+    expect(activities.body.items[0].meta).toEqual({ reason: 'Repeated ToS violations' });
   });
 
   it('unblocks a user and restores login', async () => {
     const unblocked = await request(app.getHttpServer())
       .patch(`/api/v1/admin/users/${userId}/status`)
       .set('authorization', `Bearer ${adminToken}`)
-      .send({ status: 'ACTIVE' })
+      .send({ status: 'ACTIVE', reason: 'False positive' })
       .expect(200);
 
     expect(unblocked.body.status).toBe('ACTIVE');
@@ -171,7 +172,7 @@ describe('admin user blocking', () => {
     expect(loginRestored.body.accessToken).toBeTruthy();
   });
 
-  it('records a USER_UNBLOCKED activity row', async () => {
+  it('records a USER_UNBLOCKED activity row with the reason in meta', async () => {
     const activities = await request(app.getHttpServer())
       .get(`/api/v1/admin/activities?type=USER_UNBLOCKED&userId=${userId}`)
       .set('authorization', `Bearer ${adminToken}`)
@@ -180,6 +181,7 @@ describe('admin user blocking', () => {
     expect(activities.body.items.length).toBeGreaterThanOrEqual(1);
     expect(activities.body.items[0].userId).toBe(userId);
     expect(activities.body.items[0].actorId).toBe(adminId);
+    expect(activities.body.items[0].meta).toEqual({ reason: 'False positive' });
   });
 
   it('returns 404 for an unknown user id', async () => {
