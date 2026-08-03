@@ -1,10 +1,11 @@
-import { NoteStatusEnum } from '@modules/note/enums/note-status.enum.js';
-import type { NoteInterface } from '@modules/note/interfaces/note.interface.js';
+import { type NoteResponseInterface, NoteStatusEnum } from '@nest-aws-starter/shared';
 import { ApiProperty } from '@nestjs/swagger';
-import { Exclude, Expose, Type } from 'class-transformer';
+import { Exclude, Expose, Transform } from 'class-transformer';
 
+// The wire tells the truth: dates cross HTTP as ISO-8601 strings, so the DTO
+// implements the shared wire contract, not the Date-carrying domain interface.
 @Exclude()
-export class NoteResponseDto implements NoteInterface {
+export class NoteResponseDto implements NoteResponseInterface {
   @ApiProperty({ type: String, example: '01890a5d-ac96-774b-bcce-b302099a8057' })
   @Expose()
   readonly id: string;
@@ -21,13 +22,13 @@ export class NoteResponseDto implements NoteInterface {
   @Expose()
   readonly status: NoteStatusEnum;
 
-  @ApiProperty({ type: Date, example: '2026-08-02T12:00:00.000Z' })
+  @ApiProperty({ type: String, example: '2026-08-02T12:00:00.000Z' })
   @Expose()
-  @Type(() => Date)
-  readonly createdAt: Date;
+  @Transform(({ value }: { value: Date }): string => value.toISOString())
+  readonly createdAt: string;
 
-  @ApiProperty({ type: Date, example: '2026-08-02T12:00:00.000Z' })
+  @ApiProperty({ type: String, example: '2026-08-02T12:00:00.000Z' })
   @Expose()
-  @Type(() => Date)
-  readonly updatedAt: Date;
+  @Transform(({ value }: { value: Date }): string => value.toISOString())
+  readonly updatedAt: string;
 }

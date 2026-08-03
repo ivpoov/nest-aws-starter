@@ -3,5 +3,10 @@ import type { UploadFileDataInterface } from '@providers/s3/interfaces/upload-fi
 export interface S3ProviderInterface {
   upload(data: UploadFileDataInterface): Promise<string>;
   getPresignedUrl(key: string, expiresInSeconds: number): Promise<string>;
+  getPresignedUploadUrl(
+    key: string,
+    contentType: string,
+    expiresInSeconds: number,
+  ): Promise<string>;
   delete(key: string): Promise<void>;
 }
