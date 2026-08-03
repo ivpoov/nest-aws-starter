@@ -12,10 +12,22 @@ import { SessionService } from '@modules/session/services/session.service.js';
 import { AdminUsersQueryDto } from '@modules/user/dtos/admin-users-query.dto.js';
 import { AdminUserListResponseDto } from '@modules/user/dtos/responses/admin-user-list-response.dto.js';
 import { AdminUserResponseDto } from '@modules/user/dtos/responses/admin-user-response.dto.js';
+import { UpdateUserStatusDto } from '@modules/user/dtos/update-user-status.dto.js';
 import { UserEntity } from '@modules/user/entities/user.entity.js';
 import type { AdminUserInterface } from '@modules/user/interfaces/admin-user.interface.js';
 import { UserService } from '@modules/user/services/user.service.js';
-import { Controller, Delete, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
+import { UserStatusEnum } from '@nest-aws-starter/shared';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { StatusCodes } from 'http-status-codes';
 
@@ -87,5 +99,24 @@ export class UserAdminController {
     this.logger.log(`Admin ${adminId} force-logged-out user ${id} (${revokedCount} sessions)`);
 
     return { revokedCount };
+  }
+
+  @ApiDefaultResponse({ status: StatusCodes.OK, type: AdminUserResponseDto })
+  @Serialize(AdminUserResponseDto)
+  @UseAbility(ActionsEnum.UPDATE, UserEntity)
+  @Patch(':id/status')
+  public async updateStatus(
+    @CurrentUserId() adminId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateUserStatusDto,
+  ): Promise<AdminUserInterface> {
+    await this.userService.updateStatus(id, dto.status, adminId);
+
+    if (dto.status === UserStatusEnum.BLOCKED) {
+      await this.sessionService.revokeAllForUser(id);
+      this.logger.log(`Admin ${adminId} blocked user ${id} and revoked all sessions`);
+    }
+
+    return this.userService.findByIdForAdminOrThrow(id);
   }
 }
