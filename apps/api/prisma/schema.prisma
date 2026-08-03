@@ -109,6 +109,8 @@ enum ActivityType {
   AUTH_METHOD_UNLINKED
   USER_BLOCKED
   USER_UNBLOCKED
+  AUTH_SUSPICIOUS_LOGIN
+  AUTH_NEW_DEVICE
 }
 
 // Append-only audit trail, driven entirely by domain events — no relation to
