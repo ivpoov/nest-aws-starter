@@ -11,6 +11,9 @@ export interface UserRepositoryInterface {
   findById(id: string): Promise<UserInterface | null>;
   findByAuthEmail(email: string): Promise<UserWithMethodTypesInterface | null>;
   findEmailMethodByEmail(email: string): Promise<AuthMethodInterface | null>;
+  findEmailMethodByUserId(userId: string): Promise<AuthMethodInterface | null>;
+  markEmailVerified(methodId: string): Promise<void>;
+  updatePasswordHash(methodId: string, passwordHash: string): Promise<void>;
   touchMethodLastUsed(methodId: string, now: Date): Promise<void>;
   updateProfile(id: string, data: UpdateProfileDataInterface): Promise<UserInterface | null>;
 }

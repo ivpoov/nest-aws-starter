@@ -52,6 +52,20 @@ export class UserService {
     return this.userRepository.findEmailMethodByEmail(email);
   }
 
+  public async findEmailMethodByUserId(userId: string): Promise<AuthMethodInterface | null> {
+    return this.userRepository.findEmailMethodByUserId(userId);
+  }
+
+  public async markEmailVerified(methodId: string): Promise<void> {
+    await this.userRepository.markEmailVerified(methodId);
+    this.logger.log(`Email method verified: ${methodId}`);
+  }
+
+  public async updatePasswordHash(methodId: string, passwordHash: string): Promise<void> {
+    await this.userRepository.updatePasswordHash(methodId, passwordHash);
+    this.logger.log(`Password updated for method: ${methodId}`);
+  }
+
   public async touchMethodLastUsed(methodId: string): Promise<void> {
     await this.userRepository.touchMethodLastUsed(methodId, new Date());
   }
