@@ -8,10 +8,12 @@ import { ActivityList } from '../Activities/ActivityList';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Loader } from '../ui/Loader';
+import { UserActions } from './UserActions';
 
 interface UserDetailDrawerPropsInterface {
   readonly userId: string | null;
   readonly onClose: () => void;
+  readonly onUserChanged?: () => void;
 }
 
 function tabClassName(isActive: boolean): string {
@@ -23,9 +25,20 @@ function tabClassName(isActive: boolean): string {
 export function UserDetailDrawer({
   userId,
   onClose,
+  onUserChanged,
 }: UserDetailDrawerPropsInterface): ReactElement | null {
   const [activeTab, setActiveTab] = useState<DrawerTabType>('details');
-  const { user, sessions, isLoading, error, forceLogout } = useAdminUserDetail(userId);
+  const {
+    user,
+    sessions,
+    isLoading,
+    error,
+    forceLogout,
+    updateStatus,
+    isUpdatingStatus,
+    loginAs,
+    isLoggingIn,
+  } = useAdminUserDetail(userId);
   const activity = useUserActivities(activeTab === 'activity' ? userId : null);
 
   if (!userId) return null;
@@ -36,6 +49,15 @@ export function UserDetailDrawer({
 
   function handleActivityTabClick(): void {
     setActiveTab('activity');
+  }
+
+  function handleToggleStatus(): void {
+    if (!user) return;
+
+    const nextStatus: UserStatusEnum =
+      user.status === UserStatusEnum.BLOCKED ? UserStatusEnum.ACTIVE : UserStatusEnum.BLOCKED;
+
+    void updateStatus(nextStatus).then(onUserChanged);
   }
 
   return (
@@ -103,13 +125,23 @@ export function UserDetailDrawer({
             <p className="mb-1 font-medium">Active sessions: {sessions.length}</p>
             <ul className="flex flex-col gap-1 text-content-muted">
               {sessions.map((session) => (
-                <li key={session.id}>
-                  {session.device} · {session.ip}
+                <li key={session.id} className="flex items-center gap-2">
+                  <span>
+                    {session.device} · {session.ip}
+                  </span>
+                  {session.isImpersonated ? <Badge label="Impersonated" tone="negative" /> : null}
                 </li>
               ))}
             </ul>
           </div>
           {error ? <p className="text-danger">{error.details}</p> : null}
+          <UserActions
+            status={user.status}
+            isUpdatingStatus={isUpdatingStatus}
+            isLoggingIn={isLoggingIn}
+            onToggleStatus={handleToggleStatus}
+            onLoginAs={(): void => void loginAs()}
+          />
           <Button variant="danger" onClick={(): void => void forceLogout()}>
             Log out all sessions
           </Button>
