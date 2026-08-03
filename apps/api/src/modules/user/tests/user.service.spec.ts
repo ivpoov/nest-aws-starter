@@ -1,4 +1,6 @@
+import { ConflictError } from '@modules/common/errors/conflict.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
+import type { EventBusService } from '@modules/event/services/event-bus.service.js';
 import type { UserInterface } from '@modules/user/interfaces/user.interface.js';
 import type { UserRepositoryInterface } from '@modules/user/interfaces/user-repository.interface.js';
 import { UserService } from '@modules/user/services/user.service.js';
@@ -15,22 +17,30 @@ const user: UserInterface = {
   updatedAt: new Date('2026-08-03T12:00:00Z'),
 };
 
-function createService(overrides: Partial<UserRepositoryInterface> = {}): UserService {
+const adminId = '01890a5d-ac96-774b-bcce-b302099a9999';
+
+function createService(overrides: Partial<UserRepositoryInterface> = {}): {
+  service: UserService;
+  emit: ReturnType<typeof vi.fn>;
+} {
   const repository: UserRepositoryInterface = {
     createWithEmailMethod: vi.fn().mockResolvedValue(user),
     createWithOauthMethod: vi.fn().mockResolvedValue(user),
     findById: vi.fn().mockResolvedValue(user),
     findByAuthEmail: vi.fn().mockResolvedValue(null),
     updateProfile: vi.fn().mockResolvedValue(user),
+    updateStatus: vi.fn().mockResolvedValue(user),
     ...overrides,
   };
+  const emit = vi.fn();
+  const eventBus = { emit } as unknown as EventBusService;
 
-  return new UserService(repository);
+  return { service: new UserService(repository, eventBus), emit };
 }
 
 describe('UserService', () => {
   it('creates a user with an email method', async () => {
-    const service: UserService = createService();
+    const { service } = createService();
 
     const created: UserInterface = await service.createWithEmailMethod({
       displayName: 'Igor',
@@ -42,7 +52,7 @@ describe('UserService', () => {
   });
 
   it('throws the coded not-found error for a missing user', async () => {
-    const service: UserService = createService({ findById: vi.fn().mockResolvedValue(null) });
+    const { service } = createService({ findById: vi.fn().mockResolvedValue(null) });
 
     try {
       await service.findByIdOrThrow('missing-id');
@@ -54,7 +64,7 @@ describe('UserService', () => {
   });
 
   it('maps a profile update of a vanished user to the domain 404', async () => {
-    const service: UserService = createService({
+    const { service } = createService({
       updateProfile: vi.fn().mockResolvedValue(null),
     });
 
@@ -65,11 +75,58 @@ describe('UserService', () => {
 
   it('passes findByAuthEmail through to the repository', async () => {
     const findByAuthEmail = vi.fn().mockResolvedValue(null);
-    const service: UserService = createService({ findByAuthEmail });
+    const { service } = createService({ findByAuthEmail });
 
     const result = await service.findByAuthEmail('nobody@example.com');
 
     expect(result).toBeNull();
     expect(findByAuthEmail).toHaveBeenCalledWith('nobody@example.com');
+  });
+
+  it('blocks a user and emits user.blocked', async () => {
+    const updateStatus = vi.fn().mockResolvedValue({ ...user, status: UserStatusEnum.BLOCKED });
+    const { service, emit } = createService({ updateStatus });
+
+    const updated: UserInterface = await service.updateStatus(
+      user.id,
+      UserStatusEnum.BLOCKED,
+      adminId,
+    );
+
+    expect(updateStatus).toHaveBeenCalledWith(user.id, UserStatusEnum.BLOCKED);
+    expect(updated.status).toBe(UserStatusEnum.BLOCKED);
+    expect(emit).toHaveBeenCalledWith('user.blocked', { userId: user.id, actorId: adminId });
+  });
+
+  it('unblocks a user and emits user.unblocked', async () => {
+    const { service, emit } = createService();
+
+    await service.updateStatus(user.id, UserStatusEnum.ACTIVE, adminId);
+
+    expect(emit).toHaveBeenCalledWith('user.unblocked', { userId: user.id, actorId: adminId });
+  });
+
+  it('rejects an admin blocking their own account', async () => {
+    const updateStatus = vi.fn();
+    const { service, emit } = createService({ updateStatus });
+
+    try {
+      await service.updateStatus(adminId, UserStatusEnum.BLOCKED, adminId);
+      expect.unreachable('should have thrown');
+    } catch (caught) {
+      expect(caught).toBeInstanceOf(ConflictError);
+      expect((caught as ConflictError).args.code).toBe('USER_CANNOT_BLOCK_SELF');
+    }
+
+    expect(updateStatus).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('maps a status update of a vanished user to the domain 404', async () => {
+    const { service } = createService({ updateStatus: vi.fn().mockResolvedValue(null) });
+
+    await expect(
+      service.updateStatus(user.id, UserStatusEnum.BLOCKED, adminId),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 });
