@@ -220,6 +220,19 @@ describe('ActivityListener', () => {
     });
   });
 
+  it('records CONTACT_RECEIVED on contact.received with no userId/actorId', async () => {
+    const { listener, record } = createListener();
+    const contactMessageId = '01890a5d-0000-774b-bcce-b30209990004';
+
+    await listener.onContactReceived({ contactMessageId, ip: '127.0.0.1' });
+
+    expect(record).toHaveBeenCalledWith({
+      type: ActivityTypeEnum.CONTACT_RECEIVED,
+      ip: '127.0.0.1',
+      meta: { contactMessageId },
+    });
+  });
+
   it('swallows a repository failure instead of producing an unhandled rejection', async () => {
     const record = vi.fn().mockRejectedValue(new Error('activity table unavailable'));
     const activityService = { record } as unknown as ActivityService;
