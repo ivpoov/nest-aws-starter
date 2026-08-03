@@ -8,11 +8,19 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, type OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
+import { config as loadEnv } from 'dotenv';
 import type { FastifyReply, FastifyRequest, HookHandlerDoneFunction } from 'fastify';
 import { AppModule } from './app.module.js';
 
 async function bootstrap(): Promise<void> {
-  const adapter: FastifyAdapter = new FastifyAdapter();
+  // ConfigModule's own .env loading only runs once AppModule resolves, which
+  // is after the adapter is built — load early so TRUST_PROXY is already in
+  // process.env when Fastify decides whether to honor X-Forwarded-For.
+  loadEnv();
+
+  const adapter: FastifyAdapter = new FastifyAdapter({
+    trustProxy: process.env.TRUST_PROXY === 'true',
+  });
 
   adapter
     .getInstance()
