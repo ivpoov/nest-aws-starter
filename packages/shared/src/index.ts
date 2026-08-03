@@ -41,5 +41,6 @@ export * from './users/interfaces/admin-user-response.interface.js';
 export * from './users/interfaces/avatar-upload-request.interface.js';
 export * from './users/interfaces/avatar-upload-response.interface.js';
 export * from './users/interfaces/update-profile-request.interface.js';
+export * from './users/interfaces/update-user-status-request.interface.js';
 export * from './users/interfaces/user-response.interface.js';
 export * from './users/types/user-error-code.type.js';
