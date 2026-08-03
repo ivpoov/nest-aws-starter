@@ -1,8 +1,8 @@
 import type { ApiErrorInterface, StatisticsSeriesPointInterface } from '@nest-aws-starter/shared';
 import type { ReactElement } from 'react';
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useChartColors } from '../../hooks/statistics/useChartColors';
 import type { ChartColorsInterface } from '../../interfaces/chart-colors.interface';
-import { getChartColors } from '../../utils/chartColors';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { EmptyState } from '../ui/EmptyState';
@@ -67,7 +67,7 @@ export function RegistrationsChart({
   onDaysChange,
   onRetry,
 }: RegistrationsChartPropsInterface): ReactElement {
-  const colors: ChartColorsInterface = getChartColors();
+  const colors: ChartColorsInterface = useChartColors();
 
   return (
     <Card title="Registrations">
