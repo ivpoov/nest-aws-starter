@@ -137,7 +137,7 @@ export class UserAdminController {
       this.logger.log(`Admin ${adminId} revoked all sessions for user ${id} before blocking`);
     }
 
-    await this.userService.updateStatus(id, dto.status, adminId);
+    await this.userService.updateStatus(id, dto.status, adminId, dto.reason);
 
     return this.userService.findByIdForAdminOrThrow(id);
   }

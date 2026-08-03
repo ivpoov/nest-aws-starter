@@ -108,6 +108,29 @@ describe('UserService', () => {
     expect(emit).toHaveBeenCalledWith('user.unblocked', { userId: user.id, actorId: adminId });
   });
 
+  it('includes the reason in the emitted event when the admin provides one', async () => {
+    const updateStatus = vi.fn().mockResolvedValue({ ...user, status: UserStatusEnum.BLOCKED });
+    const { service, emit } = createService({ updateStatus });
+
+    await service.updateStatus(user.id, UserStatusEnum.BLOCKED, adminId, 'Repeated ToS violations');
+
+    expect(emit).toHaveBeenCalledWith('user.blocked', {
+      userId: user.id,
+      actorId: adminId,
+      reason: 'Repeated ToS violations',
+    });
+  });
+
+  it('omits the reason key entirely when the admin does not provide one', async () => {
+    const { service, emit } = createService();
+
+    await service.updateStatus(user.id, UserStatusEnum.ACTIVE, adminId);
+
+    const [, payload] = emit.mock.calls[0] as [string, Record<string, unknown>];
+
+    expect('reason' in payload).toBe(false);
+  });
+
   it('rejects an admin blocking their own account', async () => {
     const updateStatus = vi.fn();
     const { service, emit } = createService({ updateStatus });

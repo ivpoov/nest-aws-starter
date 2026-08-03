@@ -110,7 +110,7 @@ describe('ActivityListener', () => {
     });
   });
 
-  it('records USER_BLOCKED on user.blocked', async () => {
+  it('records USER_BLOCKED on user.blocked with no meta when no reason was given', async () => {
     const { listener, record } = createListener();
 
     await listener.onUserBlocked({ userId, actorId: sessionId });
@@ -119,10 +119,28 @@ describe('ActivityListener', () => {
       userId,
       actorId: sessionId,
       type: ActivityTypeEnum.USER_BLOCKED,
+      meta: undefined,
     });
   });
 
-  it('records USER_UNBLOCKED on user.unblocked', async () => {
+  it('records USER_BLOCKED with the reason in meta when the admin provided one', async () => {
+    const { listener, record } = createListener();
+
+    await listener.onUserBlocked({
+      userId,
+      actorId: sessionId,
+      reason: 'Repeated ToS violations',
+    });
+
+    expect(record).toHaveBeenCalledWith({
+      userId,
+      actorId: sessionId,
+      type: ActivityTypeEnum.USER_BLOCKED,
+      meta: { reason: 'Repeated ToS violations' },
+    });
+  });
+
+  it('records USER_UNBLOCKED on user.unblocked with no meta when no reason was given', async () => {
     const { listener, record } = createListener();
 
     await listener.onUserUnblocked({ userId, actorId: sessionId });
@@ -131,6 +149,20 @@ describe('ActivityListener', () => {
       userId,
       actorId: sessionId,
       type: ActivityTypeEnum.USER_UNBLOCKED,
+      meta: undefined,
+    });
+  });
+
+  it('records USER_UNBLOCKED with the reason in meta when the admin provided one', async () => {
+    const { listener, record } = createListener();
+
+    await listener.onUserUnblocked({ userId, actorId: sessionId, reason: 'False positive' });
+
+    expect(record).toHaveBeenCalledWith({
+      userId,
+      actorId: sessionId,
+      type: ActivityTypeEnum.USER_UNBLOCKED,
+      meta: { reason: 'False positive' },
     });
   });
 

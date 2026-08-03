@@ -145,6 +145,7 @@ export class UserService {
     id: string,
     status: UserStatusEnum,
     actorId: string,
+    reason?: string,
   ): Promise<UserInterface> {
     if (status === UserStatusEnum.BLOCKED) this.assertNotSelfBlock(id, actorId);
 
@@ -155,7 +156,7 @@ export class UserService {
     this.logger.log(`User ${id} status set to ${status} by ${actorId}`);
     this.eventBus.emit(
       status === UserStatusEnum.BLOCKED ? USER_BLOCKED_EVENT : USER_UNBLOCKED_EVENT,
-      { userId: id, actorId },
+      { userId: id, actorId, ...(reason ? { reason } : {}) },
     );
 
     return user;
