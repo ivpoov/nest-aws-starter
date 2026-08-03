@@ -107,6 +107,8 @@ enum ActivityType {
   AUTH_PASSWORD_CHANGED
   AUTH_METHOD_LINKED
   AUTH_METHOD_UNLINKED
+  USER_BLOCKED
+  USER_UNBLOCKED
 }
 
 // Append-only audit trail, driven entirely by domain events — no relation to
