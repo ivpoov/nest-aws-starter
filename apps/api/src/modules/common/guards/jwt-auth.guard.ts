@@ -33,9 +33,11 @@ export class JwtAuthGuard implements CanActivate {
 
     request.user = await this.tokenService.verifyAccessToken(token);
 
-    // Online-users gauge: best-effort presence touch, never blocks or fails
-    // the request (OnlineUsersService swallows its own errors).
-    await this.onlineUsersService.touch(request.user.id);
+    // Online-users gauge: best-effort presence touch, fire-and-forget so it
+    // never adds a Redis round-trip to the request's critical path.
+    // OnlineUsersService.touch() swallows its own errors internally, so this
+    // can never produce an unhandled rejection.
+    void this.onlineUsersService.touch(request.user.id);
 
     return true;
   }
