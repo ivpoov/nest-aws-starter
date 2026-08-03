@@ -1,4 +1,5 @@
 import { CaslModule } from '@modules/casl/casl.module.js';
+import { OauthModule } from '@modules/oauth/oauth.module.js';
 import { SessionModule } from '@modules/session/session.module.js';
 import { USER_REPOSITORY } from '@modules/user/constants/user.constants.js';
 import { UserController } from '@modules/user/controllers/user.controller.js';
@@ -14,6 +15,7 @@ import { forwardRef, Module } from '@nestjs/common';
   imports: [
     CaslModule.forFeature({ permissions: userPermissions }),
     forwardRef(() => SessionModule),
+    forwardRef(() => OauthModule),
   ],
   controllers: [UserController, UserAdminController],
   providers: [

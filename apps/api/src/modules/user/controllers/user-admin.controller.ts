@@ -1,7 +1,6 @@
 import { ApiDefaultResponse } from '@decorators/api-default-response.decorator.js';
 import { CurrentUserId } from '@decorators/current-user-id.decorator.js';
 import { Serialize } from '@decorators/serialize.decorator.js';
-import { AuthTokensResponseDto } from '@modules/auth/dtos/responses/auth-tokens-response.dto.js';
 import { AdminScope } from '@modules/casl/decorators/admin-scope.decorator.js';
 import { UseAbility } from '@modules/casl/decorators/use-ability.decorator.js';
 import { ActionsEnum } from '@modules/casl/enums/actions.enum.js';
@@ -9,21 +8,22 @@ import { AccessGuard } from '@modules/casl/guards/access.guard.js';
 import { ADMIN_LOGIN_AS_EVENT } from '@modules/event/constants/event-names.constants.js';
 import { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
+import { OauthFlowService } from '@modules/oauth/services/oauth-flow.service.js';
 import { RevokedSessionsResponseDto } from '@modules/session/dtos/responses/revoked-sessions-response.dto.js';
 import { SessionResponseDto } from '@modules/session/dtos/responses/session-response.dto.js';
 import type { LoginAsSessionResultInterface } from '@modules/session/interfaces/login-as-session-result.interface.js';
 import type { SessionContextInterface } from '@modules/session/interfaces/session-context.interface.js';
 import type { SessionForUserInterface } from '@modules/session/interfaces/session-for-user.interface.js';
 import { SessionService } from '@modules/session/services/session.service.js';
-import type { TokenPairInterface } from '@modules/token/interfaces/token-pair.interface.js';
 import { AdminUsersQueryDto } from '@modules/user/dtos/admin-users-query.dto.js';
 import { AdminUserListResponseDto } from '@modules/user/dtos/responses/admin-user-list-response.dto.js';
 import { AdminUserResponseDto } from '@modules/user/dtos/responses/admin-user-response.dto.js';
+import { LoginAsResponseDto } from '@modules/user/dtos/responses/login-as-response.dto.js';
 import { UpdateUserStatusDto } from '@modules/user/dtos/update-user-status.dto.js';
 import { UserEntity } from '@modules/user/entities/user.entity.js';
 import type { AdminUserInterface } from '@modules/user/interfaces/admin-user.interface.js';
 import { UserService } from '@modules/user/services/user.service.js';
-import { UserStatusEnum } from '@nest-aws-starter/shared';
+import { type LoginAsResponseInterface, UserStatusEnum } from '@nest-aws-starter/shared';
 import {
   Body,
   Controller,
@@ -53,6 +53,7 @@ export class UserAdminController {
   constructor(
     private readonly userService: UserService,
     private readonly sessionService: SessionService,
+    private readonly oauthFlowService: OauthFlowService,
     private readonly eventBus: EventBusService,
   ) {}
 
@@ -143,23 +144,27 @@ export class UserAdminController {
 
   // Sensitive like /auth/login: same throttle budget, and the AccessGuard's
   // actAsBy check keeps the resulting session from ever reaching this route
-  // again — no nesting.
+  // again — no nesting. Tokens never leave the API directly: a one-time
+  // exchange code is minted and redeemed by the web app through the same
+  // public /auth/oauth/exchange endpoint OAuth login already uses, so the
+  // admin UI can open the web app in a new tab without tokens in the URL.
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiDefaultResponse({ status: StatusCodes.CREATED, type: AuthTokensResponseDto })
-  @Serialize(AuthTokensResponseDto)
+  @ApiDefaultResponse({ status: StatusCodes.CREATED, type: LoginAsResponseDto })
+  @Serialize(LoginAsResponseDto)
   @UseAbility(ActionsEnum.MANAGE, UserEntity)
   @Post(':id/login-as')
   public async loginAs(
     @CurrentUserId() adminId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Req() request: FastifyRequest,
-  ): Promise<TokenPairInterface> {
+  ): Promise<LoginAsResponseInterface> {
     const target: AdminUserInterface = await this.userService.findByIdForAdminOrThrow(id);
 
     this.userService.assertCanImpersonate(target);
 
     const result: LoginAsSessionResultInterface =
       await this.sessionService.createImpersonatedSession(target, adminId, this.contextOf(request));
+    const code: string = await this.oauthFlowService.mintExchangeCode(result.tokens);
 
     this.logger.log(`Admin ${adminId} logged in as user ${id} (session ${result.sessionId})`);
     this.eventBus.emit(ADMIN_LOGIN_AS_EVENT, {
@@ -168,7 +173,7 @@ export class UserAdminController {
       sessionId: result.sessionId,
     });
 
-    return result.tokens;
+    return { code };
   }
 
   private contextOf(request: FastifyRequest): SessionContextInterface {

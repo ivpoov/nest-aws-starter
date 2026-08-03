@@ -330,4 +330,14 @@ describe('OauthFlowService plumbing', () => {
         caught instanceof UnauthorizedError && caught.args.code === 'OAUTH_EXCHANGE_CODE_INVALID',
     );
   });
+
+  it('mints a redeemable LOGIN exchange code for admin login-as tokens', async () => {
+    const setup = createService();
+    const tokens = { accessToken: 'imp-a', refreshToken: 'imp-r', expiresInSec: 900 };
+
+    const code: string = await setup.service.mintExchangeCode(tokens);
+    const payload = await setup.service.exchange(code);
+
+    expect(payload).toEqual({ kind: 'LOGIN', tokens, linkedProvider: null });
+  });
 });

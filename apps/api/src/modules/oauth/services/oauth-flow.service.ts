@@ -106,9 +106,7 @@ export class OauthFlowService {
         profile,
         context,
       );
-      const exchangeCode: string = randomBytes(32).toString('base64url');
-
-      await this.store.setExchange(exchangeCode, result, OAUTH_EXCHANGE_TTL_SEC);
+      const exchangeCode: string = await this.storeExchange(result);
 
       return `${payload.redirect}?code=${exchangeCode}`;
     } catch (caught) {
@@ -122,6 +120,22 @@ export class OauthFlowService {
     if (!payload) throw new UnauthorizedError(OAUTH_EXCHANGE_CODE_INVALID);
 
     return payload;
+  }
+
+  // Reused by admin login-as (@modules/user) so impersonation tokens are
+  // handed over exactly like an OAuth login — a one-time code redeemed
+  // through the existing public /auth/oauth/exchange endpoint, never tokens
+  // in a URL or a response body.
+  public mintExchangeCode(tokens: TokenPairInterface): Promise<string> {
+    return this.storeExchange({ kind: OauthExchangeKindEnum.LOGIN, tokens, linkedProvider: null });
+  }
+
+  private async storeExchange(payload: OauthExchangePayloadInterface): Promise<string> {
+    const exchangeCode: string = randomBytes(32).toString('base64url');
+
+    await this.store.setExchange(exchangeCode, payload, OAUTH_EXCHANGE_TTL_SEC);
+
+    return exchangeCode;
   }
 
   private async loginOrLink(
