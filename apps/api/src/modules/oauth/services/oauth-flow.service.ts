@@ -4,7 +4,10 @@ import { ConflictError } from '@modules/common/errors/conflict.error.js';
 import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js';
 import { ValidationError } from '@modules/common/errors/validation.error.js';
-import { USER_OAUTH_REGISTERED_EVENT } from '@modules/event/constants/event-names.constants.js';
+import {
+  AUTH_METHOD_LINKED_EVENT,
+  USER_OAUTH_REGISTERED_EVENT,
+} from '@modules/event/constants/event-names.constants.js';
 import { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import {
@@ -213,6 +216,8 @@ export class OauthFlowService {
       email: profile.email,
       isEmailVerified: profile.emailVerified,
     });
+
+    this.eventBus.emit(AUTH_METHOD_LINKED_EVENT, { userId, type });
 
     return { kind: OauthExchangeKindEnum.LINK, tokens: null, linkedProvider: type };
   }
