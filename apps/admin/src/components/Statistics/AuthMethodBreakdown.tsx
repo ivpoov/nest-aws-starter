@@ -26,6 +26,32 @@ interface AuthMethodBreakdownPropsInterface {
   readonly onRetry: () => void;
 }
 
+// A visually-hidden data table alongside the chart — screen readers and
+// tests get the real values without depending on SVG text metrics, which
+// jsdom doesn't implement (recharts' category ticks render, but their exact
+// layout is not something a unit test should assert against).
+function renderAccessibleTable(items: StatisticsCountBreakdownInterface[]): ReactElement {
+  return (
+    <table className="sr-only">
+      <caption>Auth methods by count</caption>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Count</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((item) => (
+          <tr key={item.key}>
+            <th scope="row">{item.key}</th>
+            <td>{item.count}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 // One measure (count) split across nominal categories — a single hue carries
 // the bars; the axis labels already give identity, so no per-bar color.
 function renderChart(
@@ -33,29 +59,37 @@ function renderChart(
   colors: ChartColorsInterface,
 ): ReactElement {
   return (
-    <div className="h-56">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart layout="vertical" data={items}>
-          <CartesianGrid horizontal={false} stroke={colors.edge} />
-          <XAxis
-            type="number"
-            stroke={colors.muted}
-            tick={{ fontSize: 12 }}
-            allowDecimals={false}
-          />
-          <YAxis
-            type="category"
-            dataKey="key"
-            stroke={colors.muted}
-            tick={{ fontSize: 12 }}
-            width={80}
-          />
-          <Bar dataKey="count" fill={colors.accent} radius={[0, 4, 4, 0]} isAnimationActive={false}>
-            <LabelList dataKey="count" position="right" fill={colors.muted} fontSize={12} />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+    <>
+      <div className="h-56">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart layout="vertical" data={items}>
+            <CartesianGrid horizontal={false} stroke={colors.edge} />
+            <XAxis
+              type="number"
+              stroke={colors.muted}
+              tick={{ fontSize: 12 }}
+              allowDecimals={false}
+            />
+            <YAxis
+              type="category"
+              dataKey="key"
+              stroke={colors.muted}
+              tick={{ fontSize: 12 }}
+              width={80}
+            />
+            <Bar
+              dataKey="count"
+              fill={colors.accent}
+              radius={[0, 4, 4, 0]}
+              isAnimationActive={false}
+            >
+              <LabelList dataKey="count" position="right" fill={colors.muted} fontSize={12} />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      {renderAccessibleTable(items)}
+    </>
   );
 }
 
