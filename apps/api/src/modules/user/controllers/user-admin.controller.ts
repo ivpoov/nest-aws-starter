@@ -1,14 +1,21 @@
 import { ApiDefaultResponse } from '@decorators/api-default-response.decorator.js';
 import { CurrentUserId } from '@decorators/current-user-id.decorator.js';
 import { Serialize } from '@decorators/serialize.decorator.js';
+import { AuthTokensResponseDto } from '@modules/auth/dtos/responses/auth-tokens-response.dto.js';
+import { AdminScope } from '@modules/casl/decorators/admin-scope.decorator.js';
 import { UseAbility } from '@modules/casl/decorators/use-ability.decorator.js';
 import { ActionsEnum } from '@modules/casl/enums/actions.enum.js';
 import { AccessGuard } from '@modules/casl/guards/access.guard.js';
+import { ADMIN_LOGIN_AS_EVENT } from '@modules/event/constants/event-names.constants.js';
+import { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { RevokedSessionsResponseDto } from '@modules/session/dtos/responses/revoked-sessions-response.dto.js';
 import { SessionResponseDto } from '@modules/session/dtos/responses/session-response.dto.js';
+import type { LoginAsSessionResultInterface } from '@modules/session/interfaces/login-as-session-result.interface.js';
+import type { SessionContextInterface } from '@modules/session/interfaces/session-context.interface.js';
 import type { SessionForUserInterface } from '@modules/session/interfaces/session-for-user.interface.js';
 import { SessionService } from '@modules/session/services/session.service.js';
+import type { TokenPairInterface } from '@modules/token/interfaces/token-pair.interface.js';
 import { AdminUsersQueryDto } from '@modules/user/dtos/admin-users-query.dto.js';
 import { AdminUserListResponseDto } from '@modules/user/dtos/responses/admin-user-list-response.dto.js';
 import { AdminUserResponseDto } from '@modules/user/dtos/responses/admin-user-response.dto.js';
@@ -25,15 +32,20 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import type { FastifyRequest } from 'fastify';
 import { StatusCodes } from 'http-status-codes';
 
 @ApiBearerAuth()
 @ApiTags('Admin users')
 @UseGuards(AccessGuard)
+@AdminScope()
 @Controller('admin/users')
 export class UserAdminController {
   private readonly logger = new CustomLoggerService(UserAdminController.name);
@@ -41,6 +53,7 @@ export class UserAdminController {
   constructor(
     private readonly userService: UserService,
     private readonly sessionService: SessionService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   @ApiDefaultResponse({ status: StatusCodes.OK, type: AdminUserListResponseDto })
@@ -126,5 +139,39 @@ export class UserAdminController {
     await this.userService.updateStatus(id, dto.status, adminId);
 
     return this.userService.findByIdForAdminOrThrow(id);
+  }
+
+  // Sensitive like /auth/login: same throttle budget, and the AccessGuard's
+  // actAsBy check keeps the resulting session from ever reaching this route
+  // again — no nesting.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiDefaultResponse({ status: StatusCodes.CREATED, type: AuthTokensResponseDto })
+  @Serialize(AuthTokensResponseDto)
+  @UseAbility(ActionsEnum.MANAGE, UserEntity)
+  @Post(':id/login-as')
+  public async loginAs(
+    @CurrentUserId() adminId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() request: FastifyRequest,
+  ): Promise<TokenPairInterface> {
+    const target: AdminUserInterface = await this.userService.findByIdForAdminOrThrow(id);
+
+    this.userService.assertCanImpersonate(target);
+
+    const result: LoginAsSessionResultInterface =
+      await this.sessionService.createImpersonatedSession(target, adminId, this.contextOf(request));
+
+    this.logger.log(`Admin ${adminId} logged in as user ${id} (session ${result.sessionId})`);
+    this.eventBus.emit(ADMIN_LOGIN_AS_EVENT, {
+      userId: id,
+      actorId: adminId,
+      sessionId: result.sessionId,
+    });
+
+    return result.tokens;
+  }
+
+  private contextOf(request: FastifyRequest): SessionContextInterface {
+    return { userAgent: request.headers['user-agent'] ?? null, ip: request.ip };
   }
 }
