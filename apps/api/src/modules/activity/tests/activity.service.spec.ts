@@ -1,6 +1,6 @@
 import type { CursorPaginationInterface } from '@interfaces/cursor-pagination.interface.js';
-import type { ActivityFiltersInterface } from '@modules/activity/interfaces/activity-filters.interface.js';
 import type { ActivityInterface } from '@modules/activity/interfaces/activity.interface.js';
+import type { ActivityFiltersInterface } from '@modules/activity/interfaces/activity-filters.interface.js';
 import type { ActivityRepositoryInterface } from '@modules/activity/interfaces/activity-repository.interface.js';
 import { ActivityService } from '@modules/activity/services/activity.service.js';
 import { ActivityTypeEnum } from '@nest-aws-starter/shared';
@@ -52,7 +52,10 @@ describe('ActivityService', () => {
   });
 
   it('scopes the list by filters and pages by cursor', async () => {
-    const secondActivity: ActivityInterface = { ...activity, id: '01890a5d-ac96-774b-bcce-b302099a9999' };
+    const secondActivity: ActivityInterface = {
+      ...activity,
+      id: '01890a5d-ac96-774b-bcce-b302099a9999',
+    };
     const findManyAfter = vi.fn().mockResolvedValue([activity, secondActivity]);
     const { service } = createService({ findManyAfter });
 
