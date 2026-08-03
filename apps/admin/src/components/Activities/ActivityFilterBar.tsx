@@ -4,10 +4,17 @@ import { useState } from 'react';
 import type { ActivityFiltersInterface } from '../../interfaces/activity-filters.interface';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { UserSearchFilter } from './UserSearchFilter';
 
 interface ActivityFilterBarPropsInterface {
   readonly filters: ActivityFiltersInterface;
-  readonly onChange: (filters: ActivityFiltersInterface) => void;
+  readonly selectedUserLabel: string | null;
+  readonly onToggleType: (type: ActivityTypeEnum) => void;
+  readonly onClearType: () => void;
+  readonly onDateFromChange: (value: string) => void;
+  readonly onDateToChange: (value: string) => void;
+  readonly onSelectUser: (userId: string, label: string) => void;
+  readonly onClearUser: () => void;
 }
 
 const TYPE_OPTIONS: ActivityTypeEnum[] = Object.values(ActivityTypeEnum);
@@ -20,28 +27,18 @@ function chipClassName(isActive: boolean): string {
 
 export function ActivityFilterBar({
   filters,
-  onChange,
+  selectedUserLabel,
+  onToggleType,
+  onClearType,
+  onDateFromChange,
+  onDateToChange,
+  onSelectUser,
+  onClearUser,
 }: ActivityFilterBarPropsInterface): ReactElement {
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   function handleToggleExpanded(): void {
     setIsExpanded(!isExpanded);
-  }
-
-  function handleTypeSelect(type: ActivityTypeEnum | null): void {
-    onChange({ ...filters, type });
-  }
-
-  function handleUserIdChange(value: string): void {
-    onChange({ ...filters, userId: value });
-  }
-
-  function handleDateFromChange(value: string): void {
-    onChange({ ...filters, dateFrom: value ? `${value}T00:00:00.000Z` : '' });
-  }
-
-  function handleDateToChange(value: string): void {
-    onChange({ ...filters, dateTo: value ? `${value}T23:59:59.000Z` : '' });
   }
 
   return (
@@ -54,27 +51,29 @@ export function ActivityFilterBar({
       <div
         className={`${isExpanded ? 'mt-3 flex' : 'hidden'} flex-col gap-3 md:mt-0 md:flex md:flex-row md:flex-wrap md:items-end md:gap-4`}
       >
-        <div className="max-w-xs grow">
-          <Input label="User ID" value={filters.userId} onChange={handleUserIdChange} />
-        </div>
+        <UserSearchFilter
+          selectedUserLabel={selectedUserLabel}
+          onSelectUser={onSelectUser}
+          onClearUser={onClearUser}
+        />
         <Input
           label="From"
           type="date"
           value={filters.dateFrom.slice(0, 10)}
-          onChange={handleDateFromChange}
+          onChange={onDateFromChange}
         />
         <Input
           label="To"
           type="date"
           value={filters.dateTo.slice(0, 10)}
-          onChange={handleDateToChange}
+          onChange={onDateToChange}
         />
         <div className="flex flex-col gap-1">
           <span className="text-sm text-content-muted">Type</span>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={(): void => handleTypeSelect(null)}
+              onClick={onClearType}
               className={chipClassName(filters.type === null)}
             >
               All
@@ -84,7 +83,7 @@ export function ActivityFilterBar({
                 <button
                   key={type}
                   type="button"
-                  onClick={(): void => handleTypeSelect(type)}
+                  onClick={(): void => onToggleType(type)}
                   className={chipClassName(filters.type === type)}
                 >
                   {type}
