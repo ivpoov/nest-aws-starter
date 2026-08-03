@@ -1,10 +1,12 @@
 import { ConflictError } from '@modules/common/errors/conflict.error.js';
+import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import type { EventBusService } from '@modules/event/services/event-bus.service.js';
+import type { AdminUserInterface } from '@modules/user/interfaces/admin-user.interface.js';
 import type { UserInterface } from '@modules/user/interfaces/user.interface.js';
 import type { UserRepositoryInterface } from '@modules/user/interfaces/user-repository.interface.js';
 import { UserService } from '@modules/user/services/user.service.js';
-import { UserRoleEnum, UserStatusEnum } from '@nest-aws-starter/shared';
+import { AuthMethodTypeEnum, UserRoleEnum, UserStatusEnum } from '@nest-aws-starter/shared';
 import { describe, expect, it, vi } from 'vitest';
 
 const user: UserInterface = {
@@ -128,5 +130,43 @@ describe('UserService', () => {
     await expect(
       service.updateStatus(user.id, UserStatusEnum.BLOCKED, adminId),
     ).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe('UserService.assertCanImpersonate', () => {
+  const targetBase: AdminUserInterface = {
+    ...user,
+    email: 'target@example.com',
+    methodTypes: [AuthMethodTypeEnum.EMAIL],
+  };
+
+  it('allows an ACTIVE USER-role target', () => {
+    const { service } = createService();
+
+    expect(() => service.assertCanImpersonate(targetBase)).not.toThrow();
+  });
+
+  it('rejects an ADMIN target with a coded forbidden error', () => {
+    const { service } = createService();
+
+    try {
+      service.assertCanImpersonate({ ...targetBase, role: UserRoleEnum.ADMIN });
+      expect.unreachable('should have thrown');
+    } catch (caught) {
+      expect(caught).toBeInstanceOf(ForbiddenError);
+      expect((caught as ForbiddenError).args.code).toBe('ADMIN_CANNOT_IMPERSONATE_ADMIN');
+    }
+  });
+
+  it('rejects a BLOCKED target with the shared USER_BLOCKED code', () => {
+    const { service } = createService();
+
+    try {
+      service.assertCanImpersonate({ ...targetBase, status: UserStatusEnum.BLOCKED });
+      expect.unreachable('should have thrown');
+    } catch (caught) {
+      expect(caught).toBeInstanceOf(ForbiddenError);
+      expect((caught as ForbiddenError).args.code).toBe('USER_BLOCKED');
+    }
   });
 });

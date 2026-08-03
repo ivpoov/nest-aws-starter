@@ -90,6 +90,7 @@ class FakeSessionRepository implements SessionRepositoryInterface {
       createdAt: new Date(),
       lastActiveAt: new Date(),
       activeUntil: data.activeUntil,
+      signedAsAdminId: data.signedAsAdminId ?? null,
     };
 
     this.sessions.set(session.id, session);
@@ -262,6 +263,66 @@ describe('SessionService management', () => {
 
     expect(count).toBe(2);
     expect([...tokens.keys.keys()].filter((key) => key.startsWith(`${user.id}:`))).toHaveLength(0);
+  });
+});
+
+describe('SessionService impersonation', () => {
+  const adminId = '01890a5d-ac96-774b-bcce-b302099a9999';
+
+  it('mints a session flagged as impersonated with a 1h activeUntil', async () => {
+    const { service, sessions } = createService();
+
+    const result = await service.createImpersonatedSession(user, adminId, context);
+
+    const session = await sessions.findById(result.sessionId);
+
+    expect(session?.signedAsAdminId).toBe(adminId);
+    expect(session?.activeUntil.getTime()).toBeLessThanOrEqual(Date.now() + 3_600_000);
+    expect(session?.activeUntil.getTime()).toBeGreaterThan(Date.now() + 3_500_000);
+  });
+
+  it('carries actAsBy in the issued access token', async () => {
+    const { service, tokens } = createService();
+
+    const result = await service.createImpersonatedSession(user, adminId, context);
+    const tokenService: TokenService = new TokenService(config, tokens);
+    const currentUser = await tokenService.verifyAccessToken(result.tokens.accessToken);
+
+    expect(currentUser.actAsBy).toBe(adminId);
+  });
+
+  it('does not flag a normal session as impersonated', async () => {
+    const { service, sessions } = createService();
+
+    await service.createSession(user, context);
+
+    const session = await sessions.findById('session-1');
+
+    expect(session?.signedAsAdminId).toBeNull();
+  });
+
+  it('re-derives actAsBy from the session on refresh, ignoring the old token', async () => {
+    const { service, tokens } = createService();
+    const first = await service.createImpersonatedSession(user, adminId, context);
+
+    const refreshed = await service.refresh(first.tokens.refreshToken);
+
+    const tokenService: TokenService = new TokenService(config, tokens);
+    const currentUser = await tokenService.verifyAccessToken(refreshed.accessToken);
+
+    expect(currentUser.actAsBy).toBe(adminId);
+  });
+
+  it('keeps a normal session refresh free of the actAsBy claim', async () => {
+    const { service, tokens } = createService();
+    const first = await service.createSession(user, context);
+
+    const refreshed = await service.refresh(first.refreshToken);
+
+    const tokenService: TokenService = new TokenService(config, tokens);
+    const currentUser = await tokenService.verifyAccessToken(refreshed.accessToken);
+
+    expect(currentUser.actAsBy).toBeUndefined();
   });
 });
 

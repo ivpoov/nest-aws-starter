@@ -1,9 +1,12 @@
 import { ConflictError } from '@modules/common/errors/conflict.error.js';
+import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
+import type { EventBusService } from '@modules/event/services/event-bus.service.js';
 import type { SessionService } from '@modules/session/services/session.service.js';
 import { UserAdminController } from '@modules/user/controllers/user-admin.controller.js';
 import type { AdminUserInterface } from '@modules/user/interfaces/admin-user.interface.js';
 import type { UserService } from '@modules/user/services/user.service.js';
 import { AuthMethodTypeEnum, UserRoleEnum, UserStatusEnum } from '@nest-aws-starter/shared';
+import type { FastifyRequest } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
 
 const adminId = '01890a5d-0000-774b-bcce-b30209990001';
@@ -26,27 +29,49 @@ function createController(): {
   findByIdForAdminOrThrow: ReturnType<typeof vi.fn>;
   updateStatus: ReturnType<typeof vi.fn>;
   assertNotSelfBlock: ReturnType<typeof vi.fn>;
+  assertCanImpersonate: ReturnType<typeof vi.fn>;
   revokeAllForUser: ReturnType<typeof vi.fn>;
+  createImpersonatedSession: ReturnType<typeof vi.fn>;
+  emit: ReturnType<typeof vi.fn>;
 } {
   const findByIdForAdminOrThrow = vi.fn().mockResolvedValue(adminUser);
   const updateStatus = vi.fn().mockResolvedValue({ ...adminUser, status: UserStatusEnum.BLOCKED });
   const assertNotSelfBlock = vi.fn();
+  const assertCanImpersonate = vi.fn();
   const userService = {
     findByIdForAdminOrThrow,
     updateStatus,
     assertNotSelfBlock,
+    assertCanImpersonate,
   } as unknown as UserService;
 
   const revokeAllForUser = vi.fn().mockResolvedValue(1);
-  const sessionService = { revokeAllForUser } as unknown as SessionService;
+  const createImpersonatedSession = vi.fn().mockResolvedValue({
+    tokens: { accessToken: 'access', refreshToken: 'refresh', expiresInSec: 3_600 },
+    sessionId: 'session-imp-1',
+  });
+  const sessionService = {
+    revokeAllForUser,
+    createImpersonatedSession,
+  } as unknown as SessionService;
+
+  const emit = vi.fn();
+  const eventBus = { emit } as unknown as EventBusService;
 
   return {
-    controller: new UserAdminController(userService, sessionService),
+    controller: new UserAdminController(userService, sessionService, eventBus),
     findByIdForAdminOrThrow,
     updateStatus,
     assertNotSelfBlock,
+    assertCanImpersonate,
     revokeAllForUser,
+    createImpersonatedSession,
+    emit,
   };
+}
+
+function fakeRequest(): FastifyRequest {
+  return { headers: { 'user-agent': 'vitest' }, ip: '127.0.0.1' } as unknown as FastifyRequest;
 }
 
 describe('UserAdminController.updateStatus', () => {
@@ -110,5 +135,41 @@ describe('UserAdminController.updateStatus', () => {
     // user.blocked/user.unblocked — it never having been called proves both
     // "status not changed" and "no event emitted" in one assertion.
     expect(updateStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('UserAdminController.loginAs', () => {
+  it('creates an impersonated session and emits admin.login-as', async () => {
+    const { controller, createImpersonatedSession, emit } = createController();
+
+    const tokens = await controller.loginAs(adminId, userId, fakeRequest());
+
+    expect(createImpersonatedSession).toHaveBeenCalledWith(
+      adminUser,
+      adminId,
+      expect.objectContaining({ ip: '127.0.0.1' }),
+    );
+    expect(emit).toHaveBeenCalledWith('admin.login-as', {
+      userId,
+      actorId: adminId,
+      sessionId: 'session-imp-1',
+    });
+    expect(tokens).toEqual({ accessToken: 'access', refreshToken: 'refresh', expiresInSec: 3_600 });
+  });
+
+  it('aborts before creating a session when the role gate rejects the target', async () => {
+    const { controller, assertCanImpersonate, createImpersonatedSession, emit } =
+      createController();
+
+    assertCanImpersonate.mockImplementation((): void => {
+      throw new ForbiddenError({ code: 'ADMIN_CANNOT_IMPERSONATE_ADMIN', details: 'nope' });
+    });
+
+    await expect(controller.loginAs(adminId, userId, fakeRequest())).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+
+    expect(createImpersonatedSession).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
   });
 });
