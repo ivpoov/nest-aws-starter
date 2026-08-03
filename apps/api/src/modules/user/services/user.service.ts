@@ -2,6 +2,8 @@ import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { USER_REPOSITORY } from '@modules/user/constants/user.constants.js';
 import { USER_NOT_FOUND } from '@modules/user/constants/user-errors.constants.js';
+import type { AdminUserInterface } from '@modules/user/interfaces/admin-user.interface.js';
+import type { AdminUsersQueryInterface } from '@modules/user/interfaces/admin-users-query.interface.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
 import type { CreateEmailUserDataInterface } from '@modules/user/interfaces/create-email-user-data.interface.js';
 import type { CreateOauthMethodDataInterface } from '@modules/user/interfaces/create-oauth-method-data.interface.js';
@@ -68,6 +70,18 @@ export class UserService {
   public async addEmailMethod(userId: string, email: string, passwordHash: string): Promise<void> {
     await this.userRepository.addEmailMethod(userId, email, passwordHash);
     this.logger.log(`Linked EMAIL method to user ${userId}`);
+  }
+
+  public async findManyForAdmin(query: AdminUsersQueryInterface): Promise<AdminUserInterface[]> {
+    return this.userRepository.findManyForAdmin(query);
+  }
+
+  public async findByIdForAdminOrThrow(id: string): Promise<AdminUserInterface> {
+    const user: AdminUserInterface | null = await this.userRepository.findByIdForAdmin(id);
+
+    if (!user) throw new NotFoundError(USER_NOT_FOUND);
+
+    return user;
   }
 
   public async findMethodsByUserId(userId: string): Promise<AuthMethodInterface[]> {
