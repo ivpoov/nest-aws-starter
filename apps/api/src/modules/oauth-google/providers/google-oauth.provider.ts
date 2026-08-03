@@ -31,7 +31,8 @@ export class GoogleOauthProvider implements OauthProviderInterface {
       await this.httpClient.request<GoogleTokenResponseInterface>({
         method: 'POST',
         url: 'https://oauth2.googleapis.com/token',
-        body: {
+        // OAuth token endpoints require form encoding (RFC 6749 §4.1.3)
+        form: {
           code,
           client_id: this.config.clientId,
           client_secret: this.config.clientSecret,
