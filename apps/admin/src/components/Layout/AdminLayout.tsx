@@ -6,6 +6,7 @@ import { ThemeToggle } from '../ui/ThemeToggle';
 
 const NAV_ITEMS: ReadonlyArray<{ readonly to: string; readonly label: string }> = [
   { to: '/users', label: 'Users' },
+  { to: '/activities', label: 'Activity' },
 ];
 
 export function AdminLayout(): ReactElement {

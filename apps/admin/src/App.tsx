@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { AdminGate } from './components/Layout/AdminGate';
 import { AdminLayout } from './components/Layout/AdminLayout';
+import { ActivitiesPage } from './pages/ActivitiesPage';
 import { LoginPage } from './pages/LoginPage';
 import { UsersPage } from './pages/UsersPage';
 
@@ -12,6 +13,7 @@ export function App(): ReactElement {
       <Route element={<AdminGate />}>
         <Route element={<AdminLayout />}>
           <Route path="/users" element={<UsersPage />} />
+          <Route path="/activities" element={<ActivitiesPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/users" replace />} />
