@@ -124,6 +124,7 @@ enum ActivityType {
   AUTH_SUSPICIOUS_LOGIN
   AUTH_NEW_DEVICE
   ADMIN_LOGIN_AS
+  CONTACT_RECEIVED
 }
 
 // Append-only audit trail, driven entirely by domain events — no relation to
@@ -143,4 +144,26 @@ model Activity {
   @@index([type, id])
   @@index([type, createdAt])
   @@map("activities")
+}
+
+enum ContactMessageStatus {
+  OPEN
+  RESOLVED
+}
+
+// Public contact-form submissions — not append-only like Activity: an admin
+// resolving a message is a genuine update, so updatedAt is real.
+model ContactMessage {
+  id        String               @id @default(uuid(7))
+  name      String               @db.VarChar(120)
+  email     String               @db.VarChar(320)
+  subject   String               @db.VarChar(200)
+  body      String               @db.VarChar(5000)
+  status    ContactMessageStatus @default(OPEN)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  // Admin inbox cursor: filter by status, page by id (UUIDv7 = creation order).
+  @@index([status, id])
+  @@map("contact_messages")
 }
