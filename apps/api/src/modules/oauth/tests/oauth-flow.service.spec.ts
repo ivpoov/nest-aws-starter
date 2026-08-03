@@ -1,6 +1,7 @@
 import type { WebAppConfig } from '@configs/web-app.config.js';
 import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js';
 import { ValidationError } from '@modules/common/errors/validation.error.js';
+import { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { OauthIntentEnum } from '@modules/oauth/enums/oauth-intent.enum.js';
 import type { OauthExchangePayloadInterface } from '@modules/oauth/interfaces/oauth-exchange-payload.interface.js';
 import type { OauthProfileInterface } from '@modules/oauth/interfaces/oauth-profile.interface.js';
@@ -109,6 +110,7 @@ function createService(): TestSetupInterface {
       .fn()
       .mockResolvedValue({ accessToken: 'a', refreshToken: 'r', expiresInSec: 900 }),
   } as unknown as SessionService;
+  const eventBus = { emit: vi.fn() };
   const tokens = {
     verifyAccessToken: vi
       .fn()
@@ -121,6 +123,7 @@ function createService(): TestSetupInterface {
     tokens,
     users as unknown as UserService,
     sessions,
+    eventBus as unknown as EventBusService,
   );
 
   return { service, store, users };
