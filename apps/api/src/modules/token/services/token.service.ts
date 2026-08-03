@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { type AuthConfig, authConfig } from '@configs/auth.config.js';
 import type { CurrentUserInterface } from '@interfaces/current-user.interface.js';
 import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js';
@@ -9,7 +10,6 @@ import type { TokenPairInterface } from '@modules/token/interfaces/token-pair.in
 import type { TokenRepositoryInterface } from '@modules/token/interfaces/token-repository.interface.js';
 import { UserRoleEnum } from '@nest-aws-starter/shared';
 import { Inject, Injectable } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
 import { type JWTPayload, jwtVerify, SignJWT } from 'jose';
 
 @Injectable()
@@ -71,15 +71,17 @@ export class TokenService {
   }
 
   private async sign(claims: JWTPayload, subject: string, ttlSec: number): Promise<string> {
-    return new SignJWT(claims)
-      .setProtectedHeader({ alg: 'HS256' })
-      .setSubject(subject)
-      // Random jti: two tokens minted in the same second must never be identical
-      // (rotation depends on the new refresh token differing from the old one).
-      .setJti(randomUUID())
-      .setIssuedAt()
-      .setExpirationTime(`${ttlSec}s`)
-      .sign(this.secret);
+    return (
+      new SignJWT(claims)
+        .setProtectedHeader({ alg: 'HS256' })
+        .setSubject(subject)
+        // Random jti: two tokens minted in the same second must never be identical
+        // (rotation depends on the new refresh token differing from the old one).
+        .setJti(randomUUID())
+        .setIssuedAt()
+        .setExpirationTime(`${ttlSec}s`)
+        .sign(this.secret)
+    );
   }
 
   private async verify(token: string): Promise<JWTPayload> {
