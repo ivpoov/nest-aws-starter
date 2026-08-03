@@ -12,6 +12,7 @@ import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js'
 import {
   AUTH_LOGIN_EVENT,
   AUTH_LOGIN_FAILED_EVENT,
+  AUTH_LOGOUT_EVENT,
   USER_REGISTERED_EVENT,
 } from '@modules/event/constants/event-names.constants.js';
 import { EventBusService } from '@modules/event/services/event-bus.service.js';
@@ -103,6 +104,7 @@ export class AuthService {
   public async logout(userId: string, sessionId: string): Promise<void> {
     await this.sessionService.revokeSession(userId, sessionId);
     this.logger.log(`User logged out: ${userId}`);
+    this.eventBus.emit(AUTH_LOGOUT_EVENT, { userId, sessionId });
   }
 
   private async assertEmailFree(email: string): Promise<void> {
