@@ -128,6 +128,7 @@ export class EmailFlowService {
     // The actor proved possession of the current password — their session stays.
     await this.sessionService.revokeOtherSessions(userId, sessionId);
     this.logger.log(`Password changed for user ${userId}`);
+    this.eventBus.emit(AUTH_PASSWORD_CHANGED_EVENT, { userId, sessionId });
   }
 
   private issueToken(): string {
