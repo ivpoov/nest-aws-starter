@@ -45,8 +45,15 @@ jobs:
       - run: pnpm run build
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
-      # turbo fans out: api + web + admin vitest suites
+      # turbo fans out: api + web + admin vitest suites. `test` depends on
+      # `build` in turbo.json, and DATABASE_URL is in that task's env
+      # allowlist — so it's part of the build cache signature. Without it
+      # here, turbo sees a different signature than the dedicated build step
+      # above, misses cache, and re-runs the api build (prisma generate
+      # --sql) with no DB access.
       - run: pnpm run test
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
       - run: pnpm run test:e2e
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
