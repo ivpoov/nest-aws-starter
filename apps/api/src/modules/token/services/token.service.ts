@@ -25,7 +25,11 @@ export class TokenService {
 
   public async issuePair(data: IssuePairDataInterface): Promise<TokenPairInterface> {
     const accessToken: string = await this.sign(
-      { role: data.role, sessionId: data.sessionId },
+      {
+        role: data.role,
+        sessionId: data.sessionId,
+        ...(data.actAsBy ? { actAsBy: data.actAsBy } : {}),
+      },
       data.userId,
       this.config.accessTtlSec,
     );
@@ -61,7 +65,15 @@ export class TokenService {
 
     if (stored !== token) throw new UnauthorizedError(AUTH_TOKEN_INVALID);
 
-    return { id: userId, role: payload.role as UserRoleEnum, sessionId };
+    const actAsBy: string | undefined =
+      typeof payload.actAsBy === 'string' ? payload.actAsBy : undefined;
+
+    return {
+      id: userId,
+      role: payload.role as UserRoleEnum,
+      sessionId,
+      ...(actAsBy && { actAsBy }),
+    };
   }
 
   public async verifyRefreshToken(token: string): Promise<RefreshTokenClaimsInterface> {
