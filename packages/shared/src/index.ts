@@ -1,6 +1,11 @@
 // The single source of truth for every shape that crosses HTTP between apps.
 // Zero runtime dependencies — interfaces, types and string enums only.
-// Auth contracts land with the v0.2 auth PRs.
+export * from './auth/constants/auth-error-codes.constants.js';
+export * from './auth/interfaces/auth-tokens-response.interface.js';
+export * from './auth/interfaces/login-request.interface.js';
+export * from './auth/interfaces/refresh-request.interface.js';
+export * from './auth/interfaces/register-request.interface.js';
+export * from './auth/types/auth-error-code.type.js';
 export * from './common/enums/sort-order.enum.js';
 export * from './common/interfaces/api-error.interface.js';
 export * from './common/interfaces/cursor-pagination-query.interface.js';
