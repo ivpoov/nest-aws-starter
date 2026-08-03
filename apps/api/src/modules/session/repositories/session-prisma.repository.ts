@@ -11,7 +11,9 @@ export class SessionPrismaRepository implements SessionRepositoryInterface {
   constructor(private readonly prisma: PrismaService) {}
 
   public async create(data: CreateSessionDataInterface): Promise<SessionInterface> {
-    const session: SessionModel = await this.prisma.session.create({ data });
+    const session: SessionModel = await this.prisma.session.create({
+      data: { ...data, signedAsAdminId: data.signedAsAdminId ?? null },
+    });
 
     return this.toDomain(session);
   }
@@ -75,6 +77,7 @@ export class SessionPrismaRepository implements SessionRepositoryInterface {
       createdAt: session.createdAt,
       lastActiveAt: session.lastActiveAt,
       activeUntil: session.activeUntil,
+      signedAsAdminId: session.signedAsAdminId,
     };
   }
 }

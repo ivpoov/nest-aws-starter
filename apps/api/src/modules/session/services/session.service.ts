@@ -3,12 +3,17 @@ import { parseDevice } from '@helpers/parse-device.helper.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
-import { SESSION_REPOSITORY } from '@modules/session/constants/session.constants.js';
+import {
+  IMPERSONATION_ACTIVE_TTL_SEC,
+  SESSION_REPOSITORY,
+} from '@modules/session/constants/session.constants.js';
 import {
   AUTH_REFRESH_INVALID,
   AUTH_SESSION_EXPIRED,
   SESSION_NOT_FOUND,
 } from '@modules/session/constants/session-errors.constants.js';
+import type { CreateSessionResultInterface } from '@modules/session/interfaces/create-session-result.interface.js';
+import type { LoginAsSessionResultInterface } from '@modules/session/interfaces/login-as-session-result.interface.js';
 import type { SessionInterface } from '@modules/session/interfaces/session.interface.js';
 import type { SessionContextInterface } from '@modules/session/interfaces/session-context.interface.js';
 import type { SessionForUserInterface } from '@modules/session/interfaces/session-for-user.interface.js';
@@ -38,21 +43,30 @@ export class SessionService {
     user: UserInterface,
     context: SessionContextInterface,
   ): Promise<TokenPairInterface> {
-    const activeUntil: Date = new Date(Date.now() + this.config.refreshTtlSec * 1000);
-    const session: SessionInterface = await this.sessionRepository.create({
-      userId: user.id,
-      device: parseDevice(context.userAgent),
-      ip: context.ip,
-      activeUntil,
-    });
+    const { tokens }: CreateSessionResultInterface = await this.createSessionRecord(
+      user,
+      context,
+      null,
+    );
 
-    this.logger.log(`Session created: ${session.id} for user ${user.id}`);
+    return tokens;
+  }
 
-    return this.tokenService.issuePair({
-      userId: user.id,
-      role: user.role,
-      sessionId: session.id,
-    });
+  // Admin login-as: mints a normal token pair for the target user, but the
+  // session row carries signedAsAdminId and the access token carries actAsBy
+  // — every guard and both sessions UIs read those, never a separate flag.
+  public async createImpersonatedSession(
+    targetUser: UserInterface,
+    adminId: string,
+    context: SessionContextInterface,
+  ): Promise<LoginAsSessionResultInterface> {
+    const { session, tokens }: CreateSessionResultInterface = await this.createSessionRecord(
+      targetUser,
+      context,
+      adminId,
+    );
+
+    return { tokens, sessionId: session.id };
   }
 
   public async refresh(oldRefreshToken: string): Promise<TokenPairInterface> {
@@ -91,6 +105,7 @@ export class SessionService {
       (session: SessionInterface): SessionForUserInterface => ({
         ...session,
         isCurrent: session.id === currentSessionId,
+        isImpersonated: session.signedAsAdminId !== null,
       }),
     );
   }
@@ -172,12 +187,23 @@ export class SessionService {
     claims: RefreshTokenClaimsInterface,
     oldRefreshToken: string,
   ): Promise<TokenPairInterface> {
-    const user: UserInterface = await this.userService.findByIdOrThrow(claims.userId);
+    const [user, session]: [UserInterface, SessionInterface | null] = await Promise.all([
+      this.userService.findByIdOrThrow(claims.userId),
+      this.sessionRepository.findById(claims.sessionId),
+    ]);
+    // Re-derived from the session row, never trusted from the old token —
+    // the source of truth for whether this refresh keeps the impersonation
+    // claim alive.
+    const signedAsAdminId: string | null = session?.signedAsAdminId ?? null;
     const pair: TokenPairInterface = await this.tokenService.issuePair({
       userId: claims.userId,
       role: user.role,
       sessionId: claims.sessionId,
+      actAsBy: signedAsAdminId,
     });
+    const ttlSec: number = signedAsAdminId
+      ? IMPERSONATION_ACTIVE_TTL_SEC
+      : this.config.refreshTtlSec;
 
     await this.tokenRepository.setPreviousRefreshToken(
       claims.userId,
@@ -187,7 +213,7 @@ export class SessionService {
     );
     await this.sessionRepository.setActiveUntil(
       claims.sessionId,
-      new Date(Date.now() + this.config.refreshTtlSec * 1000),
+      new Date(Date.now() + ttlSec * 1000),
     );
     void this.sessionRepository
       .touchLastActive(claims.sessionId, new Date())
@@ -196,5 +222,34 @@ export class SessionService {
       );
 
     return pair;
+  }
+
+  private async createSessionRecord(
+    user: UserInterface,
+    context: SessionContextInterface,
+    signedAsAdminId: string | null,
+  ): Promise<CreateSessionResultInterface> {
+    const ttlSec: number = signedAsAdminId
+      ? IMPERSONATION_ACTIVE_TTL_SEC
+      : this.config.refreshTtlSec;
+    const activeUntil: Date = new Date(Date.now() + ttlSec * 1000);
+    const session: SessionInterface = await this.sessionRepository.create({
+      userId: user.id,
+      device: parseDevice(context.userAgent),
+      ip: context.ip,
+      activeUntil,
+      signedAsAdminId,
+    });
+
+    this.logger.log(`Session created: ${session.id} for user ${user.id}`);
+
+    const tokens: TokenPairInterface = await this.tokenService.issuePair({
+      userId: user.id,
+      role: user.role,
+      sessionId: session.id,
+      actAsBy: signedAsAdminId,
+    });
+
+    return { session, tokens };
   }
 }
