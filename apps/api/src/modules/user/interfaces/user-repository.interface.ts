@@ -1,3 +1,4 @@
+import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
 import type { CreateEmailUserDataInterface } from '@modules/user/interfaces/create-email-user-data.interface.js';
 import type { CreateOauthUserDataInterface } from '@modules/user/interfaces/create-oauth-user-data.interface.js';
 import type { UpdateProfileDataInterface } from '@modules/user/interfaces/update-profile-data.interface.js';
@@ -9,5 +10,7 @@ export interface UserRepositoryInterface {
   createWithOauthMethod(data: CreateOauthUserDataInterface): Promise<UserInterface>;
   findById(id: string): Promise<UserInterface | null>;
   findByAuthEmail(email: string): Promise<UserWithMethodTypesInterface | null>;
+  findEmailMethodByEmail(email: string): Promise<AuthMethodInterface | null>;
+  touchMethodLastUsed(methodId: string, now: Date): Promise<void>;
   updateProfile(id: string, data: UpdateProfileDataInterface): Promise<UserInterface | null>;
 }
