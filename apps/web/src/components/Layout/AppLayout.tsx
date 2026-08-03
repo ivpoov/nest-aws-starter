@@ -1,6 +1,8 @@
 import type { ReactElement } from 'react';
 import { NavLink, Outlet } from 'react-router';
+import { useIsImpersonating } from '../../hooks/auth/useIsImpersonating';
 import { useLogout } from '../../hooks/auth/useLogout';
+import { Banner } from '../ui/Banner';
 import { ThemeToggle } from '../ui/ThemeToggle';
 
 const NAV_ITEMS: ReadonlyArray<{ readonly to: string; readonly label: string }> = [
@@ -12,9 +14,11 @@ const NAV_ITEMS: ReadonlyArray<{ readonly to: string; readonly label: string }> 
 
 export function AppLayout(): ReactElement {
   const { logout } = useLogout();
+  const isImpersonating: boolean = useIsImpersonating();
 
   return (
     <div className="min-h-screen">
+      {isImpersonating ? <Banner>Viewing as this user — session started by an admin</Banner> : null}
       <header className="flex items-center justify-between border-b border-edge px-6 py-3">
         <nav className="flex gap-4 text-sm">
           {NAV_ITEMS.map((item) => (
