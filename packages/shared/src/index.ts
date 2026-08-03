@@ -1,10 +1,14 @@
 // The single source of truth for every shape that crosses HTTP between apps.
 // Zero runtime dependencies — interfaces, types and string enums only.
 export * from './auth/constants/auth-error-codes.constants.js';
+export * from './auth/enums/oauth-exchange-kind.enum.js';
 export * from './auth/interfaces/auth-tokens-response.interface.js';
 export * from './auth/interfaces/change-password-request.interface.js';
 export * from './auth/interfaces/forgot-password-request.interface.js';
 export * from './auth/interfaces/login-request.interface.js';
+export * from './auth/interfaces/oauth-exchange-request.interface.js';
+export * from './auth/interfaces/oauth-exchange-response.interface.js';
+export * from './auth/interfaces/oauth-providers-response.interface.js';
 export * from './auth/interfaces/refresh-request.interface.js';
 export * from './auth/interfaces/register-request.interface.js';
 export * from './auth/interfaces/reset-password-request.interface.js';
