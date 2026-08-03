@@ -7,3 +7,5 @@ export const AUTH_LOGOUT_EVENT = 'auth.logout';
 export const AUTH_PASSWORD_CHANGED_EVENT = 'auth.password-changed';
 export const AUTH_METHOD_LINKED_EVENT = 'auth.method-linked';
 export const AUTH_METHOD_UNLINKED_EVENT = 'auth.method-unlinked';
+export const USER_BLOCKED_EVENT = 'user.blocked';
+export const USER_UNBLOCKED_EVENT = 'user.unblocked';
