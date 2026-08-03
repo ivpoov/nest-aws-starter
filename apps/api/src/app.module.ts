@@ -3,6 +3,7 @@ import { EventModule } from '@modules/event/event.module.js';
 import { HealthModule } from '@modules/health/health.module.js';
 import { NoteModule } from '@modules/note/note.module.js';
 import { PrismaModule } from '@modules/prisma/prisma.module.js';
+import { UserModule } from '@modules/user/user.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from '@providers/cache/cache.module.js';
@@ -28,6 +29,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     LambdaModule,
     HttpClientModule,
     HealthModule,
+    UserModule,
     NoteModule,
   ],
 })
