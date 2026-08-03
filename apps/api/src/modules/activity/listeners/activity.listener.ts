@@ -5,8 +5,10 @@ import type { AuthMethodLinkedPayloadInterface } from '@modules/activity/interfa
 import type { AuthMethodUnlinkedPayloadInterface } from '@modules/activity/interfaces/auth-method-unlinked-payload.interface.js';
 import type { AuthPasswordChangedPayloadInterface } from '@modules/activity/interfaces/auth-password-changed-payload.interface.js';
 import type { CreateActivityDataInterface } from '@modules/activity/interfaces/create-activity-data.interface.js';
+import type { UserBlockedPayloadInterface } from '@modules/activity/interfaces/user-blocked-payload.interface.js';
 import type { UserOauthRegisteredPayloadInterface } from '@modules/activity/interfaces/user-oauth-registered-payload.interface.js';
 import type { UserRegisteredPayloadInterface } from '@modules/activity/interfaces/user-registered-payload.interface.js';
+import type { UserUnblockedPayloadInterface } from '@modules/activity/interfaces/user-unblocked-payload.interface.js';
 import { ActivityService } from '@modules/activity/services/activity.service.js';
 import {
   AUTH_LOGIN_EVENT,
@@ -15,8 +17,10 @@ import {
   AUTH_METHOD_LINKED_EVENT,
   AUTH_METHOD_UNLINKED_EVENT,
   AUTH_PASSWORD_CHANGED_EVENT,
+  USER_BLOCKED_EVENT,
   USER_OAUTH_REGISTERED_EVENT,
   USER_REGISTERED_EVENT,
+  USER_UNBLOCKED_EVENT,
 } from '@modules/event/constants/event-names.constants.js';
 import { OnDomainEvent } from '@modules/event/decorators/on-domain-event.decorator.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
@@ -99,6 +103,24 @@ export class ActivityListener {
       userId: payload.userId,
       type: ActivityTypeEnum.AUTH_METHOD_UNLINKED,
       meta: { methodType: payload.type },
+    });
+  }
+
+  @OnDomainEvent(USER_BLOCKED_EVENT)
+  public async onUserBlocked(payload: UserBlockedPayloadInterface): Promise<void> {
+    await this.safeRecord({
+      userId: payload.userId,
+      actorId: payload.actorId,
+      type: ActivityTypeEnum.USER_BLOCKED,
+    });
+  }
+
+  @OnDomainEvent(USER_UNBLOCKED_EVENT)
+  public async onUserUnblocked(payload: UserUnblockedPayloadInterface): Promise<void> {
+    await this.safeRecord({
+      userId: payload.userId,
+      actorId: payload.actorId,
+      type: ActivityTypeEnum.USER_UNBLOCKED,
     });
   }
 
