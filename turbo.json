@@ -28,7 +28,8 @@
         "AUTH_JWT_SECRET",
         "AUTH_ACCESS_TTL_SEC",
         "AUTH_REFRESH_TTL_SEC",
-        "AUTH_REFRESH_GRACE_SEC"
+        "AUTH_REFRESH_GRACE_SEC",
+        "TRUST_PROXY"
       ]
     }
   }

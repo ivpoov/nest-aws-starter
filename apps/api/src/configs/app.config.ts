@@ -7,6 +7,7 @@ const scheme = z.object({
   port: z.number(),
   env: z.enum(['development', 'test', 'production']),
   apiPrefix: z.string(),
+  trustProxy: z.boolean(),
 });
 
 export type AppConfig = Required<z.infer<typeof scheme>>;
@@ -16,6 +17,7 @@ export const appConfig = registerAs('app', (): AppConfig => {
     port: Number(process.env.PORT ?? 3000),
     env: (process.env.NODE_ENV ?? 'development') as AppConfig['env'],
     apiPrefix: process.env.API_PREFIX ?? 'api',
+    trustProxy: process.env.TRUST_PROXY === 'true',
   };
 
   validateScheme(scheme, config, new Logger('AppConfig'));

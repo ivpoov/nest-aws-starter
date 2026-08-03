@@ -16,6 +16,8 @@ export * from './notes/interfaces/note-list-response.interface.js';
 export * from './notes/interfaces/note-response.interface.js';
 export * from './notes/interfaces/update-note-request.interface.js';
 export * from './notes/types/note-error-code.type.js';
+export * from './sessions/interfaces/revoked-sessions-response.interface.js';
+export * from './sessions/interfaces/session-response.interface.js';
 export * from './users/constants/user-error-codes.constants.js';
 export * from './users/enums/auth-method-type.enum.js';
 export * from './users/enums/user-role.enum.js';
