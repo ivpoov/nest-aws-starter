@@ -1,6 +1,7 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["typedSql"]
 }
 
 datasource db {
@@ -40,6 +41,7 @@ model User {
   notes            Note[]
 
   @@index([role, status])
+  @@index([createdAt])
   @@map("users")
 }
 
@@ -83,6 +85,7 @@ model Session {
 
   @@index([userId, activeUntil])
   @@index([signedAsAdminId])
+  @@index([activeUntil])
   @@map("sessions")
 }
 
@@ -138,5 +141,6 @@ model Activity {
 
   @@index([userId, id])
   @@index([type, id])
+  @@index([type, createdAt])
   @@map("activities")
 }
