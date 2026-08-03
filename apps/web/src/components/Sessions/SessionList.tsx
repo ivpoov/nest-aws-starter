@@ -1,5 +1,6 @@
 import type { SessionResponseInterface } from '@nest-aws-starter/shared';
 import type { ReactElement } from 'react';
+import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 
 interface SessionListPropsInterface {
@@ -16,9 +17,10 @@ export function SessionList({ sessions, onRevoke }: SessionListPropsInterface): 
           className="flex items-center justify-between rounded-lg border border-edge p-3 text-sm"
         >
           <div className="flex flex-col">
-            <span className="font-medium">
+            <span className="flex items-center gap-2 font-medium">
               {session.device}
               {session.isCurrent ? ' — this device' : ''}
+              {session.isImpersonated ? <Badge label="Impersonated" /> : null}
             </span>
             <span className="text-content-muted">
               {session.ip} · active {new Date(session.lastActiveAt).toLocaleString()}
