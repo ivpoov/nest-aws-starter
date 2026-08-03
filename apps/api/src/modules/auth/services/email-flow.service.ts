@@ -16,6 +16,8 @@ import type { OneTimeTokenRepositoryInterface } from '@modules/auth/interfaces/o
 import { buildResetPasswordMail } from '@modules/auth/templates/reset-password.template.js';
 import { buildVerifyEmailMail } from '@modules/auth/templates/verify-email.template.js';
 import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js';
+import { AUTH_PASSWORD_CHANGED_EVENT } from '@modules/event/constants/event-names.constants.js';
+import { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { SessionService } from '@modules/session/services/session.service.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
@@ -36,6 +38,7 @@ export class EmailFlowService {
     @Inject(MAIL_TRANSPORT) private readonly mailTransport: MailTransportInterface,
     private readonly userService: UserService,
     private readonly sessionService: SessionService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   public async requestEmailVerification(userId: string): Promise<void> {
@@ -105,6 +108,7 @@ export class EmailFlowService {
     // A reset means the password may have been compromised — everything dies.
     await this.sessionService.revokeAllForUser(userId);
     this.logger.log(`Password reset completed for user ${userId}`);
+    this.eventBus.emit(AUTH_PASSWORD_CHANGED_EVENT, { userId, sessionId: null });
   }
 
   public async changePassword(
