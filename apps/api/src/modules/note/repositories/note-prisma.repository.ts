@@ -17,6 +17,7 @@ export class NotePrismaRepository implements NoteRepositoryInterface {
   public async create(data: CreateNoteDataInterface): Promise<NoteInterface> {
     const note: NoteModel = await this.prisma.note.create({
       data: {
+        userId: data.userId,
         title: data.title,
         ...(data.body !== undefined && { body: data.body }),
         ...(data.status !== undefined && { status: this.toPrismaStatus(data.status) }),
@@ -32,8 +33,12 @@ export class NotePrismaRepository implements NoteRepositoryInterface {
     return note ? this.toDomain(note) : null;
   }
 
-  public async findManyAfter(pagination: CursorPaginationInterface): Promise<NoteInterface[]> {
+  public async findManyAfter(
+    userId: string,
+    pagination: CursorPaginationInterface,
+  ): Promise<NoteInterface[]> {
     const notes: NoteModel[] = await this.prisma.note.findMany({
+      where: { userId },
       take: pagination.limit,
       ...(pagination.cursor && { cursor: { id: pagination.cursor }, skip: 1 }),
       // UUIDv7 ids are time-ordered — id order IS creation order.
@@ -83,6 +88,7 @@ export class NotePrismaRepository implements NoteRepositoryInterface {
   private toDomain(note: NoteModel): NoteInterface {
     return {
       id: note.id,
+      userId: note.userId,
       title: note.title,
       body: note.body,
       status: NoteStatusEnum[note.status],

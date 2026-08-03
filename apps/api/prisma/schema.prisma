@@ -34,6 +34,7 @@ model User {
   updatedAt   DateTime     @updatedAt
   authMethods AuthMethod[]
   sessions    Session[]
+  notes       Note[]
 
   @@index([role, status])
   @@map("users")
@@ -83,12 +84,16 @@ enum NoteStatus {
 
 model Note {
   id        String     @id @default(uuid(7))
+  userId    String
   title     String     @db.VarChar(255)
   body      String     @default("")
   status    NoteStatus @default(ACTIVE)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // UUIDv7 cursor pagination scans per owner
+  @@index([userId, id])
   @@index([status])
   @@map("notes")
 }
