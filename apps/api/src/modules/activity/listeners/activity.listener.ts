@@ -1,3 +1,4 @@
+import type { AdminLoginAsPayloadInterface } from '@modules/activity/interfaces/admin-login-as-payload.interface.js';
 import type { AuthLoginFailedPayloadInterface } from '@modules/activity/interfaces/auth-login-failed-payload.interface.js';
 import type { AuthLoginPayloadInterface } from '@modules/activity/interfaces/auth-login-payload.interface.js';
 import type { AuthLogoutPayloadInterface } from '@modules/activity/interfaces/auth-logout-payload.interface.js';
@@ -13,6 +14,7 @@ import type { UserRegisteredPayloadInterface } from '@modules/activity/interface
 import type { UserUnblockedPayloadInterface } from '@modules/activity/interfaces/user-unblocked-payload.interface.js';
 import { ActivityService } from '@modules/activity/services/activity.service.js';
 import {
+  ADMIN_LOGIN_AS_EVENT,
   AUTH_LOGIN_EVENT,
   AUTH_LOGIN_FAILED_EVENT,
   AUTH_LOGOUT_EVENT,
@@ -144,6 +146,16 @@ export class ActivityListener {
       type: ActivityTypeEnum.AUTH_NEW_DEVICE,
       ip: payload.ip,
       meta: { device: payload.device },
+    });
+  }
+
+  @OnDomainEvent(ADMIN_LOGIN_AS_EVENT)
+  public async onAdminLoginAs(payload: AdminLoginAsPayloadInterface): Promise<void> {
+    await this.safeRecord({
+      userId: payload.userId,
+      actorId: payload.actorId,
+      sessionId: payload.sessionId,
+      type: ActivityTypeEnum.ADMIN_LOGIN_AS,
     });
   }
 
