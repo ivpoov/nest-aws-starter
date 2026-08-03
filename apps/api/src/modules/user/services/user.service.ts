@@ -4,6 +4,7 @@ import { USER_REPOSITORY } from '@modules/user/constants/user.constants.js';
 import { USER_NOT_FOUND } from '@modules/user/constants/user-errors.constants.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
 import type { CreateEmailUserDataInterface } from '@modules/user/interfaces/create-email-user-data.interface.js';
+import type { CreateOauthMethodDataInterface } from '@modules/user/interfaces/create-oauth-method-data.interface.js';
 import type { CreateOauthUserDataInterface } from '@modules/user/interfaces/create-oauth-user-data.interface.js';
 import type { UpdateProfileDataInterface } from '@modules/user/interfaces/update-profile-data.interface.js';
 import type { UserInterface } from '@modules/user/interfaces/user.interface.js';
@@ -50,6 +51,18 @@ export class UserService {
 
   public async findEmailMethod(email: string): Promise<AuthMethodInterface | null> {
     return this.userRepository.findEmailMethodByEmail(email);
+  }
+
+  public async findMethodByProviderAccount(
+    type: CreateOauthMethodDataInterface['type'],
+    providerAccountId: string,
+  ): Promise<AuthMethodInterface | null> {
+    return this.userRepository.findMethodByProviderAccount(type, providerAccountId);
+  }
+
+  public async addOauthMethod(userId: string, data: CreateOauthMethodDataInterface): Promise<void> {
+    await this.userRepository.addOauthMethod(userId, data);
+    this.logger.log(`Linked ${data.type} method to user ${userId}`);
   }
 
   public async findEmailMethodByUserId(userId: string): Promise<AuthMethodInterface | null> {

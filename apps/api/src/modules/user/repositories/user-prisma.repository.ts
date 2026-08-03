@@ -4,6 +4,7 @@ import type { AuthMethodModel, UserModel } from '@generated/prisma/models.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
 import type { CreateEmailUserDataInterface } from '@modules/user/interfaces/create-email-user-data.interface.js';
+import type { CreateOauthMethodDataInterface } from '@modules/user/interfaces/create-oauth-method-data.interface.js';
 import type { CreateOauthUserDataInterface } from '@modules/user/interfaces/create-oauth-user-data.interface.js';
 import type { UpdateProfileDataInterface } from '@modules/user/interfaces/update-profile-data.interface.js';
 import type { UserInterface } from '@modules/user/interfaces/user.interface.js';
@@ -80,6 +81,29 @@ export class UserPrismaRepository implements UserRepositoryInterface {
     });
 
     return method ? this.methodToDomain(method) : null;
+  }
+
+  public async findMethodByProviderAccount(
+    type: CreateOauthMethodDataInterface['type'],
+    providerAccountId: string,
+  ): Promise<AuthMethodInterface | null> {
+    const method: AuthMethodModel | null = await this.prisma.authMethod.findUnique({
+      where: { type_providerAccountId: { type: AuthMethodType[type], providerAccountId } },
+    });
+
+    return method ? this.methodToDomain(method) : null;
+  }
+
+  public async addOauthMethod(userId: string, data: CreateOauthMethodDataInterface): Promise<void> {
+    await this.prisma.authMethod.create({
+      data: {
+        userId,
+        type: AuthMethodType[data.type],
+        providerAccountId: data.providerAccountId,
+        email: data.email,
+        isEmailVerified: data.isEmailVerified,
+      },
+    });
   }
 
   public async findEmailMethodByUserId(userId: string): Promise<AuthMethodInterface | null> {
