@@ -109,4 +109,20 @@ describe('ActivityListener', () => {
       meta: { methodType: AuthMethodTypeEnum.EMAIL },
     });
   });
+
+  it('swallows a repository failure instead of producing an unhandled rejection', async () => {
+    const record = vi.fn().mockRejectedValue(new Error('activity table unavailable'));
+    const activityService = { record } as unknown as ActivityService;
+    const listener: ActivityListener = new ActivityListener(activityService);
+
+    // EventBusService.emit() never awaits its listeners — if this handler's
+    // promise rejected, it would surface as an unhandled rejection on the
+    // login path instead of resolving quietly here.
+    await expect(listener.onAuthLogin({ userId, ip: '127.0.0.1' })).resolves.toBeUndefined();
+    expect(record).toHaveBeenCalledWith({
+      userId,
+      type: ActivityTypeEnum.AUTH_LOGIN,
+      ip: '127.0.0.1',
+    });
+  });
 });
