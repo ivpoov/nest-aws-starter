@@ -14,6 +14,7 @@ import { FacebookOauthModule } from '@modules/oauth-facebook/facebook-oauth.modu
 import { GoogleOauthModule } from '@modules/oauth-google/google-oauth.module.js';
 import { PrismaModule } from '@modules/prisma/prisma.module.js';
 import { SessionModule } from '@modules/session/session.module.js';
+import { StatisticModule } from '@modules/statistic/statistic.module.js';
 import { SuspiciousActivityModule } from '@modules/suspicious-activity/suspicious-activity.module.js';
 import { TokenModule } from '@modules/token/token.module.js';
 import { UserModule } from '@modules/user/user.module.js';
@@ -65,6 +66,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     NoteModule,
     ActivityModule,
     SuspiciousActivityModule,
+    StatisticModule,
   ],
   providers: [
     // Order matters: throttling runs before authentication.
