@@ -12,8 +12,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { useChartColors } from '../../hooks/statistics/useChartColors';
 import type { ChartColorsInterface } from '../../interfaces/chart-colors.interface';
-import { getChartColors } from '../../utils/chartColors';
 import { Card } from '../ui/Card';
 import { EmptyState } from '../ui/EmptyState';
 import { ErrorMessage } from '../ui/ErrorMessage';
@@ -79,7 +79,7 @@ export function AuthMethodBreakdown({
   error,
   onRetry,
 }: AuthMethodBreakdownPropsInterface): ReactElement {
-  const colors: ChartColorsInterface = getChartColors();
+  const colors: ChartColorsInterface = useChartColors();
 
   return <Card title="Auth methods">{renderBody(items, isLoading, error, onRetry, colors)}</Card>;
 }
