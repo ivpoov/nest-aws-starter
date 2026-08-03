@@ -50,6 +50,20 @@ export class S3ProviderService implements S3ProviderInterface {
     return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
   }
 
+  public async getPresignedUploadUrl(
+    key: string,
+    contentType: string,
+    expiresInSeconds: number,
+  ): Promise<string> {
+    const command: PutObjectCommand = new PutObjectCommand({
+      Bucket: this.config.bucketName,
+      Key: key,
+      ContentType: contentType,
+    });
+
+    return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
+  }
+
   public async delete(key: string): Promise<void> {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.config.bucketName, Key: key }));
 
