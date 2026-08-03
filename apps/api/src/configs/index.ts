@@ -1,4 +1,5 @@
 import { appConfig } from '@configs/app.config.js';
+import { authConfig } from '@configs/auth.config.js';
 import { databaseConfig } from '@configs/database.config.js';
 import { lambdaConfig } from '@configs/lambda.config.js';
 import { mailConfig } from '@configs/mail.config.js';
@@ -9,6 +10,7 @@ import { sqsConfig } from '@configs/sqs.config.js';
 
 export const configs = [
   appConfig,
+  authConfig,
   databaseConfig,
   lambdaConfig,
   mailConfig,
