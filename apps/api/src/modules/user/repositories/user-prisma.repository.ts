@@ -82,6 +82,25 @@ export class UserPrismaRepository implements UserRepositoryInterface {
     return method ? this.methodToDomain(method) : null;
   }
 
+  public async findEmailMethodByUserId(userId: string): Promise<AuthMethodInterface | null> {
+    const method: AuthMethodModel | null = await this.prisma.authMethod.findUnique({
+      where: { userId_type: { userId, type: AuthMethodType.EMAIL } },
+    });
+
+    return method ? this.methodToDomain(method) : null;
+  }
+
+  public async markEmailVerified(methodId: string): Promise<void> {
+    await this.prisma.authMethod.update({
+      where: { id: methodId },
+      data: { isEmailVerified: true },
+    });
+  }
+
+  public async updatePasswordHash(methodId: string, passwordHash: string): Promise<void> {
+    await this.prisma.authMethod.update({ where: { id: methodId }, data: { passwordHash } });
+  }
+
   public async touchMethodLastUsed(methodId: string, now: Date): Promise<void> {
     try {
       await this.prisma.authMethod.update({ where: { id: methodId }, data: { lastUsedAt: now } });
