@@ -58,6 +58,8 @@ export * from './payments/interfaces/admin-plan-response.interface.js';
 export * from './payments/interfaces/checkout-response.interface.js';
 export * from './payments/interfaces/create-checkout-request.interface.js';
 export * from './payments/interfaces/create-plan-request.interface.js';
+export * from './payments/interfaces/public-plan-response.interface.js';
+export * from './payments/interfaces/public-plans-response.interface.js';
 export * from './payments/interfaces/subscription-response.interface.js';
 export * from './payments/interfaces/update-plan-activation-request.interface.js';
 export * from './payments/interfaces/update-plan-request.interface.js';
