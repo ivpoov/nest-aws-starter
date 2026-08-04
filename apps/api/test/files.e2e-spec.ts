@@ -129,6 +129,29 @@ describe('files', () => {
     expect(response.body.code).toBe('FILE_NOT_UPLOADED');
   });
 
+  it('rejects confirming an object whose actual content type does not match the declared, allowed one', async () => {
+    // Regression: @aws-sdk/s3-request-presigner puts Content-Type in
+    // unsignableHeaders, so it is NOT part of the presigned PUT's signature —
+    // a client can declare an allowed type at requestUpload and then PUT a
+    // disallowed one. confirmUpload must re-validate what S3 actually stored.
+    const upload = await requestUpload({ intent: 'AVATAR', contentType: 'image/png' });
+
+    const putResponse: Response = await fetch(upload.uploadUrl, {
+      method: 'PUT',
+      headers: { 'content-type': 'text/html' },
+      body: '<script>alert(1)</script>',
+    });
+
+    expect(putResponse.ok).toBe(true);
+
+    const confirmed = await request(app.getHttpServer())
+      .post(`/api/v1/files/${upload.fileId}/confirm`)
+      .set('authorization', `Bearer ${ownerToken}`)
+      .expect(400);
+
+    expect(confirmed.body.code).toBe('FILE_CONTENT_TYPE_NOT_ALLOWED');
+  });
+
   it('hides a foreign file from confirm and download with 403', async () => {
     const upload = await requestUpload({ intent: 'ATTACHMENT', contentType: 'text/plain' });
 
