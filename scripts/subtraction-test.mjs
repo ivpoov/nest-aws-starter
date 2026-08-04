@@ -292,6 +292,11 @@ function createWorktree(moduleId) {
   const result = run('git', ['worktree', 'add', '-b', branch, dir, 'HEAD']);
 
   if (result.status !== 0) {
+    // `git worktree add` failed before creating anything worth tracking —
+    // the mkdtemp parent would otherwise leak forever, unlike a failure
+    // further down the pipeline (which removeWorktree cleans up).
+    rmSync(tmpParent, { recursive: true, force: true });
+
     throw new Error(`git worktree add failed for ${moduleId}:\n${result.output}`);
   }
 
@@ -311,11 +316,22 @@ function removeWorktree(worktree) {
 // model, so a client generated from the FULL schema type-checks identically
 // for whatever subset of modules remains (removed modules' generated types
 // simply go unused once their importing files are deleted).
+// Returns the same {status, output} shape as run() (never throws) so a
+// missing source dir (script run before `pnpm run build`) or any other I/O
+// error surfaces as an ordinary failed step — caught by runModule's loop,
+// which still calls removeWorktree() — rather than an uncaught exception
+// that would crash the whole run mid-worktree and skip cleanup.
 function copyGeneratedPrismaClient(worktreeDir) {
   const source = path.join(REPO_ROOT, 'apps/api/src/generated');
   const dest = path.join(worktreeDir, 'apps/api/src/generated');
 
-  cpSync(source, dest, { recursive: true });
+  try {
+    cpSync(source, dest, { recursive: true });
+
+    return { status: 0, output: '' };
+  } catch (error) {
+    return { status: 1, output: String(error) };
+  }
 }
 
 function subtractionSteps(worktreeDir) {
