@@ -1,4 +1,5 @@
 import { StatisticsCountBreakdownResponseDto } from '@modules/statistic/dtos/responses/statistics-count-breakdown-response.dto.js';
+import { StatisticsRevenueByPlanResponseDto } from '@modules/statistic/dtos/responses/statistics-revenue-by-plan-response.dto.js';
 import { StatisticsTotalsResponseDto } from '@modules/statistic/dtos/responses/statistics-totals-response.dto.js';
 import type { StatisticsOverviewResponseInterface } from '@nest-aws-starter/shared';
 import { ApiProperty } from '@nestjs/swagger';
@@ -20,4 +21,9 @@ export class StatisticsOverviewResponseDto implements StatisticsOverviewResponse
   @Expose()
   @Type(() => StatisticsCountBreakdownResponseDto)
   readonly authMethodDistribution: StatisticsCountBreakdownResponseDto[];
+
+  @ApiProperty({ type: [StatisticsRevenueByPlanResponseDto] })
+  @Expose()
+  @Type(() => StatisticsRevenueByPlanResponseDto)
+  readonly revenueByPlan: StatisticsRevenueByPlanResponseDto[];
 }
