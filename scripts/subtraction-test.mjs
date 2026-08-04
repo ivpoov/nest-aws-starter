@@ -119,12 +119,14 @@ const MODULES = [
       'apps/api/src/modules/payment',
       'apps/api/src/modules/stripe',
       'apps/api/src/configs/stripe.config.ts',
+      'apps/api/src/configs/payment.config.ts',
     ],
     envVars: [
       'STRIPE_ENABLED',
       'STRIPE_SECRET_KEY',
       'STRIPE_WEBHOOK_SECRET',
       'STRIPE_PORTAL_RETURN_URL',
+      'SQS_PAYMENT_WEBHOOK_QUEUE_URL',
     ],
   },
 ];
