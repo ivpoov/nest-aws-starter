@@ -7,6 +7,7 @@ import { CaslModule } from '@modules/casl/casl.module.js';
 import { ThrottlerRedisStorageService } from '@modules/common/services/throttler-redis-storage.service.js';
 import { ContactUsModule } from '@modules/contact-us/contact-us.module.js';
 import { EventModule } from '@modules/event/event.module.js';
+import { FileModule } from '@modules/file/file.module.js';
 import { HealthModule } from '@modules/health/health.module.js';
 import { NoteModule } from '@modules/note/note.module.js';
 import { OauthModule } from '@modules/oauth/oauth.module.js';
@@ -67,6 +68,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     FacebookOauthModule,
     DiscordOauthModule,
     NoteModule,
+    FileModule,
     ActivityModule,
     SuspiciousActivityModule,
     StatisticModule,
