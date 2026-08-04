@@ -13,6 +13,7 @@ function fakeLifecycle(): SubscriptionLifecycleInterface {
     recordRenewal: vi.fn().mockResolvedValue(undefined),
     markPastDue: vi.fn().mockResolvedValue(undefined),
     cancel: vi.fn().mockResolvedValue(undefined),
+    syncPeriodFromProvider: vi.fn().mockResolvedValue(undefined),
     expireOverdue: vi.fn().mockResolvedValue(undefined),
   };
 }
@@ -65,7 +66,7 @@ describe('WebhookEventDispatcherService.dispatch', () => {
     expect(lifecycle.activateFromCheckout).not.toHaveBeenCalled();
   });
 
-  it('maps PAYMENT_SUCCEEDED to recordRenewal', async () => {
+  it('maps PAYMENT_SUCCEEDED to recordRenewal with the event provider', async () => {
     const lifecycle = fakeLifecycle();
     const service = new WebhookEventDispatcherService(lifecycle);
     const periodEndsAt = new Date('2026-09-01T00:00:00Z');
@@ -85,13 +86,14 @@ describe('WebhookEventDispatcherService.dispatch', () => {
     );
 
     expect(lifecycle.recordRenewal).toHaveBeenCalledWith({
+      provider: 'STRIPE',
       subscriptionRef: 'sub_1',
       periodEndsAt,
       transactionData,
     });
   });
 
-  it('maps PAYMENT_FAILED to markPastDue', async () => {
+  it('maps PAYMENT_FAILED to markPastDue with the event provider', async () => {
     const lifecycle = fakeLifecycle();
     const service = new WebhookEventDispatcherService(lifecycle);
 
@@ -99,10 +101,10 @@ describe('WebhookEventDispatcherService.dispatch', () => {
       webhookEvent(NormalizedEventTypeEnum.PAYMENT_FAILED, { subscriptionRef: 'sub_1' }),
     );
 
-    expect(lifecycle.markPastDue).toHaveBeenCalledWith('sub_1');
+    expect(lifecycle.markPastDue).toHaveBeenCalledWith('STRIPE', 'sub_1');
   });
 
-  it('maps SUBSCRIPTION_CANCELED to cancel with the canceledAtPeriodEnd flag', async () => {
+  it('maps SUBSCRIPTION_CANCELED to cancel with the provider and canceledAtPeriodEnd flag', async () => {
     const lifecycle = fakeLifecycle();
     const service = new WebhookEventDispatcherService(lifecycle);
 
@@ -113,7 +115,7 @@ describe('WebhookEventDispatcherService.dispatch', () => {
       }),
     );
 
-    expect(lifecycle.cancel).toHaveBeenCalledWith('sub_1', false);
+    expect(lifecycle.cancel).toHaveBeenCalledWith('STRIPE', 'sub_1', false);
   });
 
   it('maps SUBSCRIPTION_UPDATED with canceledAtPeriodEnd=true to cancel', async () => {
@@ -127,10 +129,27 @@ describe('WebhookEventDispatcherService.dispatch', () => {
       }),
     );
 
-    expect(lifecycle.cancel).toHaveBeenCalledWith('sub_1', true);
+    expect(lifecycle.cancel).toHaveBeenCalledWith('STRIPE', 'sub_1', true);
+    expect(lifecycle.syncPeriodFromProvider).not.toHaveBeenCalled();
   });
 
-  it('no-ops on SUBSCRIPTION_UPDATED without a cancellation hint', async () => {
+  it('maps SUBSCRIPTION_UPDATED with a period end and no cancellation hint to syncPeriodFromProvider', async () => {
+    const lifecycle = fakeLifecycle();
+    const service = new WebhookEventDispatcherService(lifecycle);
+    const periodEndsAt = new Date('2026-09-01T00:00:00Z');
+
+    await service.dispatch(
+      webhookEvent(NormalizedEventTypeEnum.SUBSCRIPTION_UPDATED, {
+        subscriptionRef: 'sub_1',
+        periodEndsAt,
+      }),
+    );
+
+    expect(lifecycle.syncPeriodFromProvider).toHaveBeenCalledWith('STRIPE', 'sub_1', periodEndsAt);
+    expect(lifecycle.cancel).not.toHaveBeenCalled();
+  });
+
+  it('no-ops on SUBSCRIPTION_UPDATED with neither a cancellation hint nor a period end', async () => {
     const lifecycle = fakeLifecycle();
     const service = new WebhookEventDispatcherService(lifecycle);
 
@@ -139,6 +158,7 @@ describe('WebhookEventDispatcherService.dispatch', () => {
     );
 
     expect(lifecycle.cancel).not.toHaveBeenCalled();
+    expect(lifecycle.syncPeriodFromProvider).not.toHaveBeenCalled();
   });
 
   it('does nothing for UNHANDLED (the consumer marks it SKIPPED before ever dispatching)', async () => {
