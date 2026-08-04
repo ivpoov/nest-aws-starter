@@ -65,21 +65,27 @@ describe('StatisticService', () => {
 
     const overview = await service.getOverview();
 
-    expect(overview.totals).toEqual({
-      users: 10,
-      activeSessions: 4,
-      onlineNow: 3,
-      newToday: 2,
-      revenue: 1500,
-      mrrCents: 4_900,
-    });
+    expect(overview.totals.users).toBe(10);
+    expect(overview.totals.activeSessions).toBe(4);
+    expect(overview.totals.onlineNow).toBe(3);
+    expect(overview.totals.newToday).toBe(2);
     expect(overview.usersByStatus).toEqual([
       { key: 'ACTIVE', count: 8 },
       { key: 'BLOCKED', count: 2 },
     ]);
     expect(overview.authMethodDistribution).toEqual([{ key: 'EMAIL', count: 10 }]);
-    expect(overview.revenueByPlan).toEqual(revenueByPlanRows);
     expect(onlineUsersService.countActive).toHaveBeenCalledWith(300);
+  });
+
+  // <module:payment>
+  it('composes revenue, mrr, and revenue-by-plan into the overview when payment is present', async () => {
+    const { service } = createService();
+
+    const overview = await service.getOverview();
+
+    expect(overview.totals.revenue).toBe(1500);
+    expect(overview.totals.mrrCents).toBe(4_900);
+    expect(overview.revenueByPlan).toEqual(revenueByPlanRows);
   });
 
   it('sums revenue over the trailing 30-day window and passes the reporting currency window', async () => {
@@ -90,6 +96,21 @@ describe('StatisticService', () => {
     expect(repository.findRevenueByDay).toHaveBeenCalledWith(30);
     expect(repository.findRevenueByPlan).toHaveBeenCalledWith(30);
     expect(repository.findMrrCents).toHaveBeenCalledWith();
+  });
+  // </module:payment>
+
+  it('defaults revenue, mrr, and revenue-by-plan to the v0.3-stub shape when the revenue capability is unavailable', async () => {
+    const { service } = createService();
+
+    // Simulates the payment-subtracted build — see the guard tests below
+    // for why this is the only way to unit-test that state.
+    (service as unknown as { revenueAvailable: boolean }).revenueAvailable = false;
+
+    const overview = await service.getOverview();
+
+    expect(overview.totals.revenue).toBeNull();
+    expect(overview.totals.mrrCents).toBeNull();
+    expect(overview.revenueByPlan).toEqual([]);
   });
 
   it('wraps the overview under the fixed overview cache key with a 60s ttl', async () => {
@@ -131,6 +152,7 @@ describe('StatisticService', () => {
     );
   });
 
+  // <module:payment>
   it('dispatches REVENUE to the revenue-by-day query', async () => {
     const { service, repository } = createService();
 
@@ -146,5 +168,34 @@ describe('StatisticService', () => {
         { date: '2026-08-02', value: 500 },
       ],
     });
+  });
+  // </module:payment>
+
+  it('rejects REVENUE with a coded 400 instead of substituting registrations when the revenue capability is unavailable', async () => {
+    const { service, repository } = createService();
+
+    // Simulates the payment-subtracted build: the fenced constructor line
+    // that flips this flag true is stripped along with the payment module
+    // (see StatisticService.revenueAvailable / scripts/subtraction-test.mjs).
+    // There is no public API to construct that state — this is the only way
+    // to unit-test the guard without standing up the subtracted worktree.
+    (service as unknown as { revenueAvailable: boolean }).revenueAvailable = false;
+
+    await expect(service.getSeries(StatisticsMetricEnum.REVENUE, 7)).rejects.toMatchObject({
+      args: { code: 'STATISTIC_REVENUE_UNAVAILABLE' },
+    });
+    expect(repository.findRegistrationsByDay).not.toHaveBeenCalled();
+    expect(repository.findRevenueByDay).not.toHaveBeenCalled();
+  });
+
+  it('still serves REGISTRATIONS and NEW_DEVICES when the revenue capability is unavailable', async () => {
+    const { service, repository } = createService();
+
+    (service as unknown as { revenueAvailable: boolean }).revenueAvailable = false;
+
+    await expect(service.getSeries(StatisticsMetricEnum.REGISTRATIONS, 2)).resolves.toBeDefined();
+    await expect(service.getSeries(StatisticsMetricEnum.NEW_DEVICES, 1)).resolves.toBeDefined();
+    expect(repository.findRegistrationsByDay).toHaveBeenCalledWith(2);
+    expect(repository.findNewDevicesByDay).toHaveBeenCalledWith(1);
   });
 });
