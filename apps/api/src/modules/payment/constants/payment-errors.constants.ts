@@ -34,3 +34,18 @@ export const PAYMENT_SUBSCRIPTION_REQUIRED: ErrorArgsInterface = {
   code: 'PAYMENT_SUBSCRIPTION_REQUIRED',
   details: 'An active subscription is required to access this resource',
 };
+
+// Category: ConflictError (409) — a plan with at least one subscription
+// (any status, past or present) can never be deleted, only deactivated.
+export const PLAN_HAS_SUBSCRIPTIONS: ErrorArgsInterface = {
+  code: 'PLAN_HAS_SUBSCRIPTIONS',
+  details: 'This plan has subscriptions and cannot be deleted',
+};
+
+// Category: ValidationError (400) — thrown by PlanAdminService when a
+// providerRefs entry is set/changed and the target provider is enabled but
+// rejects the ref (e.g. the Stripe price id does not exist).
+export const PLAN_PROVIDER_REF_INVALID: ErrorArgsInterface = {
+  code: 'PLAN_PROVIDER_REF_INVALID',
+  details: 'The provider reference does not exist',
+};
