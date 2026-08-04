@@ -20,7 +20,7 @@ the marked lines/blocks and the markers themselves.
   - line 76: `FileModule, // <module:file>`
 - `apps/api/prisma/schema.prisma`
   - line 42: `files               File[] // <module:file>`
-  - lines 181-212 (block)
+  - lines 186-217 (block)
 
 ## 3. Drop `.env` variables
 

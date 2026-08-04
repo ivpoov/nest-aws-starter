@@ -31,7 +31,7 @@ the marked lines/blocks and the markers themselves.
 - `apps/api/prisma/schema.prisma`
   - line 44: `subscriptions       Subscription[] // <module:payment>`
   - line 45: `paymentTransactions PaymentTransaction[] // <module:payment>`
-  - lines 240-336 (block)
+  - lines 245-341 (block)
 
 ## 3. Drop `.env` variables
 
