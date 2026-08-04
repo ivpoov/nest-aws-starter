@@ -26,21 +26,23 @@ enum AuthMethodType {
 }
 
 model User {
-  id               String       @id @default(uuid(7))
-  role             UserRole     @default(USER)
-  status           UserStatus   @default(ACTIVE)
-  displayName      String       @db.VarChar(120)
-  avatarKey        String? // S3 object key, served via presigned URL
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-  authMethods      AuthMethod[]
-  sessions         Session[]
+  id                  String               @id @default(uuid(7))
+  role                UserRole             @default(USER)
+  status              UserStatus           @default(ACTIVE)
+  displayName         String               @db.VarChar(120)
+  avatarKey           String? // S3 object key, served via presigned URL
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  authMethods         AuthMethod[]
+  sessions            Session[]
   // Sessions this user (as an admin) is currently impersonating a target
   // through — back-relation only, never queried from the User side today.
-  impersonatedByMe Session[]    @relation("SessionSignedAsAdmin")
-  notes            Note[]
-  files            File[] // <module:file>
-  apiKeys          ApiKey[] // <module:api-key>
+  impersonatedByMe    Session[]            @relation("SessionSignedAsAdmin")
+  notes               Note[]
+  files               File[] // <module:file>
+  apiKeys             ApiKey[] // <module:api-key>
+  subscriptions       Subscription[] // <module:payment>
+  paymentTransactions PaymentTransaction[] // <module:payment>
 
   @@index([role, status])
   @@index([createdAt])
@@ -234,3 +236,100 @@ model ApiKey {
 }
 
 // </module:api-key>
+
+// <module:payment>
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum TransactionStatus {
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+  SKIPPED
+}
+
+model Plan {
+  id            String         @id @default(uuid(7))
+  name          String         @db.VarChar(120)
+  description   String         @default("")
+  amountCents   Int
+  currency      String         @db.VarChar(3)
+  intervalDays  Int // 30 / 365 — provider-agnostic interval
+  providerRefs  Json           @default("{}") // { "STRIPE": "price_..." } — per-provider price ids
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  subscriptions Subscription[]
+
+  @@index([isActive])
+  @@map("plans")
+}
+
+model Subscription {
+  id                  String               @id @default(uuid(7))
+  userId              String
+  planId              String
+  status              SubscriptionStatus
+  provider            String               @db.VarChar(30) // 'STRIPE'
+  providerRef         String?              @db.VarChar(255) // sub_... (unique per provider)
+  currentPeriodEndsAt DateTime
+  canceledAt          DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                Plan                 @relation(fields: [planId], references: [id])
+  transactions        PaymentTransaction[]
+
+  @@unique([provider, providerRef])
+  @@index([userId, status])
+  @@index([status, currentPeriodEndsAt]) // expiry sweep
+  @@map("subscriptions")
+}
+
+model PaymentTransaction {
+  id             String            @id @default(uuid(7))
+  userId         String
+  subscriptionId String?
+  status         TransactionStatus
+  amountCents    Int
+  currency       String            @db.VarChar(3)
+  provider       String            @db.VarChar(30)
+  providerRef    String            @db.VarChar(255) // payment_intent / charge id
+  createdAt      DateTime          @default(now())
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription   Subscription?     @relation(fields: [subscriptionId], references: [id])
+
+  @@unique([provider, providerRef])
+  @@index([userId, id])
+  @@index([status, createdAt]) // revenue TypedSQL
+  @@map("payment_transactions")
+}
+
+model WebhookEvent {
+  id              String             @id @default(uuid(7))
+  provider        String             @db.VarChar(30)
+  providerEventId String             @db.VarChar(255)
+  type            String             @db.VarChar(120)
+  payload         Json
+  status          WebhookEventStatus @default(RECEIVED)
+  attempts        Int                @default(0)
+  lastError       String?
+  createdAt       DateTime           @default(now())
+  processedAt     DateTime?
+
+  @@unique([provider, providerEventId]) // idempotency backbone
+  @@index([status, createdAt])
+  @@map("webhook_events")
+}
+
+// </module:payment>
