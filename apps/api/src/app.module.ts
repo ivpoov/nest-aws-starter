@@ -19,6 +19,7 @@ import { PrismaModule } from '@modules/prisma/prisma.module.js';
 import { SessionModule } from '@modules/session/session.module.js';
 import { StatisticModule } from '@modules/statistic/statistic.module.js'; // <module:statistic>
 import { SuspiciousActivityModule } from '@modules/suspicious-activity/suspicious-activity.module.js';
+import { TaskSchedulerModule } from '@modules/task-scheduler/task-scheduler.module.js';
 import { TokenModule } from '@modules/token/token.module.js';
 import { UserModule } from '@modules/user/user.module.js';
 import { Module } from '@nestjs/common';
@@ -51,6 +52,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     RedisModule,
     CacheModule,
     EventModule,
+    TaskSchedulerModule,
     CaslModule,
     S3Module,
     CloudFrontModule, // <module:cloudfront>

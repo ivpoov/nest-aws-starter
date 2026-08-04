@@ -9,6 +9,7 @@ import { lambdaConfig } from '@configs/lambda.config.js';
 import { mailConfig } from '@configs/mail.config.js';
 import { redisConfig } from '@configs/redis.config.js';
 import { s3Config } from '@configs/s3.config.js';
+import { schedulerConfig } from '@configs/scheduler.config.js';
 import { snsConfig } from '@configs/sns.config.js';
 import { sqsConfig } from '@configs/sqs.config.js';
 import { suspiciousActivityConfig } from '@configs/suspicious-activity.config.js';
@@ -26,6 +27,7 @@ export const configs = [
   mailConfig,
   redisConfig,
   s3Config,
+  schedulerConfig,
   snsConfig,
   sqsConfig,
   suspiciousActivityConfig,
