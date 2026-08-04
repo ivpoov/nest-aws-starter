@@ -1,6 +1,11 @@
 import { ActivityListener } from '@modules/activity/listeners/activity.listener.js';
 import type { ActivityService } from '@modules/activity/services/activity.service.js';
-import { ActivityTypeEnum, AuthMethodTypeEnum, LockoutScopeEnum } from '@nest-aws-starter/shared';
+import {
+  ActivityTypeEnum,
+  AuthMethodTypeEnum,
+  FileIntentEnum,
+  LockoutScopeEnum,
+} from '@nest-aws-starter/shared';
 import { describe, expect, it, vi } from 'vitest';
 
 function createListener(): { listener: ActivityListener; record: ReturnType<typeof vi.fn> } {
@@ -230,6 +235,19 @@ describe('ActivityListener', () => {
       type: ActivityTypeEnum.CONTACT_RECEIVED,
       ip: '127.0.0.1',
       meta: { contactMessageId },
+    });
+  });
+
+  it('records FILE_UPLOADED on file.uploaded', async () => {
+    const { listener, record } = createListener();
+    const fileId = '01890a5d-0000-774b-bcce-b30209990005';
+
+    await listener.onFileUploaded({ fileId, userId, intent: FileIntentEnum.ATTACHMENT });
+
+    expect(record).toHaveBeenCalledWith({
+      userId,
+      type: ActivityTypeEnum.FILE_UPLOADED,
+      meta: { fileId, intent: FileIntentEnum.ATTACHMENT },
     });
   });
 
