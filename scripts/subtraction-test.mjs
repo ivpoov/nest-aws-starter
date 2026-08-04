@@ -286,7 +286,8 @@ function deleteModulePaths(treeRoot, modulePaths) {
 }
 
 function createWorktree(moduleId) {
-  const dir = path.join(mkdtempSync(path.join(tmpdir(), 'subtraction-')), moduleId);
+  const tmpParent = mkdtempSync(path.join(tmpdir(), 'subtraction-'));
+  const dir = path.join(tmpParent, moduleId);
   const branch = `subtraction/${moduleId}-${randomUUID().slice(0, 8)}`;
   const result = run('git', ['worktree', 'add', '-b', branch, dir, 'HEAD']);
 
@@ -294,12 +295,13 @@ function createWorktree(moduleId) {
     throw new Error(`git worktree add failed for ${moduleId}:\n${result.output}`);
   }
 
-  return { dir, branch };
+  return { dir, tmpParent, branch };
 }
 
 function removeWorktree(worktree) {
   run('git', ['worktree', 'remove', '--force', worktree.dir]);
   run('git', ['branch', '-D', worktree.branch]);
+  rmSync(worktree.tmpParent, { recursive: true, force: true });
 }
 
 // Prisma's generated client/TypedSQL output isn't checked in. `prisma
