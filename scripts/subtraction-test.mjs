@@ -110,6 +110,17 @@ const MODULES = [
       'CLOUDFRONT_URL_TTL_SEC',
     ],
   },
+  {
+    // Schema-only for now (v0.4 Task 1): no module folder exists yet — the
+    // service/controller code lands in Task 3, which will add its path to
+    // `paths` below. Until then this entry proves only the schema fences
+    // (models/enums in schema.prisma) and the two `User` back-relation
+    // lines strip cleanly.
+    id: 'payment',
+    summary: 'Plans, subscriptions, payment transactions, and webhook events (schema).',
+    paths: [],
+    envVars: [],
+  },
 ];
 
 // Documented for docs/removal/README.md — investigated during Task 14 and
