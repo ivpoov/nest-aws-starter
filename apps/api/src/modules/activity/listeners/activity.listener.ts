@@ -12,6 +12,11 @@ import type { AuthSuspiciousLoginPayloadInterface } from '@modules/activity/inte
 import type { ContactReceivedPayloadInterface } from '@modules/activity/interfaces/contact-received-payload.interface.js';
 import type { CreateActivityDataInterface } from '@modules/activity/interfaces/create-activity-data.interface.js';
 import type { FileUploadedPayloadInterface } from '@modules/activity/interfaces/file-uploaded-payload.interface.js';
+import type { SubscriptionActivatedPayloadInterface } from '@modules/activity/interfaces/subscription-activated-payload.interface.js';
+import type { SubscriptionCanceledPayloadInterface } from '@modules/activity/interfaces/subscription-canceled-payload.interface.js';
+import type { SubscriptionExpiredPayloadInterface } from '@modules/activity/interfaces/subscription-expired-payload.interface.js';
+import type { SubscriptionPastDuePayloadInterface } from '@modules/activity/interfaces/subscription-past-due-payload.interface.js';
+import type { SubscriptionRenewedPayloadInterface } from '@modules/activity/interfaces/subscription-renewed-payload.interface.js';
 import type { UserBlockedPayloadInterface } from '@modules/activity/interfaces/user-blocked-payload.interface.js';
 import type { UserOauthRegisteredPayloadInterface } from '@modules/activity/interfaces/user-oauth-registered-payload.interface.js';
 import type { UserRegisteredPayloadInterface } from '@modules/activity/interfaces/user-registered-payload.interface.js';
@@ -31,6 +36,11 @@ import {
   AUTH_SUSPICIOUS_LOGIN_EVENT,
   CONTACT_RECEIVED_EVENT,
   FILE_UPLOADED_EVENT,
+  SUBSCRIPTION_ACTIVATED_EVENT,
+  SUBSCRIPTION_CANCELED_EVENT,
+  SUBSCRIPTION_EXPIRED_EVENT,
+  SUBSCRIPTION_PAST_DUE_EVENT,
+  SUBSCRIPTION_RENEWED_EVENT,
   USER_BLOCKED_EVENT,
   USER_OAUTH_REGISTERED_EVENT,
   USER_REGISTERED_EVENT,
@@ -202,6 +212,55 @@ export class ActivityListener {
       actorId: payload.actorId,
       type: ActivityTypeEnum.API_KEY_REVOKED,
       meta: { apiKeyId: payload.apiKeyId },
+    });
+  }
+
+  @OnDomainEvent(SUBSCRIPTION_ACTIVATED_EVENT)
+  public async onSubscriptionActivated(
+    payload: SubscriptionActivatedPayloadInterface,
+  ): Promise<void> {
+    await this.safeRecord({
+      userId: payload.userId,
+      type: ActivityTypeEnum.SUBSCRIPTION_ACTIVATED,
+      meta: { subscriptionId: payload.subscriptionId, planId: payload.planId },
+    });
+  }
+
+  @OnDomainEvent(SUBSCRIPTION_RENEWED_EVENT)
+  public async onSubscriptionRenewed(payload: SubscriptionRenewedPayloadInterface): Promise<void> {
+    await this.safeRecord({
+      userId: payload.userId,
+      type: ActivityTypeEnum.SUBSCRIPTION_RENEWED,
+      meta: { subscriptionId: payload.subscriptionId },
+    });
+  }
+
+  @OnDomainEvent(SUBSCRIPTION_PAST_DUE_EVENT)
+  public async onSubscriptionPastDue(payload: SubscriptionPastDuePayloadInterface): Promise<void> {
+    await this.safeRecord({
+      userId: payload.userId,
+      type: ActivityTypeEnum.SUBSCRIPTION_PAST_DUE,
+      meta: { subscriptionId: payload.subscriptionId },
+    });
+  }
+
+  @OnDomainEvent(SUBSCRIPTION_CANCELED_EVENT)
+  public async onSubscriptionCanceled(
+    payload: SubscriptionCanceledPayloadInterface,
+  ): Promise<void> {
+    await this.safeRecord({
+      userId: payload.userId,
+      type: ActivityTypeEnum.SUBSCRIPTION_CANCELED,
+      meta: { subscriptionId: payload.subscriptionId },
+    });
+  }
+
+  @OnDomainEvent(SUBSCRIPTION_EXPIRED_EVENT)
+  public async onSubscriptionExpired(payload: SubscriptionExpiredPayloadInterface): Promise<void> {
+    await this.safeRecord({
+      userId: payload.userId,
+      type: ActivityTypeEnum.SUBSCRIPTION_EXPIRED,
+      meta: { subscriptionId: payload.subscriptionId },
     });
   }
 
