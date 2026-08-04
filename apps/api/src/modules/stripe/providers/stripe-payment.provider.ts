@@ -4,6 +4,7 @@ import { CustomLoggerService } from '@modules/logger/services/custom-logger.serv
 import type { CheckoutSessionInterface } from '@modules/payment/interfaces/checkout-session.interface.js';
 import type { CreateCheckoutDataInterface } from '@modules/payment/interfaces/create-checkout-data.interface.js';
 import type { PaymentProviderInterface } from '@modules/payment/interfaces/payment-provider.interface.js';
+import type { PaymentProviderRefValidatorInterface } from '@modules/payment/interfaces/payment-provider-ref-validator.interface.js';
 import type { ProviderEventInterface } from '@modules/payment/interfaces/provider-event.interface.js';
 import {
   PLAN_PROVIDER_REF_MISSING,
@@ -14,7 +15,9 @@ import { StripeEventMapper } from '@modules/stripe/services/stripe-event-mapper.
 import type { EnabledStripeConfigType } from '@modules/stripe/types/enabled-stripe-config.type.js';
 import Stripe from 'stripe';
 
-export class StripePaymentProvider implements PaymentProviderInterface {
+export class StripePaymentProvider
+  implements PaymentProviderInterface, PaymentProviderRefValidatorInterface
+{
   public readonly name = 'STRIPE';
 
   private readonly logger = new CustomLoggerService(StripePaymentProvider.name);
@@ -53,6 +56,23 @@ export class StripePaymentProvider implements PaymentProviderInterface {
     });
 
     return session.url;
+  }
+
+  // Used by PlanAdminService when a plan's providerRefs.STRIPE is set or
+  // changed — confirms the price actually exists in this Stripe account
+  // before the plan is offered for checkout.
+  public async validateProviderRef(ref: string): Promise<boolean> {
+    try {
+      await this.client.prices.retrieve(ref);
+
+      return true;
+    } catch (error) {
+      const message: string = error instanceof Error ? error.message : String(error);
+
+      this.logger.warn(`Stripe price ref invalid (${ref}): ${message}`);
+
+      return false;
+    }
   }
 
   public async verifyAndParseWebhook(
