@@ -9,10 +9,13 @@ import { Inject, Injectable } from '@nestjs/common';
 // Maps a normalized event to its SubscriptionLifecycleInterface target.
 // SUBSCRIPTION_UPDATED and SUBSCRIPTION_CANCELED both route to `cancel` —
 // the interface (plan Task 7) has no other method shaped for a bare
-// "subscription changed" webhook, and Stripe's own `customer.subscription.
-// updated` fires precisely when `cancel_at_period_end` toggles, so the two
-// normalized types differ only in whether access survives to period end
-// (`canceledAtPeriodEnd`). PR 7 may extend this mapping once the real
+// "subscription changed" webhook. Stripe's own `customer.subscription.
+// updated` actually fires on ANY field change (plan swap, quantity, trial
+// end, discounts, ...), not only when `cancel_at_period_end` toggles — this
+// dispatcher only acts on it when `canceledAtPeriodEnd` is explicitly true
+// (see dispatchSubscriptionUpdated below) and is a no-op otherwise, so the
+// breadth of the underlying Stripe event is safe to ignore for now. PR 7
+// may extend this mapping (e.g. a real "plan changed" method) once the real
 // lifecycle service exposes more transitions.
 @Injectable()
 export class WebhookEventDispatcherService {
