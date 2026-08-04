@@ -15,11 +15,24 @@ import { buildClientError } from '../../utils/buildClientError';
 import { toApiError } from '../../utils/toApiError';
 import { validateFileUpload } from '../../utils/validateFileUpload';
 
+// apiClient.uploadToUrl throws `Upload failed: <status>` for a non-ok HTTP
+// response (an expired/invalid presign reads as 403) and a plain fetch
+// TypeError for a network-level failure (never reached the server) — worth
+// distinguishing since only the first one is actually "try again".
+function isHttpUploadFailure(caught: unknown): boolean {
+  return caught instanceof Error && caught.message.startsWith('Upload failed:');
+}
+
 async function putToPresignedUrl(url: string, file: File): Promise<void> {
   try {
     await apiClient.uploadToUrl(url, file, file.type);
-  } catch {
-    throw buildClientError('FILE_UPLOAD_LINK_EXPIRED', 'Upload link expired, try again');
+  } catch (caught) {
+    throw isHttpUploadFailure(caught)
+      ? buildClientError('FILE_UPLOAD_LINK_EXPIRED', 'Upload link expired, try again')
+      : buildClientError(
+          'FILE_UPLOAD_NETWORK_ERROR',
+          'Could not reach the upload service, check your connection and try again',
+        );
   }
 }
 
