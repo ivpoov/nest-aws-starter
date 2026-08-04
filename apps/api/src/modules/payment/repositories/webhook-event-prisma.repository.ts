@@ -42,6 +42,44 @@ export class WebhookEventPrismaRepository implements WebhookEventRepositoryInter
     return this.toDomain(existing);
   }
 
+  public async findById(id: string): Promise<WebhookEventInterface | null> {
+    const webhookEvent: WebhookEventModel | null = await this.prisma.webhookEvent.findUnique({
+      where: { id },
+    });
+
+    return webhookEvent ? this.toDomain(webhookEvent) : null;
+  }
+
+  public async markProcessed(id: string): Promise<void> {
+    await this.prisma.webhookEvent.update({
+      where: { id },
+      data: { status: WebhookEventStatusEnum.PROCESSED, processedAt: new Date() },
+    });
+  }
+
+  public async markSkipped(id: string): Promise<void> {
+    await this.prisma.webhookEvent.update({
+      where: { id },
+      data: { status: WebhookEventStatusEnum.SKIPPED, processedAt: new Date() },
+    });
+  }
+
+  public async markFailed(id: string): Promise<void> {
+    await this.prisma.webhookEvent.update({
+      where: { id },
+      data: { status: WebhookEventStatusEnum.FAILED, processedAt: new Date() },
+    });
+  }
+
+  public async recordFailure(id: string, error: string): Promise<number> {
+    const updated: WebhookEventModel = await this.prisma.webhookEvent.update({
+      where: { id },
+      data: { attempts: { increment: 1 }, lastError: error },
+    });
+
+    return updated.attempts;
+  }
+
   // Deliberate extension of the "P2025 is the single permitted Prisma-error
   // touchpoint" convention (docs/conventions/backend.md §11): P2002 (unique
   // violation) is this repository's own confined signal for idempotent
