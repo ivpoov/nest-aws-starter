@@ -14,6 +14,7 @@ import {
 } from '@modules/session/constants/session-errors.constants.js';
 import type { CreateSessionResultInterface } from '@modules/session/interfaces/create-session-result.interface.js';
 import type { LoginAsSessionResultInterface } from '@modules/session/interfaces/login-as-session-result.interface.js';
+import type { RotatedWindowInterface } from '@modules/session/interfaces/rotated-window.interface.js';
 import type { SessionInterface } from '@modules/session/interfaces/session.interface.js';
 import type { SessionContextInterface } from '@modules/session/interfaces/session-context.interface.js';
 import type { SessionForUserInterface } from '@modules/session/interfaces/session-for-user.interface.js';
@@ -208,13 +209,13 @@ export class SessionService {
     // the source of truth for whether this refresh keeps the impersonation
     // claim alive.
     const signedAsAdminId: string | null = session.signedAsAdminId;
-    const ttlSec: number = this.ttlSecFor(signedAsAdminId);
+    const window: RotatedWindowInterface = this.rotatedWindow(session);
     const pair: TokenPairInterface = await this.tokenService.issuePair({
       userId: claims.userId,
       role: user.role,
       sessionId: claims.sessionId,
       actAsBy: signedAsAdminId,
-      refreshTtlSec: ttlSec,
+      refreshTtlSec: window.ttlSec,
     });
 
     await this.tokenRepository.setPreviousRefreshToken(
@@ -223,10 +224,7 @@ export class SessionService {
       oldRefreshToken,
       this.config.refreshGraceSec,
     );
-    await this.sessionRepository.setActiveUntil(
-      claims.sessionId,
-      new Date(Date.now() + ttlSec * 1000),
-    );
+    await this.sessionRepository.setActiveUntil(claims.sessionId, window.activeUntil);
     void this.sessionRepository
       .touchLastActive(claims.sessionId, new Date())
       .catch((caught: unknown): void =>
@@ -264,10 +262,33 @@ export class SessionService {
     return { session, tokens };
   }
 
-  // Single source for the refresh TTL / activeUntil window: impersonated
-  // sessions are capped at IMPERSONATION_ACTIVE_TTL_SEC everywhere a TTL is
-  // decided — Redis key, refresh JWT exp, and the Postgres activeUntil.
+  // Grant on session creation only — a fresh session always gets its full
+  // window. rotate() uses rotatedWindow() instead, which clamps rather than
+  // re-grants for impersonated sessions.
   private ttlSecFor(signedAsAdminId: string | null): number {
     return signedAsAdminId ? IMPERSONATION_ACTIVE_TTL_SEC : this.config.refreshTtlSec;
+  }
+
+  // Normal sessions keep the sliding window: every refresh re-grants the
+  // full refreshTtlSec, exactly as before. Impersonated sessions get an
+  // ABSOLUTE cap instead — activeUntil never moves past the original hour,
+  // however often the token is refreshed — and the rotated pair's TTL is
+  // whatever budget remains, so the Redis key and JWT exp die with the
+  // session rather than an hour after the last refresh.
+  private rotatedWindow(session: SessionInterface): RotatedWindowInterface {
+    if (!session.signedAsAdminId) {
+      return {
+        activeUntil: new Date(Date.now() + this.config.refreshTtlSec * 1000),
+        ttlSec: this.config.refreshTtlSec,
+      };
+    }
+
+    const now: number = Date.now();
+    const activeUntil: Date = new Date(
+      Math.min(session.activeUntil.getTime(), now + IMPERSONATION_ACTIVE_TTL_SEC * 1000),
+    );
+    const ttlSec: number = Math.max(1, Math.ceil((activeUntil.getTime() - now) / 1000));
+
+    return { activeUntil, ttlSec };
   }
 }

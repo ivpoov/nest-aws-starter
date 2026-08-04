@@ -371,6 +371,64 @@ describe('SessionService impersonation', () => {
     expect(tokens.ttlSecByKey.get(`${user.id}:${first.sessionId}:refresh`)).toBe(3_600);
   });
 
+  // Release-review fix (case a): the 1h window is an ABSOLUTE cap, not a
+  // sliding one — rotating near expiry must not push activeUntil back out
+  // to now+3600, and the rotated token's TTL must match the remaining
+  // budget so Redis/JWT expiry and the session die together.
+  it('clamps activeUntil instead of extending it when rotating an impersonated session near expiry', async () => {
+    const { service, tokens, sessions } = createService();
+    const first = await service.createImpersonatedSession(user, adminId, context);
+    const nearExpiry: Date = new Date(Date.now() + 5_000);
+
+    await sessions.setActiveUntil(first.sessionId, nearExpiry);
+    await service.refresh(first.tokens.refreshToken);
+
+    const rotatedActiveUntil: number | undefined = (
+      await sessions.findById(first.sessionId)
+    )?.activeUntil.getTime();
+    const ttl: number = tokens.ttlSecByKey.get(`${user.id}:${first.sessionId}:refresh`) ?? 0;
+
+    expect(rotatedActiveUntil).toBe(nearExpiry.getTime());
+    expect(ttl).toBeGreaterThan(0);
+    expect(ttl).toBeLessThanOrEqual(5);
+  });
+
+  // Release-review fix (case b): rotating immediately after creation must
+  // leave the original bound untouched — the clamp always picks the
+  // existing activeUntil since it can never be later than now+3600 freshly
+  // computed at rotation time.
+  it('leaves the activeUntil bound unchanged when rotating right after creation', async () => {
+    const { service, sessions } = createService();
+    const first = await service.createImpersonatedSession(user, adminId, context);
+    const originalActiveUntil: number | undefined = (
+      await sessions.findById(first.sessionId)
+    )?.activeUntil.getTime();
+
+    await service.refresh(first.tokens.refreshToken);
+
+    const rotatedActiveUntil: number | undefined = (
+      await sessions.findById(first.sessionId)
+    )?.activeUntil.getTime();
+
+    expect(rotatedActiveUntil).toBe(originalActiveUntil);
+  });
+
+  // Release-review fix (case c, regression guard): normal sessions keep the
+  // sliding window exactly as before — every refresh re-grants the full TTL.
+  it('still extends activeUntil on every refresh for a normal (non-impersonated) session', async () => {
+    const { service, sessions } = createService();
+    const first = await service.createSession(user, context);
+    const originalActiveUntil: number =
+      (await sessions.findById('session-1'))?.activeUntil.getTime() ?? 0;
+
+    await service.refresh(first.refreshToken);
+
+    const rotatedActiveUntil: number =
+      (await sessions.findById('session-1'))?.activeUntil.getTime() ?? 0;
+
+    expect(rotatedActiveUntil).toBeGreaterThan(originalActiveUntil);
+  });
+
   // The Critical fix under test: rotate()'s happy path must gate on
   // activeUntil explicitly, not merely on "the Redis key still exists" — the
   // fake token repository has no real TTL semantics, so this isolates that
