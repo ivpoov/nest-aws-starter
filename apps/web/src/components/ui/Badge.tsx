@@ -2,12 +2,17 @@ import type { ReactElement } from 'react';
 
 interface BadgePropsInterface {
   readonly label: string;
+  readonly tone?: 'neutral' | 'positive' | 'negative';
 }
 
-export function Badge({ label }: BadgePropsInterface): ReactElement {
+const TONE_CLASSES: Record<string, string> = {
+  neutral: 'border-edge text-content-muted',
+  positive: 'border-accent text-accent',
+  negative: 'border-danger/40 text-danger',
+};
+
+export function Badge({ label, tone = 'negative' }: BadgePropsInterface): ReactElement {
   return (
-    <span className="rounded-full border border-danger/40 px-2 py-0.5 text-xs text-danger">
-      {label}
-    </span>
+    <span className={`rounded-full border px-2 py-0.5 text-xs ${TONE_CLASSES[tone]}`}>{label}</span>
   );
 }
