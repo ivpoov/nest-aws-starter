@@ -21,7 +21,7 @@ the marked lines/blocks and the markers themselves.
   - line 73: `FacebookOauthModule, // <module:oauth-facebook>`
 - `apps/api/src/configs/index.ts`
   - line 6: `import { facebookOauthConfig } from '@configs/facebook-oauth.config.js'; // <module:oauth-facebook>`
-  - line 25: `facebookOauthConfig, // <module:oauth-facebook>`
+  - line 26: `facebookOauthConfig, // <module:oauth-facebook>`
 
 ## 3. Drop `.env` variables
 
