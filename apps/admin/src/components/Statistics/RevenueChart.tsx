@@ -21,6 +21,13 @@ interface RevenueChartPropsInterface {
   readonly days: number;
   readonly onDaysChange: (days: number) => void;
   readonly onRetry: () => void;
+  // Mirrors KpiTiles' totals.revenue === null check — true while the
+  // overview hasn't loaded yet (so the loading/chart state isn't skipped),
+  // false once the overview confirms the payment module is absent. Renders
+  // the same "—" placeholder KpiTiles uses instead of the chart, so a
+  // payment-subtracted deployment never shows registration counts under a
+  // "Revenue" heading.
+  readonly isAvailable: boolean;
 }
 
 function formatCents(amountCents: number): string {
@@ -71,7 +78,9 @@ function renderBody(
   error: ApiErrorInterface | null,
   onRetry: () => void,
   colors: ChartColorsInterface,
+  isAvailable: boolean,
 ): ReactElement {
+  if (!isAvailable) return <EmptyState message="Revenue requires the payment module" />;
   if (error && points.length === 0) return <ErrorMessage error={error} onRetry={onRetry} />;
   if (isLoading && points.length === 0) return <Loader />;
   if (points.length === 0) return <EmptyState message="No revenue in this range" />;
@@ -91,25 +100,28 @@ export function RevenueChart({
   days,
   onDaysChange,
   onRetry,
+  isAvailable,
 }: RevenueChartPropsInterface): ReactElement {
   const colors: ChartColorsInterface = useChartColors();
 
   return (
     <Card title="Revenue">
-      <div className="mb-4 flex gap-2">
-        {DAY_OPTIONS.map(
-          (option): ReactElement => (
-            <Button
-              key={option}
-              variant={option === days ? 'primary' : 'ghost'}
-              onClick={(): void => onDaysChange(option)}
-            >
-              {option}d
-            </Button>
-          ),
-        )}
-      </div>
-      {renderBody(points, isLoading, error, onRetry, colors)}
+      {isAvailable ? (
+        <div className="mb-4 flex gap-2">
+          {DAY_OPTIONS.map(
+            (option): ReactElement => (
+              <Button
+                key={option}
+                variant={option === days ? 'primary' : 'ghost'}
+                onClick={(): void => onDaysChange(option)}
+              >
+                {option}d
+              </Button>
+            ),
+          )}
+        </div>
+      ) : null}
+      {renderBody(points, isLoading, error, onRetry, colors, isAvailable)}
     </Card>
   );
 }
