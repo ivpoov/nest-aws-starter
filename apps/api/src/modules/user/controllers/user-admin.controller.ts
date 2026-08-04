@@ -23,7 +23,8 @@ import { UpdateUserStatusDto } from '@modules/user/dtos/update-user-status.dto.j
 import { UserEntity } from '@modules/user/entities/user.entity.js';
 import type { AdminUserInterface } from '@modules/user/interfaces/admin-user.interface.js';
 import { UserService } from '@modules/user/services/user.service.js';
-import { type LoginAsResponseInterface, UserStatusEnum } from '@nest-aws-starter/shared';
+import { UserAdminService } from '@modules/user/services/user-admin.service.js';
+import type { LoginAsResponseInterface } from '@nest-aws-starter/shared';
 import {
   Body,
   Controller,
@@ -52,6 +53,7 @@ export class UserAdminController {
 
   constructor(
     private readonly userService: UserService,
+    private readonly userAdminService: UserAdminService,
     private readonly sessionService: SessionService,
     private readonly oauthFlowService: OauthFlowService,
     private readonly eventBus: EventBusService,
@@ -119,27 +121,12 @@ export class UserAdminController {
   @Serialize(AdminUserResponseDto)
   @UseAbility(ActionsEnum.UPDATE, UserEntity)
   @Patch(':id/status')
-  public async updateStatus(
+  public updateStatus(
     @CurrentUserId() adminId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserStatusDto,
   ): Promise<AdminUserInterface> {
-    await this.userService.findByIdForAdminOrThrow(id);
-
-    // Fail-safe ordering: revoke sessions BEFORE flipping the status. If the
-    // revoke throws, nothing has changed yet (status untouched, no event). If
-    // the status write below fails after a successful revoke, the user is
-    // left logged out but still ACTIVE — the safe direction, since it never
-    // leaves a BLOCKED user with live sessions.
-    if (dto.status === UserStatusEnum.BLOCKED) {
-      this.userService.assertNotSelfBlock(id, adminId);
-      await this.sessionService.revokeAllForUser(id);
-      this.logger.log(`Admin ${adminId} revoked all sessions for user ${id} before blocking`);
-    }
-
-    await this.userService.updateStatus(id, dto.status, adminId, dto.reason);
-
-    return this.userService.findByIdForAdminOrThrow(id);
+    return this.userAdminService.updateStatus(adminId, id, dto.status, dto.reason);
   }
 
   // Sensitive like /auth/login: same throttle budget, and the AccessGuard's
