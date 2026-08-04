@@ -2,12 +2,16 @@ import type { ReactElement } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { AppLayout } from './components/Layout/AppLayout';
 import { AuthGate } from './components/Layout/AuthGate';
+import { BillingCanceledPage } from './pages/BillingCanceledPage';
+import { BillingPage } from './pages/BillingPage';
+import { BillingSuccessPage } from './pages/BillingSuccessPage';
 import { ContactPage } from './pages/ContactPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { MethodsPage } from './pages/MethodsPage';
 import { NotesPage } from './pages/NotesPage';
 import { OauthCallbackPage } from './pages/OauthCallbackPage';
+import { PricingPage } from './pages/PricingPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
@@ -24,12 +28,16 @@ export function App(): ReactElement {
       <Route path="/password/forgot" element={<ForgotPasswordPage />} />
       <Route path="/password/reset" element={<ResetPasswordPage />} />
       <Route path="/contact" element={<ContactPage />} />
+      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/billing/success" element={<BillingSuccessPage />} />
+      <Route path="/billing/canceled" element={<BillingCanceledPage />} />
       <Route element={<AuthGate />}>
         <Route element={<AppLayout />}>
           <Route path="/notes" element={<NotesPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings/methods" element={<MethodsPage />} />
           <Route path="/settings/sessions" element={<SessionsPage />} />
+          <Route path="/settings/billing" element={<BillingPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/notes" replace />} />
