@@ -10,6 +10,7 @@ fence markers in the codebase — do not hand-edit; re-run the generator instead
 - `apps/api/src/modules/payment` (delete)
 - `apps/api/src/modules/stripe` (delete)
 - `apps/api/src/configs/stripe.config.ts` (delete)
+- `apps/api/src/configs/payment.config.ts` (delete)
 
 ## 2. Strip cross-module references
 
@@ -23,8 +24,10 @@ the marked lines/blocks and the markers themselves.
   - line 82: `PaymentModule, // <module:payment>`
   - line 83: `StripeModule, // <module:payment>`
 - `apps/api/src/configs/index.ts`
-  - line 15: `import { stripeConfig } from '@configs/stripe.config.js'; // <module:payment>`
-  - line 34: `stripeConfig, // <module:payment>`
+  - line 10: `import { paymentConfig } from '@configs/payment.config.js'; // <module:payment>`
+  - line 16: `import { stripeConfig } from '@configs/stripe.config.js'; // <module:payment>`
+  - line 30: `paymentConfig, // <module:payment>`
+  - line 36: `stripeConfig, // <module:payment>`
 - `apps/api/prisma/schema.prisma`
   - line 44: `subscriptions       Subscription[] // <module:payment>`
   - line 45: `paymentTransactions PaymentTransaction[] // <module:payment>`
@@ -36,6 +39,7 @@ the marked lines/blocks and the markers themselves.
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PORTAL_RETURN_URL`
+- `SQS_PAYMENT_WEBHOOK_QUEUE_URL`
 
 ## 4. Verify
 
