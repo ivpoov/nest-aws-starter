@@ -30,6 +30,24 @@ describe('useStatisticsSeries', () => {
     expect(result.current.points).toEqual([{ date: '2026-08-01', value: 5 }]);
   });
 
+  it('loads points for the REVENUE metric', async () => {
+    vi.mocked(statisticsApi.fetchStatisticsSeries).mockResolvedValue({
+      metric: StatisticsMetricEnum.REVENUE,
+      days: 30,
+      points: [{ date: '2026-08-01', value: 2_500 }],
+    } as never);
+
+    const { result } = renderHook(() => useStatisticsSeries(StatisticsMetricEnum.REVENUE, 30));
+
+    await waitFor((): void => expect(result.current.isLoading).toBe(false));
+
+    expect(statisticsApi.fetchStatisticsSeries).toHaveBeenCalledWith(
+      StatisticsMetricEnum.REVENUE,
+      30,
+    );
+    expect(result.current.points).toEqual([{ date: '2026-08-01', value: 2_500 }]);
+  });
+
   it('reloads when the metric or days change', async () => {
     const { result, rerender } = renderHook(
       ({ metric, days }: { metric: StatisticsMetricEnum; days: number }) =>

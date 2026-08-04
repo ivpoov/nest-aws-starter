@@ -6,9 +6,17 @@ import { useStatisticsOverview } from '../hooks/statistics/useStatisticsOverview
 vi.mock('../apis/statistics');
 
 const OVERVIEW: Record<string, unknown> = {
-  totals: { users: 10, activeSessions: 3, onlineNow: 1, newToday: 2, revenue: null },
+  totals: {
+    users: 10,
+    activeSessions: 3,
+    onlineNow: 1,
+    newToday: 2,
+    revenue: null,
+    mrrCents: null,
+  },
   usersByStatus: [{ key: 'ACTIVE', count: 9 }],
   authMethodDistribution: [{ key: 'EMAIL', count: 10 }],
+  revenueByPlan: [],
 };
 
 describe('useStatisticsOverview', () => {
