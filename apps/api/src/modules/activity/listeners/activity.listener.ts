@@ -9,6 +9,7 @@ import type { AuthPasswordChangedPayloadInterface } from '@modules/activity/inte
 import type { AuthSuspiciousLoginPayloadInterface } from '@modules/activity/interfaces/auth-suspicious-login-payload.interface.js';
 import type { ContactReceivedPayloadInterface } from '@modules/activity/interfaces/contact-received-payload.interface.js';
 import type { CreateActivityDataInterface } from '@modules/activity/interfaces/create-activity-data.interface.js';
+import type { FileUploadedPayloadInterface } from '@modules/activity/interfaces/file-uploaded-payload.interface.js';
 import type { UserBlockedPayloadInterface } from '@modules/activity/interfaces/user-blocked-payload.interface.js';
 import type { UserOauthRegisteredPayloadInterface } from '@modules/activity/interfaces/user-oauth-registered-payload.interface.js';
 import type { UserRegisteredPayloadInterface } from '@modules/activity/interfaces/user-registered-payload.interface.js';
@@ -25,6 +26,7 @@ import {
   AUTH_PASSWORD_CHANGED_EVENT,
   AUTH_SUSPICIOUS_LOGIN_EVENT,
   CONTACT_RECEIVED_EVENT,
+  FILE_UPLOADED_EVENT,
   USER_BLOCKED_EVENT,
   USER_OAUTH_REGISTERED_EVENT,
   USER_REGISTERED_EVENT,
@@ -169,6 +171,15 @@ export class ActivityListener {
       type: ActivityTypeEnum.CONTACT_RECEIVED,
       ip: payload.ip,
       meta: { contactMessageId: payload.contactMessageId },
+    });
+  }
+
+  @OnDomainEvent(FILE_UPLOADED_EVENT)
+  public async onFileUploaded(payload: FileUploadedPayloadInterface): Promise<void> {
+    await this.safeRecord({
+      userId: payload.userId,
+      type: ActivityTypeEnum.FILE_UPLOADED,
+      meta: { fileId: payload.fileId, intent: payload.intent },
     });
   }
 
