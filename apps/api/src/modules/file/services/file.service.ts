@@ -87,9 +87,8 @@ export class FileService {
     const head: HeadObjectResultInterface | null = await this.s3Provider.headObject(file.key);
 
     if (!head) throw new ValidationError(FILE_NOT_UPLOADED);
-    if (head.contentLength > FILE_MAX_SIZE_BYTES[file.intent]) {
-      throw new ValidationError(FILE_TOO_LARGE);
-    }
+
+    this.assertUploadedObjectValid(file.intent, head);
 
     const updated: FileInterface | null = await this.fileRepository.markReady(fileId, {
       contentType: head.contentType,
@@ -127,6 +126,17 @@ export class FileService {
     if (!ALLOWED_FILE_CONTENT_TYPES[intent].includes(contentType)) {
       throw new ValidationError(FILE_CONTENT_TYPE_NOT_ALLOWED);
     }
+  }
+
+  // The presigned PUT's Content-Type is unsigned (s3-request-presigner puts it
+  // in unsignableHeaders), so a client can declare an allowed type at
+  // requestUpload and then PUT with a different one — S3 stores whatever
+  // Content-Type the PUT actually sent. Re-validate the type S3 observed, not
+  // the one the client claimed earlier, before trusting this object.
+  private assertUploadedObjectValid(intent: FileIntentEnum, head: HeadObjectResultInterface): void {
+    this.assertContentTypeAllowed(intent, head.contentType);
+
+    if (head.contentLength > FILE_MAX_SIZE_BYTES[intent]) throw new ValidationError(FILE_TOO_LARGE);
   }
 
   private assertSizeAllowed(intent: FileIntentEnum, size: number): void {

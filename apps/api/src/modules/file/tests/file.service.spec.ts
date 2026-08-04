@@ -138,6 +138,27 @@ describe('FileService.confirmUpload', () => {
     });
   });
 
+  it('throws FILE_CONTENT_TYPE_NOT_ALLOWED when the object S3 observed is not the declared type', async () => {
+    // Regression for the spoofed-content-type bypass: s3-request-presigner
+    // puts Content-Type in unsignableHeaders, so a client can declare an
+    // allowed type at requestUpload and PUT a different, disallowed one.
+    // confirmUpload must re-validate what S3 actually stored, not trust the
+    // type declared earlier.
+    const spoofedHead: HeadObjectResultInterface = {
+      contentLength: 1024,
+      contentType: 'application/x-msdownload',
+    };
+    const { service, fileRepository } = createService(
+      {},
+      { headObject: vi.fn().mockResolvedValue(spoofedHead) },
+    );
+
+    await expect(service.confirmUpload(ownerId, pendingFile.id)).rejects.toMatchObject({
+      args: { code: 'FILE_CONTENT_TYPE_NOT_ALLOWED' },
+    });
+    expect(fileRepository.markReady).not.toHaveBeenCalled();
+  });
+
   it('throws FILE_TOO_LARGE when the uploaded object exceeds the intent cap', async () => {
     const oversizedHead: HeadObjectResultInterface = {
       contentLength: 20 * 1024 * 1024,
