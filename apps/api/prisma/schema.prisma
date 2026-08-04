@@ -282,6 +282,7 @@ model Subscription {
   status              SubscriptionStatus
   provider            String               @db.VarChar(30) // 'STRIPE'
   providerRef         String?              @db.VarChar(255) // sub_... (unique per provider)
+  providerCustomerRef String?              @db.VarChar(255) // provider's customer id — needed by the billing portal; populated by the checkout.completed webhook (PR 7)
   currentPeriodEndsAt DateTime
   canceledAt          DateTime?
   createdAt           DateTime             @default(now())
