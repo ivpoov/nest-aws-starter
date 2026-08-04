@@ -17,10 +17,10 @@ the marked lines/blocks and the markers themselves.
 
 - `apps/api/src/app.module.ts`
   - line 5: `import { ApiKeyModule } from '@modules/api-key/api-key.module.js'; // <module:api-key>`
-  - line 77: `ApiKeyModule, // <module:api-key>`
+  - line 80: `ApiKeyModule, // <module:api-key>`
 - `apps/api/prisma/schema.prisma`
-  - line 43: `apiKeys          ApiKey[] // <module:api-key>`
-  - lines 212-236 (block)
+  - line 43: `apiKeys             ApiKey[] // <module:api-key>`
+  - lines 214-238 (block)
 
 ## 3. Drop `.env` variables
 
