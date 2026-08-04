@@ -1,4 +1,6 @@
 import { Prisma } from '@generated/prisma/client.js';
+import type { CursorPaginationInterface } from '@interfaces/cursor-pagination.interface.js';
+import type { TransactionFiltersInterface } from '@modules/payment/interfaces/transaction-filters.interface.js';
 import { PaymentTransactionPrismaRepository } from '@modules/payment/repositories/payment-transaction-prisma.repository.js';
 import type { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import { TransactionStatusEnum } from '@nest-aws-starter/shared';
@@ -33,6 +35,7 @@ function createRepository(overrides: Record<string, ReturnType<typeof vi.fn>> = 
   const paymentTransaction = {
     create: vi.fn().mockResolvedValue(row),
     findUniqueOrThrow: vi.fn().mockResolvedValue(row),
+    findMany: vi.fn().mockResolvedValue([row]),
     ...overrides,
   };
   const prisma = { paymentTransaction } as unknown as PrismaService;
@@ -77,5 +80,76 @@ describe('PaymentTransactionPrismaRepository.createIdempotent', () => {
     const { repository } = createRepository({ create: vi.fn().mockRejectedValue(other) });
 
     await expect(repository.createIdempotent(data)).rejects.toBe(other);
+  });
+});
+
+describe('PaymentTransactionPrismaRepository.findManyByUserAfter', () => {
+  it('scopes by userId, applies the cursor, and orders by id desc', async () => {
+    const { repository, paymentTransaction } = createRepository();
+    const pagination: CursorPaginationInterface = { cursor: 'txn-0', limit: 20 };
+
+    const result = await repository.findManyByUserAfter('user-1', pagination);
+
+    expect(paymentTransaction.findMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1' },
+      take: 20,
+      cursor: { id: 'txn-0' },
+      skip: 1,
+      orderBy: { id: 'desc' },
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe('txn-1');
+  });
+
+  it('omits the cursor clause on the first page', async () => {
+    const { repository, paymentTransaction } = createRepository();
+    const pagination: CursorPaginationInterface = { cursor: null, limit: 20 };
+
+    await repository.findManyByUserAfter('user-1', pagination);
+
+    expect(paymentTransaction.findMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1' },
+      take: 20,
+      orderBy: { id: 'desc' },
+    });
+  });
+});
+
+describe('PaymentTransactionPrismaRepository.findManyForAdmin', () => {
+  it('applies userId, status, and date-range filters together', async () => {
+    const { repository, paymentTransaction } = createRepository();
+    const pagination: CursorPaginationInterface = { cursor: null, limit: 20 };
+    const filters: TransactionFiltersInterface = {
+      userId: 'user-1',
+      status: TransactionStatusEnum.SUCCEEDED,
+      dateFrom: new Date('2026-08-01T00:00:00Z'),
+      dateTo: new Date('2026-08-03T23:59:59Z'),
+    };
+
+    await repository.findManyForAdmin(pagination, filters);
+
+    expect(paymentTransaction.findMany).toHaveBeenCalledWith({
+      where: {
+        userId: 'user-1',
+        status: 'SUCCEEDED',
+        createdAt: { gte: filters.dateFrom, lte: filters.dateTo },
+      },
+      take: 20,
+      orderBy: { id: 'desc' },
+    });
+  });
+
+  it('builds an unfiltered where clause when no filters are given', async () => {
+    const { repository, paymentTransaction } = createRepository();
+    const pagination: CursorPaginationInterface = { cursor: null, limit: 20 };
+    const filters: TransactionFiltersInterface = {};
+
+    await repository.findManyForAdmin(pagination, filters);
+
+    expect(paymentTransaction.findMany).toHaveBeenCalledWith({
+      where: {},
+      take: 20,
+      orderBy: { id: 'desc' },
+    });
   });
 });

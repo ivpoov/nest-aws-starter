@@ -64,7 +64,11 @@ describe('SubscriptionLifecycleService', () => {
       setCanceledAt: vi.fn(),
       findOverdue: vi.fn(),
     };
-    transactionRepository = { createIdempotent: vi.fn() };
+    transactionRepository = {
+      createIdempotent: vi.fn(),
+      findManyByUserAfter: vi.fn(),
+      findManyForAdmin: vi.fn(),
+    };
     planRepository = { findActiveById: vi.fn(), findManyActive: vi.fn() };
     eventBus = { emit: vi.fn() } as unknown as EventBusService;
     service = new SubscriptionLifecycleService(
