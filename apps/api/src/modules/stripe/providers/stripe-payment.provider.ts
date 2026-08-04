@@ -4,6 +4,7 @@ import { CustomLoggerService } from '@modules/logger/services/custom-logger.serv
 import type { CheckoutSessionInterface } from '@modules/payment/interfaces/checkout-session.interface.js';
 import type { CreateCheckoutDataInterface } from '@modules/payment/interfaces/create-checkout-data.interface.js';
 import type { PaymentProviderInterface } from '@modules/payment/interfaces/payment-provider.interface.js';
+import type { PaymentProviderCancellationInterface } from '@modules/payment/interfaces/payment-provider-cancellation.interface.js';
 import type { PaymentProviderRefValidatorInterface } from '@modules/payment/interfaces/payment-provider-ref-validator.interface.js';
 import type { ProviderEventInterface } from '@modules/payment/interfaces/provider-event.interface.js';
 import {
@@ -16,7 +17,10 @@ import type { EnabledStripeConfigType } from '@modules/stripe/types/enabled-stri
 import Stripe from 'stripe';
 
 export class StripePaymentProvider
-  implements PaymentProviderInterface, PaymentProviderRefValidatorInterface
+  implements
+    PaymentProviderInterface,
+    PaymentProviderRefValidatorInterface,
+    PaymentProviderCancellationInterface
 {
   public readonly name = 'STRIPE';
 
@@ -73,6 +77,13 @@ export class StripePaymentProvider
 
       return false;
     }
+  }
+
+  // Used by BillingService when a user-initiated cancel needs to reach the
+  // provider before the local lifecycle cancel runs — mirrors the portal's
+  // own cancellation flow but is callable directly from the cancel button.
+  public async cancelAtPeriodEnd(subscriptionRef: string): Promise<void> {
+    await this.client.subscriptions.update(subscriptionRef, { cancel_at_period_end: true });
   }
 
   public async verifyAndParseWebhook(
