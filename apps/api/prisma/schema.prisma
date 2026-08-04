@@ -40,6 +40,7 @@ model User {
   impersonatedByMe Session[]    @relation("SessionSignedAsAdmin")
   notes            Note[]
   files            File[]
+  apiKeys          ApiKey[]
 
   @@index([role, status])
   @@index([createdAt])
@@ -127,6 +128,8 @@ enum ActivityType {
   ADMIN_LOGIN_AS
   CONTACT_RECEIVED
   FILE_UPLOADED
+  API_KEY_CREATED
+  API_KEY_REVOKED
 }
 
 // Append-only audit trail, driven entirely by domain events — no relation to
@@ -198,4 +201,27 @@ model File {
 
   @@index([ownerId, id])
   @@map("files")
+}
+
+// Long-lived service credentials, deliberately modeled in Postgres rather
+// than as Redis sessions — they are issued once, live for months/years, and
+// must survive independently of any single request/refresh cycle. The
+// plaintext key is shown exactly once at creation; only its sha256 (unique,
+// used for guard lookups) and a short display prefix are ever persisted.
+// Revocation is a soft delete (revokedAt) — keys are auditable credentials,
+// never hard-deleted.
+model ApiKey {
+  id         String    @id @default(uuid(7))
+  name       String    @db.VarChar(120)
+  hashedKey  String    @unique
+  prefix     String    @db.VarChar(12)
+  ownerId    String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  owner      User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // UUIDv7 cursor pagination scans for the admin list
+  @@index([ownerId, id])
+  @@map("api_keys")
 }
