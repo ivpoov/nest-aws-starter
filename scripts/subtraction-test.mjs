@@ -111,16 +111,21 @@ const MODULES = [
     ],
   },
   {
-    // Schema-only for now (v0.4 Task 1): no module folder exists yet — the
-    // service/controller code lands in Task 3, which will add its path to
-    // `paths` below. Until then this entry proves only the schema fences
-    // (models/enums in schema.prisma) and the two `User` back-relation
-    // lines strip cleanly.
     id: 'payment',
     summary:
-      'Plans, subscriptions, payment transactions, and webhook events (schema + core module).',
-    paths: ['apps/api/src/modules/payment'],
-    envVars: [],
+      'Plans, subscriptions, payment transactions, webhook events, and the Stripe provider ' +
+      '(schema + core module + Stripe implementation).',
+    paths: [
+      'apps/api/src/modules/payment',
+      'apps/api/src/modules/stripe',
+      'apps/api/src/configs/stripe.config.ts',
+    ],
+    envVars: [
+      'STRIPE_ENABLED',
+      'STRIPE_SECRET_KEY',
+      'STRIPE_WEBHOOK_SECRET',
+      'STRIPE_PORTAL_RETURN_URL',
+    ],
   },
 ];
 
