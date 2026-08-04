@@ -73,6 +73,7 @@ jobs:
           MAIL_FROM_ADDRESS: no-reply@example.com
           LAMBDA_ENABLED: "true"
           SCHEDULER_ENABLED: "false"
+          PAYMENT_WEBHOOK_CONSUMER_ENABLED: "false"
           AUTH_JWT_SECRET: ci-only-secret-with-at-least-32-characters
           TRUST_PROXY: "true"
 
