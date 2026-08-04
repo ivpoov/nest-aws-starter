@@ -1,3 +1,4 @@
+import { CaslModule } from '@modules/casl/casl.module.js';
 import {
   PAYMENT_TRANSACTION_REPOSITORY,
   PLAN_REPOSITORY,
@@ -6,10 +7,12 @@ import {
   WEBHOOK_EVENT_REPOSITORY,
 } from '@modules/payment/constants/payment.constants.js';
 import { BillingController } from '@modules/payment/controllers/billing.controller.js';
+import { PlanAdminController } from '@modules/payment/controllers/plan-admin.controller.js';
 import { WebhookController } from '@modules/payment/controllers/webhook.controller.js';
 import { RequiresSubscriptionGuard } from '@modules/payment/guards/requires-subscription.guard.js';
 import type { SubscriptionLifecycleInterface } from '@modules/payment/interfaces/subscription-lifecycle.interface.js';
 import { SubscriptionExpiryJob } from '@modules/payment/jobs/subscription-expiry.job.js';
+import { planPermissions } from '@modules/payment/permissions/plan.permissions.js';
 import { PaymentTransactionPrismaRepository } from '@modules/payment/repositories/payment-transaction-prisma.repository.js';
 import { PlanPrismaRepository } from '@modules/payment/repositories/plan-prisma.repository.js';
 import { SubscriptionPrismaRepository } from '@modules/payment/repositories/subscription-prisma.repository.js';
@@ -17,6 +20,7 @@ import { WebhookEventPrismaRepository } from '@modules/payment/repositories/webh
 import { BillingService } from '@modules/payment/services/billing.service.js';
 import { PaymentProviderRegistryService } from '@modules/payment/services/payment-provider-registry.service.js';
 import { PaymentWebhookConsumerService } from '@modules/payment/services/payment-webhook-consumer.service.js';
+import { PlanAdminService } from '@modules/payment/services/plan-admin.service.js';
 import { SubscriptionService } from '@modules/payment/services/subscription.service.js';
 import { SubscriptionLifecycleService } from '@modules/payment/services/subscription-lifecycle.service.js';
 import { WebhookEventDispatcherService } from '@modules/payment/services/webhook-event-dispatcher.service.js';
@@ -45,7 +49,8 @@ const scheduledJobRegistrationProvider: Provider = {
 // mirrors OauthModule.
 @Global()
 @Module({
-  controllers: [BillingController, WebhookController],
+  imports: [CaslModule.forFeature({ permissions: planPermissions })],
+  controllers: [BillingController, WebhookController, PlanAdminController],
   providers: [
     PaymentProviderRegistryService,
     BillingService,
@@ -54,6 +59,7 @@ const scheduledJobRegistrationProvider: Provider = {
     WebhookEventDispatcherService,
     PaymentWebhookConsumerService,
     RequiresSubscriptionGuard,
+    PlanAdminService,
     { provide: PLAN_REPOSITORY, useClass: PlanPrismaRepository },
     { provide: SUBSCRIPTION_REPOSITORY, useClass: SubscriptionPrismaRepository },
     { provide: WEBHOOK_EVENT_REPOSITORY, useClass: WebhookEventPrismaRepository },
