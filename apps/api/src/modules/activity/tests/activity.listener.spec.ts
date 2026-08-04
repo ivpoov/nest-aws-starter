@@ -251,6 +251,34 @@ describe('ActivityListener', () => {
     });
   });
 
+  it('records API_KEY_CREATED on api-key.created', async () => {
+    const { listener, record } = createListener();
+    const apiKeyId = '01890a5d-0000-774b-bcce-b30209990006';
+    const adminId = '01890a5d-0000-774b-bcce-b30209990003';
+
+    await listener.onApiKeyCreated({ apiKeyId, name: 'CI deploy bot', actorId: adminId });
+
+    expect(record).toHaveBeenCalledWith({
+      actorId: adminId,
+      type: ActivityTypeEnum.API_KEY_CREATED,
+      meta: { apiKeyId, name: 'CI deploy bot' },
+    });
+  });
+
+  it('records API_KEY_REVOKED on api-key.revoked', async () => {
+    const { listener, record } = createListener();
+    const apiKeyId = '01890a5d-0000-774b-bcce-b30209990006';
+    const adminId = '01890a5d-0000-774b-bcce-b30209990003';
+
+    await listener.onApiKeyRevoked({ apiKeyId, actorId: adminId });
+
+    expect(record).toHaveBeenCalledWith({
+      actorId: adminId,
+      type: ActivityTypeEnum.API_KEY_REVOKED,
+      meta: { apiKeyId },
+    });
+  });
+
   it('swallows a repository failure instead of producing an unhandled rejection', async () => {
     const record = vi.fn().mockRejectedValue(new Error('activity table unavailable'));
     const activityService = { record } as unknown as ActivityService;
