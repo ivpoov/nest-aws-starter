@@ -2,6 +2,7 @@ import { configs } from '@configs/index.js';
 import { JwtAuthGuard } from '@guards/jwt-auth.guard.js';
 import { ThrottlerBehindProxyGuard } from '@guards/throttler-behind-proxy.guard.js';
 import { ActivityModule } from '@modules/activity/activity.module.js';
+import { ApiKeyModule } from '@modules/api-key/api-key.module.js';
 import { AuthModule } from '@modules/auth/auth.module.js';
 import { CaslModule } from '@modules/casl/casl.module.js';
 import { ThrottlerRedisStorageService } from '@modules/common/services/throttler-redis-storage.service.js';
@@ -73,6 +74,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     SuspiciousActivityModule,
     StatisticModule,
     ContactUsModule,
+    ApiKeyModule,
   ],
   providers: [
     // Order matters: throttling runs before authentication.
