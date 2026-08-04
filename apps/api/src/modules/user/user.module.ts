@@ -8,6 +8,7 @@ import { userPermissions } from '@modules/user/permissions/user.permissions.js';
 import { UserPrismaRepository } from '@modules/user/repositories/user-prisma.repository.js';
 import { ProfileService } from '@modules/user/services/profile.service.js';
 import { UserService } from '@modules/user/services/user.service.js';
+import { UserAdminService } from '@modules/user/services/user-admin.service.js';
 import { forwardRef, Module } from '@nestjs/common';
 
 @Module({
@@ -18,6 +19,7 @@ import { forwardRef, Module } from '@nestjs/common';
   controllers: [UserController, UserAdminController],
   providers: [
     UserService,
+    UserAdminService,
     ProfileService,
     OauthAvatarListener,
     { provide: USER_REPOSITORY, useClass: UserPrismaRepository },
