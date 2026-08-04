@@ -3,9 +3,11 @@ import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import { ValidationError } from '@modules/common/errors/validation.error.js';
 import type { CheckoutSessionInterface } from '@modules/payment/interfaces/checkout-session.interface.js';
 import type { PaymentProviderInterface } from '@modules/payment/interfaces/payment-provider.interface.js';
+import type { PaymentProviderCancellationInterface } from '@modules/payment/interfaces/payment-provider-cancellation.interface.js';
 import type { PlanInterface } from '@modules/payment/interfaces/plan.interface.js';
 import type { PlanRepositoryInterface } from '@modules/payment/interfaces/plan-repository.interface.js';
 import type { SubscriptionInterface } from '@modules/payment/interfaces/subscription.interface.js';
+import type { SubscriptionLifecycleInterface } from '@modules/payment/interfaces/subscription-lifecycle.interface.js';
 import type { SubscriptionRepositoryInterface } from '@modules/payment/interfaces/subscription-repository.interface.js';
 import { BillingService } from '@modules/payment/services/billing.service.js';
 import { PaymentProviderRegistryService } from '@modules/payment/services/payment-provider-registry.service.js';
@@ -56,10 +58,19 @@ function fakeProvider(overrides: Partial<PaymentProviderInterface> = {}): Paymen
   };
 }
 
+function fakeProviderWithCancellation(): PaymentProviderInterface &
+  PaymentProviderCancellationInterface {
+  return {
+    ...fakeProvider(),
+    cancelAtPeriodEnd: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
 interface TestSetupInterface {
   readonly service: BillingService;
   readonly planRepository: PlanRepositoryInterface;
   readonly subscriptionRepository: SubscriptionRepositoryInterface;
+  readonly lifecycle: SubscriptionLifecycleInterface;
   readonly registry: PaymentProviderRegistryService;
 }
 
@@ -68,6 +79,7 @@ function createService(
     provider?: PaymentProviderInterface | null;
     plan?: PlanInterface | null;
     subscription?: SubscriptionInterface | null;
+    canceledSubscription?: SubscriptionInterface | null;
   } = {},
 ): TestSetupInterface {
   const planRepository: PlanRepositoryInterface = {
@@ -80,11 +92,25 @@ function createService(
       .mockResolvedValue(options.subscription === undefined ? subscription : options.subscription),
     findLatestByUserId: vi.fn(),
     createFromCheckout: vi.fn(),
-    findByProviderRef: vi.fn(),
+    findByProviderRef: vi
+      .fn()
+      .mockResolvedValue(
+        options.canceledSubscription === undefined
+          ? { ...subscription, status: SubscriptionStatusEnum.CANCELED, canceledAt: new Date() }
+          : options.canceledSubscription,
+      ),
     updatePeriodEnd: vi.fn(),
     updateStatus: vi.fn(),
     setCanceledAt: vi.fn(),
     findOverdue: vi.fn(),
+  };
+  const lifecycle: SubscriptionLifecycleInterface = {
+    activateFromCheckout: vi.fn(),
+    recordRenewal: vi.fn(),
+    markPastDue: vi.fn(),
+    cancel: vi.fn().mockResolvedValue(undefined),
+    syncPeriodFromProvider: vi.fn(),
+    expireOverdue: vi.fn(),
   };
   const registry: PaymentProviderRegistryService = new PaymentProviderRegistryService();
 
@@ -96,10 +122,11 @@ function createService(
     webApp,
     planRepository,
     subscriptionRepository,
+    lifecycle,
     registry,
   );
 
-  return { service, planRepository, subscriptionRepository, registry };
+  return { service, planRepository, subscriptionRepository, lifecycle, registry };
 }
 
 describe('BillingService.createCheckoutSession', () => {
@@ -194,5 +221,71 @@ describe('BillingService.createPortalSession', () => {
 
     expect(caught).toBeInstanceOf(ValidationError);
     expect((caught as ValidationError).args.code).toBe('PAYMENT_PORTAL_UNAVAILABLE');
+  });
+});
+
+describe('BillingService.listActivePlans', () => {
+  it('returns the active plans from the repository', async () => {
+    const { service, planRepository } = createService();
+
+    await expect(service.listActivePlans()).resolves.toEqual([plan]);
+    expect(planRepository.findManyActive).toHaveBeenCalled();
+  });
+});
+
+describe('BillingService.cancelSubscription', () => {
+  it('cancels through the provider then the lifecycle, and returns the updated row', async () => {
+    const provider = fakeProviderWithCancellation();
+    const canceledSubscription: SubscriptionInterface = {
+      ...subscription,
+      status: SubscriptionStatusEnum.CANCELED,
+      canceledAt: new Date('2026-08-04T00:00:00Z'),
+    };
+    const { service, lifecycle } = createService({ provider, canceledSubscription });
+
+    const result: SubscriptionInterface = await service.cancelSubscription('user-1');
+
+    expect(provider.cancelAtPeriodEnd).toHaveBeenCalledWith(subscription.providerRef);
+    expect(lifecycle.cancel).toHaveBeenCalledWith(
+      subscription.provider,
+      subscription.providerRef,
+      true,
+    );
+    expect(result).toEqual(canceledSubscription);
+  });
+
+  it('falls back to a local-only cancel when the provider has no cancellation support', async () => {
+    const provider = fakeProvider();
+    const { service, lifecycle } = createService({ provider });
+
+    await service.cancelSubscription('user-1');
+
+    expect(lifecycle.cancel).toHaveBeenCalledWith(
+      subscription.provider,
+      subscription.providerRef,
+      true,
+    );
+  });
+
+  it('cancels locally even when no provider is registered', async () => {
+    const { service, lifecycle } = createService({ provider: null });
+
+    await expect(service.cancelSubscription('user-1')).resolves.toBeDefined();
+    expect(lifecycle.cancel).toHaveBeenCalledWith(
+      subscription.provider,
+      subscription.providerRef,
+      true,
+    );
+  });
+
+  it('throws PAYMENT_NO_SUBSCRIPTION when there is no current subscription', async () => {
+    const { service } = createService({ subscription: null });
+
+    const caught: unknown = await service
+      .cancelSubscription('user-1')
+      .catch((error: unknown): unknown => error);
+
+    expect(caught).toBeInstanceOf(NotFoundError);
+    expect((caught as NotFoundError).args.code).toBe('PAYMENT_NO_SUBSCRIPTION');
   });
 });
