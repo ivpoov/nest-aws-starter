@@ -62,6 +62,10 @@ export function LoginPage(): ReactElement {
               Create account
             </Link>
             {' · '}
+            <Link to="/pricing" className="hover:text-content">
+              Pricing
+            </Link>
+            {' · '}
             <Link to="/contact" className="hover:text-content">
               Contact us
             </Link>
