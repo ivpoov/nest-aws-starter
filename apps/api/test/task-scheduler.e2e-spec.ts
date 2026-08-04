@@ -9,6 +9,10 @@ import type { RedisClientType } from '@providers/redis/types/redis-client.type.j
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp } from './app.factory.js';
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // Two real Nest apps against one Redis, exactly as the brief asks. Cron
 // wall-time is never awaited: the job is registered post-boot on both
 // instances and its lock-guarded run is triggered directly (the same path
@@ -47,8 +51,18 @@ describe('task scheduler (2 instances, 1 redis)', () => {
     const job: ScheduledJobInterface = {
       name: jobName,
       cronExpression: '* * * * *',
+      // The assertion only means anything if both instances' acquire
+      // attempts overlap in wall-clock time. Without a deliberate hold,
+      // instance A can acquire → increment → release before instance B's
+      // acquire request even reaches Redis (likely under slow CI network
+      // round-trips), so B legitimately re-acquires the freed lock and also
+      // runs — the counter hits 2 with no lock malfunction, and the test
+      // proves nothing. Holding the lock for 750ms — far longer than any
+      // realistic Redis RTT — guarantees the two acquire attempts race
+      // against each other instead of running in sequence.
       run: async (): Promise<void> => {
         await redis.incr(counterKey);
+        await sleep(750);
       },
     };
 
