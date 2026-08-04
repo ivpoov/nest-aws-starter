@@ -1,4 +1,5 @@
 import type { CloudFrontConfig } from '@configs/cloudfront.config.js';
+import { ConflictError } from '@modules/common/errors/conflict.error.js';
 import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import type { EventBusService } from '@modules/event/services/event-bus.service.js';
@@ -130,12 +131,16 @@ describe('FileService.confirmUpload', () => {
     });
   });
 
-  it('throws FILE_NOT_UPLOADED when no object exists at the key', async () => {
+  it('throws FILE_NOT_UPLOADED (conflict) when no object exists at the key', async () => {
     const { service } = createService({}, { headObject: vi.fn().mockResolvedValue(null) });
 
-    await expect(service.confirmUpload(ownerId, pendingFile.id)).rejects.toMatchObject({
-      args: { code: 'FILE_NOT_UPLOADED' },
-    });
+    const caught: unknown = await service
+      .confirmUpload(ownerId, pendingFile.id)
+      .then(() => null)
+      .catch((error: unknown): unknown => error);
+
+    expect(caught).toBeInstanceOf(ConflictError);
+    expect((caught as ConflictError).args.code).toBe('FILE_NOT_UPLOADED');
   });
 
   it('throws FILE_CONTENT_TYPE_NOT_ALLOWED when the object S3 observed is not the declared type', async () => {
@@ -221,12 +226,16 @@ describe('FileService.getDownloadUrl', () => {
     expect(s3Provider.getPresignedUrl).not.toHaveBeenCalled();
   });
 
-  it('rejects a download before the file is ready', async () => {
+  it('rejects a download before the file is ready (conflict)', async () => {
     const { service } = createService({ findById: vi.fn().mockResolvedValue(pendingFile) });
 
-    await expect(service.getDownloadUrl(ownerId, pendingFile.id)).rejects.toMatchObject({
-      args: { code: 'FILE_NOT_READY' },
-    });
+    const caught: unknown = await service
+      .getDownloadUrl(ownerId, pendingFile.id)
+      .then(() => null)
+      .catch((error: unknown): unknown => error);
+
+    expect(caught).toBeInstanceOf(ConflictError);
+    expect((caught as ConflictError).args.code).toBe('FILE_NOT_READY');
   });
 
   it('denies downloading a foreign file', async () => {

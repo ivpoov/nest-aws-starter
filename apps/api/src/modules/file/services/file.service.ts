@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { type CloudFrontConfig, cloudfrontConfig } from '@configs/cloudfront.config.js';
+import { ConflictError } from '@modules/common/errors/conflict.error.js';
 import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import { ValidationError } from '@modules/common/errors/validation.error.js';
@@ -86,7 +87,7 @@ export class FileService {
     const file: FileInterface = await this.findOwnedOrThrow(fileId, userId);
     const head: HeadObjectResultInterface | null = await this.s3Provider.headObject(file.key);
 
-    if (!head) throw new ValidationError(FILE_NOT_UPLOADED);
+    if (!head) throw new ConflictError(FILE_NOT_UPLOADED);
 
     this.assertUploadedObjectValid(file.intent, head);
 
@@ -113,7 +114,7 @@ export class FileService {
   ): Promise<DownloadUrlResponseInterface> {
     const file: FileInterface = await this.findOwnedOrThrow(fileId, userId);
 
-    if (file.status !== FileStatusEnum.READY) throw new ValidationError(FILE_NOT_READY);
+    if (file.status !== FileStatusEnum.READY) throw new ConflictError(FILE_NOT_READY);
 
     const downloadUrl: string = this.cloudFrontConfig.isEnabled
       ? await this.cloudFrontSigner.getSignedUrl(file.key)
