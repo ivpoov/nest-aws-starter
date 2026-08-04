@@ -11,7 +11,8 @@
     "test:e2e": "vitest run --config ./test/vitest.e2e.config.ts",
     "db:generate": "prisma generate --sql",
     "db:migrate": "prisma migrate deploy",
-    "db:migrate:dev": "prisma migrate dev"
+    "db:migrate:dev": "prisma migrate dev",
+    "db:seed": "prisma db seed"
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "3.1079.0",
@@ -60,6 +61,7 @@
     "dotenv": "17.4.2",
     "prisma": "7.8.0",
     "supertest": "7.2.2",
+    "tsx": "4.23.5",
     "typescript": "7.0.2",
     "unplugin-swc": "1.5.9",
     "vite-tsconfig-paths": "6.1.1",
