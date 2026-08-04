@@ -17,7 +17,7 @@ the marked lines/blocks and the markers themselves.
 
 - `apps/api/src/app.module.ts`
   - line 5: `import { ApiKeyModule } from '@modules/api-key/api-key.module.js'; // <module:api-key>`
-  - line 80: `ApiKeyModule, // <module:api-key>`
+  - line 81: `ApiKeyModule, // <module:api-key>`
 - `apps/api/prisma/schema.prisma`
   - line 43: `apiKeys             ApiKey[] // <module:api-key>`
   - lines 214-238 (block)

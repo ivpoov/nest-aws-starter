@@ -18,7 +18,7 @@ the marked lines/blocks and the markers themselves.
 
 - `apps/api/src/app.module.ts`
   - line 21: `import { StatisticModule } from '@modules/statistic/statistic.module.js'; // <module:statistic>`
-  - line 78: `StatisticModule, // <module:statistic>`
+  - line 79: `StatisticModule, // <module:statistic>`
 
 ## 3. Drop `.env` variables
 

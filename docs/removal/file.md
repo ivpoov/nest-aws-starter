@@ -17,7 +17,7 @@ the marked lines/blocks and the markers themselves.
 
 - `apps/api/src/app.module.ts`
   - line 11: `import { FileModule } from '@modules/file/file.module.js'; // <module:file>`
-  - line 75: `FileModule, // <module:file>`
+  - line 76: `FileModule, // <module:file>`
 - `apps/api/prisma/schema.prisma`
   - line 42: `files               File[] // <module:file>`
   - lines 181-212 (block)
