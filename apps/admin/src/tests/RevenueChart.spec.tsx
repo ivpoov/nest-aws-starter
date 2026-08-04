@@ -27,6 +27,7 @@ describe('RevenueChart', () => {
         days={30}
         onDaysChange={vi.fn()}
         onRetry={vi.fn()}
+        isAvailable={true}
       />,
     );
 
@@ -44,6 +45,7 @@ describe('RevenueChart', () => {
         days={30}
         onDaysChange={vi.fn()}
         onRetry={onRetry}
+        isAvailable={true}
       />,
     );
 
@@ -63,6 +65,7 @@ describe('RevenueChart', () => {
         days={30}
         onDaysChange={vi.fn()}
         onRetry={vi.fn()}
+        isAvailable={true}
       />,
     );
 
@@ -78,6 +81,7 @@ describe('RevenueChart', () => {
         days={30}
         onDaysChange={vi.fn()}
         onRetry={vi.fn()}
+        isAvailable={true}
       />,
     );
 
@@ -95,11 +99,50 @@ describe('RevenueChart', () => {
         days={30}
         onDaysChange={onDaysChange}
         onRetry={vi.fn()}
+        isAvailable={true}
       />,
     );
 
     fireEvent.click(screen.getByText('7d'));
 
     expect(onDaysChange).toHaveBeenCalledWith(7);
+  });
+
+  it('shows the unavailable placeholder instead of the chart when the payment module is absent', () => {
+    // Reproduces the payment-subtracted deployment: even if the series call
+    // somehow returned points (it won't — the API now hard-400s), this
+    // guard must win and never render a chart under the "Revenue" heading.
+    render(
+      <RevenueChart
+        points={POINTS}
+        isLoading={false}
+        error={null}
+        days={30}
+        onDaysChange={vi.fn()}
+        onRetry={vi.fn()}
+        isAvailable={false}
+      />,
+    );
+
+    expect(screen.getByText('Revenue requires the payment module')).toBeInTheDocument();
+    expect(document.querySelector('.recharts-responsive-container')).toBeNull();
+    expect(screen.queryByText('7d')).not.toBeInTheDocument();
+  });
+
+  it('shows the unavailable placeholder even while a stale error from the unavailable series call is present', () => {
+    render(
+      <RevenueChart
+        points={[]}
+        isLoading={false}
+        error={ERROR}
+        days={30}
+        onDaysChange={vi.fn()}
+        onRetry={vi.fn()}
+        isAvailable={false}
+      />,
+    );
+
+    expect(screen.getByText('Revenue requires the payment module')).toBeInTheDocument();
+    expect(screen.queryByText('Try again')).not.toBeInTheDocument();
   });
 });

@@ -26,6 +26,14 @@ const OVERVIEW: Record<string, unknown> = {
   revenueByPlan: [],
 };
 
+// Payment present — revenue/mrr are real numbers, and RevenueChart's
+// switcher is only rendered in this state (isAvailable derives from
+// totals.revenue !== null, mirroring KpiTiles).
+const OVERVIEW_WITH_REVENUE: Record<string, unknown> = {
+  ...OVERVIEW,
+  totals: { ...(OVERVIEW.totals as Record<string, unknown>), revenue: 12_500, mrrCents: 4_900 },
+};
+
 describe('StatisticsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -90,7 +98,9 @@ describe('StatisticsPage', () => {
   });
 
   it('fetches and refetches the revenue series independently of the registrations series', async () => {
-    vi.mocked(statisticsApi.fetchStatisticsOverview).mockResolvedValue(OVERVIEW as never);
+    vi.mocked(statisticsApi.fetchStatisticsOverview).mockResolvedValue(
+      OVERVIEW_WITH_REVENUE as never,
+    );
 
     render(<StatisticsPage />);
 
@@ -103,6 +113,8 @@ describe('StatisticsPage', () => {
 
     const switchers: HTMLElement[] = await screen.findAllByText('7d');
 
+    expect(switchers).toHaveLength(2);
+
     fireEvent.click(switchers[1] as HTMLElement);
 
     await waitFor((): void => {
@@ -111,5 +123,19 @@ describe('StatisticsPage', () => {
         7,
       );
     });
+  });
+
+  it('shows the unavailable placeholder for the revenue chart instead of a chart when payment is absent', async () => {
+    vi.mocked(statisticsApi.fetchStatisticsOverview).mockResolvedValue(OVERVIEW as never);
+
+    render(<StatisticsPage />);
+
+    expect(await screen.findByText('Revenue requires the payment module')).toBeInTheDocument();
+
+    // Only the registrations chart's switcher renders — RevenueChart hides
+    // its own switcher while unavailable.
+    const switchers: HTMLElement[] = await screen.findAllByText('7d');
+
+    expect(switchers).toHaveLength(1);
   });
 });
