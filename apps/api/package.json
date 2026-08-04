@@ -61,7 +61,7 @@
     "dotenv": "17.4.2",
     "prisma": "7.8.0",
     "supertest": "7.2.2",
-    "tsx": "4.23.5",
+    "tsx": "4.23.0",
     "typescript": "7.0.2",
     "unplugin-swc": "1.5.9",
     "vite-tsconfig-paths": "6.1.1",
