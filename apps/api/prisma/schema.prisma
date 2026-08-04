@@ -132,6 +132,11 @@ enum ActivityType {
   FILE_UPLOADED
   API_KEY_CREATED
   API_KEY_REVOKED
+  SUBSCRIPTION_ACTIVATED
+  SUBSCRIPTION_RENEWED
+  SUBSCRIPTION_PAST_DUE
+  SUBSCRIPTION_CANCELED
+  SUBSCRIPTION_EXPIRED
 }
 
 // Append-only audit trail, driven entirely by domain events — no relation to
