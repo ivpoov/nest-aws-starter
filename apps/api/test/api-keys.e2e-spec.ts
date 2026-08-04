@@ -4,6 +4,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp } from './app.factory.js';
+import { waitForActivity } from './helpers/wait-for-activity.helper.js';
 
 interface CreateApiKeyBodyInterface {
   readonly id: string;
@@ -136,14 +137,16 @@ describe('api keys', () => {
   it('records an API_KEY_CREATED activity row for the creating admin', async () => {
     const created = await createApiKey();
 
-    const activities = await request(app.getHttpServer())
-      .get('/api/v1/admin/activities?type=API_KEY_CREATED&limit=100')
-      .set('authorization', `Bearer ${adminToken}`)
-      .expect(200);
+    const matching = await waitForActivity(async () => {
+      const activities = await request(app.getHttpServer())
+        .get('/api/v1/admin/activities?type=API_KEY_CREATED&limit=100')
+        .set('authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-    const matching = (activities.body.items as ActivityBodyInterface[]).find(
-      (item) => (item.meta as { apiKeyId?: string } | null)?.apiKeyId === created.id,
-    );
+      return (activities.body.items as ActivityBodyInterface[]).find(
+        (item) => (item.meta as { apiKeyId?: string } | null)?.apiKeyId === created.id,
+      );
+    });
 
     expect(matching).toBeDefined();
     expect(matching?.actorId).toBe(adminId);
@@ -204,14 +207,16 @@ describe('api keys', () => {
       .set('authorization', `Bearer ${adminToken}`)
       .expect(204);
 
-    const activities = await request(app.getHttpServer())
-      .get('/api/v1/admin/activities?type=API_KEY_REVOKED&limit=100')
-      .set('authorization', `Bearer ${adminToken}`)
-      .expect(200);
+    const matching = await waitForActivity(async () => {
+      const activities = await request(app.getHttpServer())
+        .get('/api/v1/admin/activities?type=API_KEY_REVOKED&limit=100')
+        .set('authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-    const matching = (activities.body.items as ActivityBodyInterface[]).find(
-      (item) => (item.meta as { apiKeyId?: string } | null)?.apiKeyId === created.id,
-    );
+      return (activities.body.items as ActivityBodyInterface[]).find(
+        (item) => (item.meta as { apiKeyId?: string } | null)?.apiKeyId === created.id,
+      );
+    });
 
     expect(matching).toBeDefined();
     expect(matching?.actorId).toBe(adminId);

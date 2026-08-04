@@ -4,6 +4,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp } from './app.factory.js';
+import { waitForActivity } from './helpers/wait-for-activity.helper.js';
 
 describe('admin login-as', () => {
   let app: NestFastifyApplication;
@@ -185,13 +186,17 @@ describe('admin login-as', () => {
   });
 
   it('records ADMIN_LOGIN_AS in the activity log with the admin as actor', async () => {
-    const activities = await request(app.getHttpServer())
-      .get(`/api/v1/admin/activities?userId=${targetId}&type=ADMIN_LOGIN_AS&limit=10`)
-      .set('authorization', `Bearer ${adminToken}`)
-      .expect(200);
+    const items = await waitForActivity(async () => {
+      const activities = await request(app.getHttpServer())
+        .get(`/api/v1/admin/activities?userId=${targetId}&type=ADMIN_LOGIN_AS&limit=10`)
+        .set('authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-    expect(activities.body.items.length).toBeGreaterThanOrEqual(1);
-    for (const item of activities.body.items) {
+      return activities.body.items.length > 0 ? activities.body.items : null;
+    });
+
+    expect(items).toBeTruthy();
+    for (const item of items ?? []) {
       expect(item.type).toBe('ADMIN_LOGIN_AS');
       expect(item.actorId).toBe(adminId);
       expect(item.userId).toBe(targetId);

@@ -5,6 +5,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp } from './app.factory.js';
 import { ensureBucket } from './helpers/ensure-bucket.helper.js';
+import { waitForActivity } from './helpers/wait-for-activity.helper.js';
 
 describe('files', () => {
   let app: NestFastifyApplication;
@@ -110,9 +111,11 @@ describe('files', () => {
     expect(fetched.ok).toBe(true);
     expect(await fetched.text()).toBe(bodyText);
 
-    const activity = await app.get(PrismaService).activity.findFirst({
-      where: { type: 'FILE_UPLOADED', userId: ownerId },
-    });
+    const activity = await waitForActivity(() =>
+      app.get(PrismaService).activity.findFirst({
+        where: { type: 'FILE_UPLOADED', userId: ownerId },
+      }),
+    );
 
     expect(activity).not.toBeNull();
     expect((activity?.meta as { fileId?: string } | null)?.fileId).toBe(upload.fileId);
