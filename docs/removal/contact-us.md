@@ -17,7 +17,7 @@ the marked lines/blocks and the markers themselves.
 
 - `apps/api/src/app.module.ts`
   - line 9: `import { ContactUsModule } from '@modules/contact-us/contact-us.module.js'; // <module:contact-us>`
-  - line 79: `ContactUsModule, // <module:contact-us>`
+  - line 80: `ContactUsModule, // <module:contact-us>`
 - `apps/api/prisma/schema.prisma`
   - lines 156-179 (block)
 

@@ -18,10 +18,10 @@ the marked lines/blocks and the markers themselves.
 
 - `apps/api/src/app.module.ts`
   - line 17: `import { GoogleOauthModule } from '@modules/oauth-google/google-oauth.module.js'; // <module:oauth-google>`
-  - line 71: `GoogleOauthModule, // <module:oauth-google>`
+  - line 72: `GoogleOauthModule, // <module:oauth-google>`
 - `apps/api/src/configs/index.ts`
   - line 7: `import { googleOauthConfig } from '@configs/google-oauth.config.js'; // <module:oauth-google>`
-  - line 25: `googleOauthConfig, // <module:oauth-google>`
+  - line 26: `googleOauthConfig, // <module:oauth-google>`
 
 ## 3. Drop `.env` variables
 
