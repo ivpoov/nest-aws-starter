@@ -74,6 +74,8 @@ export function useFileUpload(intent: FileIntentEnum): UseFileUploadResultInterf
   );
 
   const download = useCallback(async (fileId: string): Promise<void> => {
+    setError(null);
+
     try {
       const target: DownloadUrlResponseInterface = await fetchFileDownloadUrl(fileId);
 
