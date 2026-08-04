@@ -40,6 +40,7 @@ the marked lines/blocks and the markers themselves.
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PORTAL_RETURN_URL`
 - `SQS_PAYMENT_WEBHOOK_QUEUE_URL`
+- `PAYMENT_WEBHOOK_CONSUMER_ENABLED`
 
 ## 4. Verify
 
