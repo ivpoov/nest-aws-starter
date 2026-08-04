@@ -50,6 +50,8 @@ export * from './notes/interfaces/note-list-response.interface.js';
 export * from './notes/interfaces/note-response.interface.js';
 export * from './notes/interfaces/update-note-request.interface.js';
 export * from './notes/types/note-error-code.type.js';
+export * from './payments/enums/subscription-status.enum.js';
+export * from './payments/enums/transaction-status.enum.js';
 export * from './sessions/interfaces/revoked-sessions-response.interface.js';
 export * from './sessions/interfaces/session-response.interface.js';
 export * from './statistics/enums/statistics-metric.enum.js';
