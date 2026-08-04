@@ -30,7 +30,12 @@ describe('task scheduler (2 instances, 1 redis)', () => {
     await appB.close();
   });
 
-  it('wires no real cron jobs by default (SCHEDULER_ENABLED=false in the e2e env)', () => {
+  // No production module registers a real job at boot yet, so this only
+  // shows the registry starts empty — it does NOT prove the
+  // SCHEDULER_ENABLED=false gate suppresses scheduling (that's proven by
+  // TaskSchedulerRunnerService's onModuleInit unit test). Once a real job is
+  // wired at boot, this becomes a genuine gate check.
+  it('starts with no cron jobs registered (no production job wired yet)', () => {
     const schedulerRegistry: SchedulerRegistry = appA.get(SchedulerRegistry);
 
     expect(schedulerRegistry.getCronJobs().size).toBe(0);
