@@ -142,4 +142,32 @@ describe('useFileUpload', () => {
 
     vi.unstubAllGlobals();
   });
+
+  it('clears a stale error from a previous failed upload once a download succeeds', async () => {
+    vi.mocked(filesApi.fetchFileDownloadUrl).mockResolvedValue({
+      downloadUrl: 'https://cdn.example.com/signed',
+    });
+    vi.stubGlobal('open', vi.fn());
+
+    const { result } = renderHook(() => useFileUpload(FileIntentEnum.ATTACHMENT));
+    const validFile: File = textFile('report.pdf', 1024, 'application/pdf');
+    const invalidFile: File = textFile('script.exe', 1024, 'application/x-msdownload');
+
+    await act(async (): Promise<void> => {
+      await result.current.upload(validFile);
+    });
+    await act(async (): Promise<void> => {
+      await result.current.upload(invalidFile);
+    });
+
+    expect(result.current.error?.code).toBe('FILE_CONTENT_TYPE_NOT_ALLOWED');
+
+    await act(async (): Promise<void> => {
+      await result.current.download('file-1');
+    });
+
+    expect(result.current.error).toBeNull();
+
+    vi.unstubAllGlobals();
+  });
 });
