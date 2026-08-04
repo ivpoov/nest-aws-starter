@@ -9,8 +9,14 @@ import { z } from 'zod';
 // catch site) — an empty/misconfigured URL just degrades to "logged and
 // skipped" instead of a boot failure, same resilience posture as the rest of
 // the ingest flow.
+//
+// consumerEnabled: opt-out, not opt-in (mirrors scheduler.config.ts) — the
+// long-poll loop defaults on everywhere except e2e, where suites drive
+// PaymentWebhookConsumerService.processMessage() directly for determinism
+// instead of racing the loop's own poll interval.
 const scheme = z.object({
   webhookQueueUrl: z.string(),
+  consumerEnabled: z.boolean(),
 });
 
 export type PaymentConfig = z.infer<typeof scheme>;
@@ -18,6 +24,7 @@ export type PaymentConfig = z.infer<typeof scheme>;
 export const paymentConfig = registerAs('payment', (): PaymentConfig => {
   const config: PaymentConfig = {
     webhookQueueUrl: process.env.SQS_PAYMENT_WEBHOOK_QUEUE_URL ?? '',
+    consumerEnabled: process.env.PAYMENT_WEBHOOK_CONSUMER_ENABLED !== 'false',
   };
 
   validateScheme(scheme, config, new Logger('PaymentConfig'));
