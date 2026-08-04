@@ -37,6 +37,7 @@ export class PaymentWebhookConsumerService
   private readonly logger = new CustomLoggerService(PaymentWebhookConsumerService.name);
   private isStopping: boolean = false;
   private loopPromise: Promise<void> | null = null;
+  private loopSettled: boolean = false;
 
   constructor(
     @Inject(WEBHOOK_EVENT_REPOSITORY)
@@ -59,7 +60,14 @@ export class PaymentWebhookConsumerService
     }
 
     this.isStopping = false;
-    this.loopPromise = this.runLoop();
+    this.loopSettled = false;
+    // .finally() keeps loopSettled honest even in the (now theoretical,
+    // since every iteration below is self-contained) case the loop still
+    // exits abnormally — isLoopRunning() reflects reality, not just whether
+    // stop() was requested.
+    this.loopPromise = this.runLoop().finally(() => {
+      this.loopSettled = true;
+    });
   }
 
   public async onApplicationShutdown(): Promise<void> {
@@ -71,13 +79,25 @@ export class PaymentWebhookConsumerService
   // Exposed so tests can assert the loop actually stops instead of just
   // flipping the flag and hoping.
   public isLoopRunning(): boolean {
-    return this.loopPromise !== null && !this.isStopping;
+    return this.loopPromise !== null && !this.isStopping && !this.loopSettled;
   }
 
   private async runLoop(): Promise<void> {
     this.logger.log('Webhook consumer loop started');
 
-    while (!this.isStopping) {
+    while (!this.isStopping) await this.runLoopIteration();
+
+    this.logger.log('Webhook consumer loop stopped');
+  }
+
+  // One full iteration — receive + drain the batch — wrapped in its own
+  // try/catch: a transient SQS throttle or Postgres hiccup must never
+  // escape here. runLoop() is fire-and-forget from onApplicationBootstrap
+  // (no caller ever awaits/catches it), so an uncaught rejection would be a
+  // top-level unhandled rejection that kills the process by default —
+  // mirrors TaskSchedulerRunnerService.runJob's per-run try/catch.
+  private async runLoopIteration(): Promise<void> {
+    try {
       const messages: SqsMessageInterface[] = await this.sqsProvider.receiveMessages(
         this.payment.webhookQueueUrl,
         MAX_MESSAGES_PER_POLL,
@@ -85,16 +105,33 @@ export class PaymentWebhookConsumerService
 
       if (messages.length === 0) {
         await this.sleep(EMPTY_POLL_INTERVAL_MS);
-        continue;
+
+        return;
       }
 
-      for (const message of messages) {
-        if (this.isStopping) break;
+      await this.processMessages(messages);
+    } catch (caught) {
+      this.logError('Webhook consumer loop iteration failed', caught);
+      await this.sleep(EMPTY_POLL_INTERVAL_MS);
+    }
+  }
+
+  // Public (like processMessage) so tests can prove containment directly:
+  // one message throwing must never stop the batch or escape as an
+  // unhandled rejection — see payment-webhook-consumer.service.spec.ts.
+  public async processMessages(messages: SqsMessageInterface[]): Promise<void> {
+    for (const message of messages) {
+      if (this.isStopping) break;
+
+      try {
         await this.processMessage(message);
+      } catch (caught) {
+        this.logError(
+          `Webhook message processing failed, left for redelivery: ${message.messageId}`,
+          caught,
+        );
       }
     }
-
-    this.logger.log('Webhook consumer loop stopped');
   }
 
   private sleep(ms: number): Promise<void> {
@@ -125,9 +162,7 @@ export class PaymentWebhookConsumerService
 
       return this.extractWebhookEventId(parsed);
     } catch (caught) {
-      const message: string = caught instanceof Error ? caught.message : String(caught);
-
-      this.logger.error(`Failed to parse webhook queue message body: ${message}`);
+      this.logError('Failed to parse webhook queue message body', caught);
 
       return null;
     }
@@ -209,16 +244,15 @@ export class PaymentWebhookConsumerService
   }
 
   private async recordDispatchFailure(webhookEventId: string, caught: unknown): Promise<boolean> {
-    const message: string = caught instanceof Error ? caught.message : String(caught);
-    const stack: string | undefined = caught instanceof Error ? caught.stack : undefined;
+    const message: string = this.extractErrorMessage(caught);
     const attempts: number = await this.webhookEventRepository.recordFailure(
       webhookEventId,
       message,
     );
 
-    this.logger.error(
-      `Webhook event dispatch failed (attempt ${attempts}/${MAX_WEBHOOK_ATTEMPTS}): ${webhookEventId} — ${message}`,
-      stack,
+    this.logError(
+      `Webhook event dispatch failed (attempt ${attempts}/${MAX_WEBHOOK_ATTEMPTS}): ${webhookEventId}`,
+      caught,
     );
 
     if (attempts < MAX_WEBHOOK_ATTEMPTS) return false;
@@ -231,5 +265,16 @@ export class PaymentWebhookConsumerService
 
   private isTerminal(status: WebhookEventStatusEnum): boolean {
     return status === WebhookEventStatusEnum.PROCESSED || status === WebhookEventStatusEnum.SKIPPED;
+  }
+
+  private extractErrorMessage(caught: unknown): string {
+    return caught instanceof Error ? caught.message : String(caught);
+  }
+
+  private logError(context: string, caught: unknown): void {
+    const message: string = this.extractErrorMessage(caught);
+    const stack: string | undefined = caught instanceof Error ? caught.stack : undefined;
+
+    this.logger.error(`${context} — ${message}`, stack);
   }
 }

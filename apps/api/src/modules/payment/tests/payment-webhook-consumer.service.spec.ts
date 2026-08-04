@@ -1,4 +1,5 @@
 import type { PaymentConfig } from '@configs/payment.config.js';
+import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { MAX_WEBHOOK_ATTEMPTS } from '@modules/payment/constants/webhook-consumer.constants.js';
 import { NormalizedEventTypeEnum } from '@modules/payment/enums/normalized-event-type.enum.js';
 import { WebhookEventStatusEnum } from '@modules/payment/enums/webhook-event-status.enum.js';
@@ -190,5 +191,77 @@ describe('PaymentWebhookConsumerService.processMessage', () => {
 
     expect(dispatcher.dispatch).not.toHaveBeenCalled();
     expect(sqsProvider.deleteMessage).toHaveBeenCalled();
+  });
+});
+
+describe('PaymentWebhookConsumerService.processMessages (loop containment)', () => {
+  // Regression for the review finding: an error anywhere in one message's
+  // processing (here, sqsProvider.deleteMessage rejecting) must be caught
+  // and logged, never escape processMessages — runLoop() is fire-and-forget
+  // from onApplicationBootstrap, so an escaped rejection would be a
+  // top-level unhandled rejection that kills the process by default.
+  it('contains a per-message failure, logs it, and still processes the next message', async () => {
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown): void => {
+      unhandledRejections.push(reason);
+    };
+
+    process.on('unhandledRejection', onUnhandledRejection);
+    const errorSpy = vi.spyOn(CustomLoggerService.prototype, 'error').mockImplementation(() => {});
+
+    try {
+      const eventA = baseEvent({ id: 'evt-a', status: WebhookEventStatusEnum.PROCESSED });
+      const eventB = baseEvent({ id: 'evt-b', status: WebhookEventStatusEnum.PROCESSED });
+      const webhookEventRepository: WebhookEventRepositoryInterface = {
+        upsertReceived: vi.fn(),
+        findById: vi.fn(async (id: string) => (id === 'evt-a' ? eventA : eventB)),
+        markProcessed: vi.fn(),
+        markSkipped: vi.fn(),
+        markFailed: vi.fn(),
+        recordFailure: vi.fn(),
+      };
+      const sqsProvider: SqsProviderInterface = {
+        sendMessage: vi.fn(),
+        receiveMessages: vi.fn(),
+        deleteMessage: vi.fn(async (_url: string, receiptHandle: string): Promise<void> => {
+          if (receiptHandle === 'receipt-a') throw new Error('sqs delete failed');
+        }),
+      };
+      const redisLock = { withLock: vi.fn() };
+      const dispatcher = { dispatch: vi.fn() };
+      const service: PaymentWebhookConsumerService = new PaymentWebhookConsumerService(
+        webhookEventRepository,
+        sqsProvider,
+        redisLock as unknown as RedisLockService,
+        dispatcher as unknown as WebhookEventDispatcherService,
+        payment,
+      );
+      const messageA = message({
+        messageId: 'msg-a',
+        receiptHandle: 'receipt-a',
+        body: JSON.stringify({ webhookEventId: 'evt-a' }),
+      });
+      const messageB = message({
+        messageId: 'msg-b',
+        receiptHandle: 'receipt-b',
+        body: JSON.stringify({ webhookEventId: 'evt-b' }),
+      });
+
+      await expect(service.processMessages([messageA, messageB])).resolves.toBeUndefined();
+
+      // Let any stray microtask-queued rejection surface before asserting.
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(sqsProvider.deleteMessage).toHaveBeenCalledWith(payment.webhookQueueUrl, 'receipt-a');
+      expect(sqsProvider.deleteMessage).toHaveBeenCalledWith(payment.webhookQueueUrl, 'receipt-b');
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Webhook message processing failed, left for redelivery: msg-a'),
+        expect.anything(),
+      );
+      expect(unhandledRejections).toHaveLength(0);
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection);
+      errorSpy.mockRestore();
+    }
   });
 });
