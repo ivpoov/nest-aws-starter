@@ -1,0 +1,13 @@
+{
+  "id": "evt_test_sub_deleted",
+  "type": "customer.subscription.deleted",
+  "data": {
+    "object": {
+      "id": "sub_test_1",
+      "cancel_at_period_end": false,
+      "items": {
+        "data": [{ "current_period_end": 1752678400 }]
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "evt_test_checkout_completed",
+  "type": "checkout.session.completed",
+  "data": {
+    "object": {
+      "id": "cs_test_1",
+      "client_reference_id": "user_123",
+      "customer": "cus_test_1",
+      "subscription": "sub_test_1",
+      "metadata": { "planId": "plan_123" }
+    }
+  }
+}
