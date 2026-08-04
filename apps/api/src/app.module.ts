@@ -24,6 +24,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { CacheModule } from '@providers/cache/cache.module.js';
+import { CloudFrontModule } from '@providers/cloudfront/cloudfront.module.js';
 import { HttpClientModule } from '@providers/http-client/http-client.module.js';
 import { LambdaModule } from '@providers/lambda/lambda.module.js';
 import { MailModule } from '@providers/mail/mail.module.js';
@@ -50,6 +51,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     EventModule,
     CaslModule,
     S3Module,
+    CloudFrontModule,
     SqsModule,
     SnsModule,
     MailModule,
