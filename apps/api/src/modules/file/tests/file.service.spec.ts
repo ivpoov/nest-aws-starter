@@ -1,4 +1,4 @@
-import type { CloudFrontConfig } from '@configs/cloudfront.config.js';
+import type { CloudFrontConfig } from '@configs/cloudfront.config.js'; // <module:cloudfront>
 import { ConflictError } from '@modules/common/errors/conflict.error.js';
 import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
@@ -7,7 +7,7 @@ import type { FileInterface } from '@modules/file/interfaces/file.interface.js';
 import type { FileRepositoryInterface } from '@modules/file/interfaces/file-repository.interface.js';
 import { FileService } from '@modules/file/services/file.service.js';
 import { FileIntentEnum, FileStatusEnum } from '@nest-aws-starter/shared';
-import type { CloudFrontSignerInterface } from '@providers/cloudfront/interfaces/cloudfront-signer.interface.js';
+import type { CloudFrontSignerInterface } from '@providers/cloudfront/interfaces/cloudfront-signer.interface.js'; // <module:cloudfront>
 import type { HeadObjectResultInterface } from '@providers/s3/interfaces/head-object-result.interface.js';
 import type { S3ProviderInterface } from '@providers/s3/interfaces/s3-provider.interface.js';
 import { describe, expect, it, vi } from 'vitest';
@@ -33,14 +33,14 @@ interface TestSetupInterface {
   readonly service: FileService;
   readonly fileRepository: FileRepositoryInterface;
   readonly s3Provider: S3ProviderInterface;
-  readonly cloudFrontSigner: CloudFrontSignerInterface;
+  readonly cloudFrontSigner: CloudFrontSignerInterface; // <module:cloudfront>
   readonly emit: ReturnType<typeof vi.fn>;
 }
 
 function createService(
   overrides: Partial<FileRepositoryInterface> = {},
   s3Overrides: Partial<S3ProviderInterface> = {},
-  cloudFrontConfig: CloudFrontConfig = { isEnabled: false },
+  cloudFrontConfig: CloudFrontConfig = { isEnabled: false }, // <module:cloudfront>
 ): TestSetupInterface {
   const fileRepository: FileRepositoryInterface = {
     create: vi.fn().mockResolvedValue(pendingFile),
@@ -56,20 +56,30 @@ function createService(
     headObject: vi.fn().mockResolvedValue({ contentLength: 1024, contentType: 'application/pdf' }),
     ...s3Overrides,
   };
+  // <module:cloudfront>
   const cloudFrontSigner: CloudFrontSignerInterface = {
     getSignedUrl: vi.fn().mockResolvedValue('https://cdn.example.com/signed'),
   };
+  // </module:cloudfront>
   const emit = vi.fn();
   const eventBus = { emit } as unknown as EventBusService;
   const service: FileService = new FileService(
     fileRepository,
     s3Provider,
+    // <module:cloudfront>
     cloudFrontSigner,
     cloudFrontConfig,
+    // </module:cloudfront>
     eventBus,
   );
 
-  return { service, fileRepository, s3Provider, cloudFrontSigner, emit };
+  return {
+    service,
+    fileRepository,
+    s3Provider,
+    cloudFrontSigner, // <module:cloudfront>
+    emit,
+  };
 }
 
 describe('FileService.requestUpload', () => {
@@ -195,7 +205,7 @@ describe('FileService.confirmUpload', () => {
 
 describe('FileService.getDownloadUrl', () => {
   it('returns a presigned s3 url when cloudfront is disabled', async () => {
-    const { service, s3Provider, cloudFrontSigner } = createService({
+    const { service, s3Provider } = createService({
       findById: vi.fn().mockResolvedValue(readyFile),
     });
 
@@ -203,9 +213,9 @@ describe('FileService.getDownloadUrl', () => {
 
     expect(result).toEqual({ downloadUrl: 'https://s3.example/download' });
     expect(s3Provider.getPresignedUrl).toHaveBeenCalledWith(readyFile.key, 300);
-    expect(cloudFrontSigner.getSignedUrl).not.toHaveBeenCalled();
   });
 
+  // <module:cloudfront>
   it('returns a cloudfront signed url when cloudfront is enabled', async () => {
     const { service, s3Provider, cloudFrontSigner } = createService(
       { findById: vi.fn().mockResolvedValue(readyFile) },
@@ -225,6 +235,7 @@ describe('FileService.getDownloadUrl', () => {
     expect(cloudFrontSigner.getSignedUrl).toHaveBeenCalledWith(readyFile.key);
     expect(s3Provider.getPresignedUrl).not.toHaveBeenCalled();
   });
+  // </module:cloudfront>
 
   it('rejects a download before the file is ready (conflict)', async () => {
     const { service } = createService({ findById: vi.fn().mockResolvedValue(pendingFile) });

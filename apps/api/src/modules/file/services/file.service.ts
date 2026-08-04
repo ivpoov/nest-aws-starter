@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { type CloudFrontConfig, cloudfrontConfig } from '@configs/cloudfront.config.js';
+import { type CloudFrontConfig, cloudfrontConfig } from '@configs/cloudfront.config.js'; // <module:cloudfront>
 import { ConflictError } from '@modules/common/errors/conflict.error.js';
 import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
@@ -31,8 +31,8 @@ import {
   type RequestUploadResponseInterface,
 } from '@nest-aws-starter/shared';
 import { Inject, Injectable } from '@nestjs/common';
-import { CLOUDFRONT_SIGNER } from '@providers/cloudfront/constants/cloudfront.constants.js';
-import type { CloudFrontSignerInterface } from '@providers/cloudfront/interfaces/cloudfront-signer.interface.js';
+import { CLOUDFRONT_SIGNER } from '@providers/cloudfront/constants/cloudfront.constants.js'; // <module:cloudfront>
+import type { CloudFrontSignerInterface } from '@providers/cloudfront/interfaces/cloudfront-signer.interface.js'; // <module:cloudfront>
 import { S3_PROVIDER } from '@providers/s3/constants/s3.constants.js';
 import type { HeadObjectResultInterface } from '@providers/s3/interfaces/head-object-result.interface.js';
 import type { S3ProviderInterface } from '@providers/s3/interfaces/s3-provider.interface.js';
@@ -46,10 +46,12 @@ export class FileService {
     private readonly fileRepository: FileRepositoryInterface,
     @Inject(S3_PROVIDER)
     private readonly s3Provider: S3ProviderInterface,
+    // <module:cloudfront>
     @Inject(CLOUDFRONT_SIGNER)
     private readonly cloudFrontSigner: CloudFrontSignerInterface,
     @Inject(cloudfrontConfig.KEY)
     private readonly cloudFrontConfig: CloudFrontConfig,
+    // </module:cloudfront>
     private readonly eventBus: EventBusService,
   ) {}
 
@@ -116,9 +118,16 @@ export class FileService {
 
     if (file.status !== FileStatusEnum.READY) throw new ConflictError(FILE_NOT_READY);
 
-    const downloadUrl: string = this.cloudFrontConfig.isEnabled
-      ? await this.cloudFrontSigner.getSignedUrl(file.key)
-      : await this.s3Provider.getPresignedUrl(file.key, FILE_DOWNLOAD_TTL_SEC);
+    // <module:cloudfront>
+    if (this.cloudFrontConfig.isEnabled) {
+      return { downloadUrl: await this.cloudFrontSigner.getSignedUrl(file.key) };
+    }
+    // </module:cloudfront>
+
+    const downloadUrl: string = await this.s3Provider.getPresignedUrl(
+      file.key,
+      FILE_DOWNLOAD_TTL_SEC,
+    );
 
     return { downloadUrl };
   }
