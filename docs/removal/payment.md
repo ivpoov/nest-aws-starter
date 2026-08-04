@@ -42,10 +42,17 @@ the marked lines/blocks and the markers themselves.
   - lines 18-20 (block)
   - lines 77-110 (block)
 - `apps/api/src/modules/statistic/services/statistic.service.ts`
-  - lines 11-13 (block)
-  - lines 70-72 (block)
-  - lines 89-107 (block)
-  - lines 132-136 (block)
+  - lines 13-15 (block)
+  - lines 44-46 (block)
+  - lines 84-88 (block)
+  - lines 105-123 (block)
+  - lines 150-154 (block)
+- `apps/api/src/modules/statistic/tests/statistic-typed-sql.repository.spec.ts`
+  - lines 4-6 (block)
+  - lines 79-124 (block)
+- `apps/api/src/modules/statistic/tests/statistic.service.spec.ts`
+  - lines 80-100 (block)
+  - lines 155-172 (block)
 - `apps/api/prisma/schema.prisma`
   - line 44: `subscriptions       Subscription[] // <module:payment>`
   - line 45: `paymentTransactions PaymentTransaction[] // <module:payment>`
