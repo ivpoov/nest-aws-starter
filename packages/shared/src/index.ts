@@ -73,6 +73,7 @@ export * from './sessions/interfaces/session-response.interface.js';
 export * from './statistics/enums/statistics-metric.enum.js';
 export * from './statistics/interfaces/statistics-count-breakdown.interface.js';
 export * from './statistics/interfaces/statistics-overview-response.interface.js';
+export * from './statistics/interfaces/statistics-revenue-by-plan.interface.js';
 export * from './statistics/interfaces/statistics-series-point.interface.js';
 export * from './statistics/interfaces/statistics-series-response.interface.js';
 export * from './statistics/interfaces/statistics-totals.interface.js';
