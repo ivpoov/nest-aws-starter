@@ -25,11 +25,22 @@ of the app still type-checks and passes its unit tests — see
 Only `cloudfront` is exercised this round. S3/SQS/SNS/SES(mail)/Lambda are also optional,
 disable-fallback providers, but they predate the fence-marker convention introduced in this
 PR (Task 14, v0.3). Retrofitting fences onto all of them is deliberately deferred to a
-dedicated pass rather than folded into this release.
+dedicated pass rather than folded into this release. The coupling shape differs per
+provider — investigated individually rather than deferred on a blanket excuse:
+
+- **s3** — Coupled beyond the file module: `ProfileService` (avatar upload/download URLs) and `OauthAvatarListener` (OAuth avatar sync) — both in the core `user` module — call `S3_PROVIDER` unconditionally, with no `isEnabled` branch at the call site (the branch lives one level down, in the DI factory that swaps in `DisabledS3ProviderService`). Removing S3 outright means refactoring those two core call sites, not deleting a removable module's reference to it.
+
+- **sqs** — No domain-layer consumers found — nothing outside its own module and `test/sqs.e2e-spec.ts` (which pulls `SQS_PROVIDER` straight out of the DI container) references it. Removal would be as mechanical as an `oauth-*` provider (module + config + `app.module.ts` lines + its e2e spec) — simply not yet ported to the fence-marker convention this round.
+
+- **sns** — Same shape as sqs: no domain-layer consumers, only its own module and `test/sns.e2e-spec.ts` reference `SNS_PROVIDER` directly. Mechanical to fence; not yet ported this round.
+
+- **mail** — Coupled into core auth: `EmailFlowService` (verify/reset emails, `auth` module) calls `MAIL_TRANSPORT` unconditionally; `NewDeviceService` (`suspicious-activity`) also injects it directly, gated only by its own `newDeviceEmailEnabled` flag, not by mail's own `isEnabled`. Removing mail outright breaks core auth email flows.
+
+- **lambda** — Same shape as sqs/sns: no domain-layer consumers — `test/lambda.e2e-spec.ts` pulls `LAMBDA_PROVIDER` straight out of the DI container to invoke the example function. Mechanical to fence; not yet ported this round.
 
 ## Not removable (investigated, kept in core)
 
-- **suspicious-activity** — AuthService.login() synchronously gates credential verification on LoginLockoutService.assertNotLocked() and branches AUTH_NEW_DEVICE_EVENT emission on NewDeviceService.check() — a security-critical control-flow dependency, not a fire-and-forget side effect. auth.service.spec.ts has six dedicated test cases asserting this ordering. Fencing it would require restructuring AuthService.login() itself and half its spec file — the coupling is real, not incidental. Left as a core-adjacent module.
+- **suspicious-activity** — Fenceable in principle — multi-line/block fences exist elsewhere in this PR — but disproportionately invasive here: it is a synchronous security gate inside AuthService.login() (LoginLockoutService.assertNotLocked() blocks credential verification; NewDeviceService.check() branches AUTH_NEW_DEVICE_EVENT emission), and fencing it would touch most of auth.service.spec.ts (six of its test cases exist solely to assert this ordering). Removing a login-hardening module should never be a quiet one-line subtraction that silently weakens auth — so it is deliberately kept non-removable rather than fenced.
 
 - **activity** — Subscribes to core auth/user events (AUTH_LOGIN, USER_BLOCKED, ...) that survive regardless of which optional modules are present; it is the audit trail for the core system, not an optional feature.
 
@@ -49,4 +60,4 @@ dedicated pass rather than folded into this release.
 
 - **oauth (core)** — The oauth flow/registry/state-store module — not a provider itself. user-admin.controller (login-as) depends on OauthFlowService.mintExchangeCode directly. Only the oauth-* provider plugins (google/facebook/discord) are removable.
 
-- **s3 / sqs / sns / mail / lambda (providers)** — v0.1 providers predate the fence-marker convention introduced in this PR. Retrofitting them is deliberately out of scope for this round — see the scope note in docs/removal/README.md — and belongs to a dedicated pass.
+- **s3 / sqs / sns / mail / lambda (providers)** — v0.1 providers predate the fence-marker convention introduced in this PR. Retrofitting them is deliberately out of scope for this round — see the per-provider coupling notes in docs/removal/README.md — and belongs to a dedicated pass.
