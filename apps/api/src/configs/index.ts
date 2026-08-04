@@ -1,5 +1,6 @@
 import { appConfig } from '@configs/app.config.js';
 import { authConfig } from '@configs/auth.config.js';
+import { cloudfrontConfig } from '@configs/cloudfront.config.js';
 import { databaseConfig } from '@configs/database.config.js';
 import { discordOauthConfig } from '@configs/discord-oauth.config.js';
 import { facebookOauthConfig } from '@configs/facebook-oauth.config.js';
@@ -16,6 +17,7 @@ import { webAppConfig } from '@configs/web-app.config.js';
 export const configs = [
   appConfig,
   authConfig,
+  cloudfrontConfig,
   databaseConfig,
   discordOauthConfig,
   facebookOauthConfig,

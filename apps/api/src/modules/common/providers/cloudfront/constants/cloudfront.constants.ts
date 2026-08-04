@@ -1,0 +1,1 @@
+export const CLOUDFRONT_SIGNER = Symbol('CLOUDFRONT_SIGNER');
