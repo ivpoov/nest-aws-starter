@@ -153,7 +153,55 @@ const NON_REMOVABLE = [
     reason:
       'v0.1 providers predate the fence-marker convention introduced in this PR. ' +
       'Retrofitting them is deliberately out of scope for this round — see the ' +
-      'scope note in docs/removal/README.md — and belongs to a dedicated pass.',
+      'per-provider coupling notes in docs/removal/README.md — and belongs to a dedicated pass.',
+  },
+];
+
+// Per-provider investigation backing the v0.1-provider scope cut above —
+// grepped each provider's injection token for consumers outside its own
+// module before writing these, so the notes describe the actual coupling
+// shape rather than a blanket "predates the convention" excuse.
+const DEFERRED_PROVIDERS = [
+  {
+    id: 's3',
+    note:
+      'Coupled beyond the file module: `ProfileService` (avatar upload/download URLs) and ' +
+      '`OauthAvatarListener` (OAuth avatar sync) — both in the core `user` module — call ' +
+      '`S3_PROVIDER` unconditionally, with no `isEnabled` branch at the call site (the branch ' +
+      'lives one level down, in the DI factory that swaps in `DisabledS3ProviderService`). ' +
+      'Removing S3 outright means refactoring those two core call sites, not deleting a ' +
+      "removable module's reference to it.",
+  },
+  {
+    id: 'sqs',
+    note:
+      'No domain-layer consumers found — nothing outside its own module and ' +
+      '`test/sqs.e2e-spec.ts` (which pulls `SQS_PROVIDER` straight out of the DI container) ' +
+      'references it. Removal would be as mechanical as an `oauth-*` provider (module + ' +
+      'config + `app.module.ts` lines + its e2e spec) — simply not yet ported to the ' +
+      'fence-marker convention this round.',
+  },
+  {
+    id: 'sns',
+    note:
+      'Same shape as sqs: no domain-layer consumers, only its own module and ' +
+      '`test/sns.e2e-spec.ts` reference `SNS_PROVIDER` directly. Mechanical to fence; not ' +
+      'yet ported this round.',
+  },
+  {
+    id: 'mail',
+    note:
+      'Coupled into core auth: `EmailFlowService` (verify/reset emails, `auth` module) calls ' +
+      '`MAIL_TRANSPORT` unconditionally; `NewDeviceService` (`suspicious-activity`) also ' +
+      "injects it directly, gated only by its own `newDeviceEmailEnabled` flag, not by mail's " +
+      'own `isEnabled`. Removing mail outright breaks core auth email flows.',
+  },
+  {
+    id: 'lambda',
+    note:
+      'Same shape as sqs/sns: no domain-layer consumers — `test/lambda.e2e-spec.ts` pulls ' +
+      '`LAMBDA_PROVIDER` straight out of the DI container to invoke the example function. ' +
+      'Mechanical to fence; not yet ported this round.',
   },
 ];
 
@@ -469,6 +517,9 @@ function renderReadme() {
     '\n',
   );
   const nonRemovableList = NON_REMOVABLE.map((m) => `- **${m.id}** — ${m.reason}`).join('\n\n');
+  const deferredProvidersList = DEFERRED_PROVIDERS.map((p) => `- **${p.id}** — ${p.note}`).join(
+    '\n\n',
+  );
 
   return `# Removal recipes
 
@@ -490,7 +541,10 @@ ${removableList}
 Only \`cloudfront\` is exercised this round. S3/SQS/SNS/SES(mail)/Lambda are also optional,
 disable-fallback providers, but they predate the fence-marker convention introduced in this
 PR (Task 14, v0.3). Retrofitting fences onto all of them is deliberately deferred to a
-dedicated pass rather than folded into this release.
+dedicated pass rather than folded into this release. The coupling shape differs per
+provider — investigated individually rather than deferred on a blanket excuse:
+
+${deferredProvidersList}
 
 ## Not removable (investigated, kept in core)
 
