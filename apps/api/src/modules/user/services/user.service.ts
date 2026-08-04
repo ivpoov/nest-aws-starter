@@ -1,7 +1,19 @@
+import { ConflictError } from '@modules/common/errors/conflict.error.js';
+import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
+import {
+  USER_BLOCKED_EVENT,
+  USER_UNBLOCKED_EVENT,
+} from '@modules/event/constants/event-names.constants.js';
+import { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { USER_REPOSITORY } from '@modules/user/constants/user.constants.js';
-import { USER_NOT_FOUND } from '@modules/user/constants/user-errors.constants.js';
+import {
+  ADMIN_CANNOT_IMPERSONATE_ADMIN,
+  USER_BLOCKED,
+  USER_CANNOT_BLOCK_SELF,
+  USER_NOT_FOUND,
+} from '@modules/user/constants/user-errors.constants.js';
 import type { AdminUserInterface } from '@modules/user/interfaces/admin-user.interface.js';
 import type { AdminUsersQueryInterface } from '@modules/user/interfaces/admin-users-query.interface.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
@@ -12,6 +24,7 @@ import type { UpdateProfileDataInterface } from '@modules/user/interfaces/update
 import type { UserInterface } from '@modules/user/interfaces/user.interface.js';
 import type { UserRepositoryInterface } from '@modules/user/interfaces/user-repository.interface.js';
 import type { UserWithMethodTypesInterface } from '@modules/user/interfaces/user-with-method-types.interface.js';
+import { UserRoleEnum, UserStatusEnum } from '@nest-aws-starter/shared';
 import { Inject, Injectable } from '@nestjs/common';
 
 @Injectable()
@@ -21,6 +34,7 @@ export class UserService {
   constructor(
     @Inject(USER_REPOSITORY)
     private readonly userRepository: UserRepositoryInterface,
+    private readonly eventBus: EventBusService,
   ) {}
 
   public async createWithEmailMethod(data: CreateEmailUserDataInterface): Promise<UserInterface> {
@@ -125,5 +139,47 @@ export class UserService {
     this.logger.log(`User profile updated: ${id}`);
 
     return user;
+  }
+
+  public async updateStatus(
+    id: string,
+    status: UserStatusEnum,
+    actorId: string,
+    reason?: string,
+  ): Promise<UserInterface> {
+    if (status === UserStatusEnum.BLOCKED) this.assertNotSelfBlock(id, actorId);
+
+    const user: UserInterface | null = await this.userRepository.updateStatus(id, status);
+
+    if (!user) throw new NotFoundError(USER_NOT_FOUND);
+
+    this.logger.log(`User ${id} status set to ${status} by ${actorId}`);
+    this.eventBus.emit(
+      status === UserStatusEnum.BLOCKED ? USER_BLOCKED_EVENT : USER_UNBLOCKED_EVENT,
+      { userId: id, actorId, ...(reason ? { reason } : {}) },
+    );
+
+    return user;
+  }
+
+  // Side-effect-free guard, called by the controller before it revokes
+  // sessions (fail-safe ordering: never revoke a blocker's own live
+  // sessions on a rejected self-block) and again here as the write path's
+  // own defense in depth.
+  public assertNotSelfBlock(id: string, actorId: string): void {
+    if (id === actorId) throw new ConflictError(USER_CANNOT_BLOCK_SELF);
+  }
+
+  // Login-as gate: only USER-role, non-blocked targets can be impersonated —
+  // never another admin (no privilege re-escalation) and never a blocked
+  // account (nothing to legitimately investigate through a live session).
+  public assertCanImpersonate(target: AdminUserInterface): void {
+    if (target.role !== UserRoleEnum.USER) {
+      throw new ForbiddenError(ADMIN_CANNOT_IMPERSONATE_ADMIN);
+    }
+
+    if (target.status === UserStatusEnum.BLOCKED) {
+      throw new ForbiddenError(USER_BLOCKED);
+    }
   }
 }

@@ -1,5 +1,5 @@
 import { Prisma } from '@generated/prisma/client.js';
-import { AuthMethodType } from '@generated/prisma/enums.js';
+import { AuthMethodType, UserStatus } from '@generated/prisma/enums.js';
 import type { AuthMethodModel, UserModel } from '@generated/prisma/models.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import type { AdminUserInterface } from '@modules/user/interfaces/admin-user.interface.js';
@@ -184,6 +184,23 @@ export class UserPrismaRepository implements UserRepositoryInterface {
           ...(data.displayName !== undefined && { displayName: data.displayName }),
           ...(data.avatarKey !== undefined && { avatarKey: data.avatarKey }),
         },
+      });
+
+      return this.toDomain(user);
+    } catch (caught) {
+      if (caught instanceof Prisma.PrismaClientKnownRequestError && caught.code === 'P2025') {
+        return null;
+      }
+
+      throw caught;
+    }
+  }
+
+  public async updateStatus(id: string, status: UserStatusEnum): Promise<UserInterface | null> {
+    try {
+      const user: UserModel = await this.prisma.user.update({
+        where: { id },
+        data: { status: UserStatus[status] },
       });
 
       return this.toDomain(user);

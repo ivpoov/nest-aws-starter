@@ -6,6 +6,11 @@ import {
 import { EmailFlowService } from '@modules/auth/services/email-flow.service.js';
 import { ConflictError } from '@modules/common/errors/conflict.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
+import {
+  AUTH_METHOD_LINKED_EVENT,
+  AUTH_METHOD_UNLINKED_EVENT,
+} from '@modules/event/constants/event-names.constants.js';
+import { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import {
   AUTH_EMAIL_LINKED_TO_OTHER_ACCOUNT,
@@ -25,6 +30,7 @@ export class MethodLinkingService {
   constructor(
     private readonly userService: UserService,
     private readonly emailFlowService: EmailFlowService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   public async listMethods(userId: string): Promise<AuthMethodInterface[]> {
@@ -46,6 +52,10 @@ export class MethodLinkingService {
     await this.userService.addEmailMethod(userId, email, await hash(password, ARGON2_OPTIONS));
     await this.emailFlowService.requestEmailVerification(userId);
     this.logger.log(`Email method added for user ${userId}`);
+    this.eventBus.emit(AUTH_METHOD_LINKED_EVENT, {
+      userId,
+      type: AuthMethodTypeEnum.EMAIL,
+    });
   }
 
   public async unlinkMethod(userId: string, type: AuthMethodTypeEnum): Promise<void> {
@@ -60,6 +70,7 @@ export class MethodLinkingService {
     if (methods.length <= 1) throw new ConflictError(AUTH_LAST_METHOD);
 
     await this.userService.removeMethod(userId, type);
+    this.eventBus.emit(AUTH_METHOD_UNLINKED_EVENT, { userId, type });
   }
 
   // The user's own oauth method may carry this email — that is the expected

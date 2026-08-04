@@ -1,5 +1,6 @@
 import { InternalError } from '@modules/common/errors/internal.error.js';
 import { S3_PROVIDER_DISABLED } from '@providers/s3/constants/s3-errors.constants.js';
+import type { HeadObjectResultInterface } from '@providers/s3/interfaces/head-object-result.interface.js';
 import type { S3ProviderInterface } from '@providers/s3/interfaces/s3-provider.interface.js';
 import type { UploadFileDataInterface } from '@providers/s3/interfaces/upload-file-data.interface.js';
 
@@ -23,6 +24,10 @@ export class DisabledS3ProviderService implements S3ProviderInterface {
   }
 
   public delete(_key: string): Promise<void> {
+    return this.throwDisabled();
+  }
+
+  public headObject(_key: string): Promise<HeadObjectResultInterface | null> {
     return this.throwDisabled();
   }
 

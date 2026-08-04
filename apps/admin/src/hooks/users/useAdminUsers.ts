@@ -37,10 +37,11 @@ export function useAdminUsers(search: string): UseAdminUsersResultInterface {
   );
 
   const loadMore = useCallback(async (): Promise<void> => loadPage(false), [loadPage]);
+  const reload = useCallback(async (): Promise<void> => loadPage(true), [loadPage]);
 
   useEffect(() => {
     void loadPage(true);
   }, [loadPage]);
 
-  return { users, hasMore, isLoading, error, loadMore };
+  return { users, hasMore, isLoading, error, loadMore, reload };
 }

@@ -1,16 +1,24 @@
-import { type NoteResponseInterface, NoteStatusEnum } from '@nest-aws-starter/shared';
+import {
+  FileIntentEnum,
+  type NoteResponseInterface,
+  NoteStatusEnum,
+} from '@nest-aws-starter/shared';
 import type { ReactElement } from 'react';
 import { useState } from 'react';
+import { AttachmentsCard } from '../components/Attachments/AttachmentsCard';
 import { NoteList } from '../components/Notes/NoteList';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { ErrorMessage } from '../components/ui/ErrorMessage';
 import { Input } from '../components/ui/Input';
 import { Loader } from '../components/ui/Loader';
+import { useFileUpload } from '../hooks/files/useFileUpload';
 import { useNotes } from '../hooks/notes/useNotes';
+import type { UseFileUploadResultInterface } from '../interfaces/use-file-upload-result.interface';
 
 export function NotesPage(): ReactElement {
   const { notes, hasMore, isLoading, error, loadMore, create, update, remove } = useNotes();
+  const fileUpload: UseFileUploadResultInterface = useFileUpload(FileIntentEnum.ATTACHMENT);
   const [title, setTitle] = useState<string>('');
 
   if (isLoading && notes.length === 0) return <Loader />;
@@ -61,6 +69,13 @@ export function NotesPage(): ReactElement {
           </div>
         ) : null}
       </Card>
+      <AttachmentsCard
+        uploads={fileUpload.uploads}
+        status={fileUpload.status}
+        error={fileUpload.error}
+        onUpload={(file): void => void fileUpload.upload(file)}
+        onDownload={(fileId): void => void fileUpload.download(fileId)}
+      />
     </div>
   );
 }

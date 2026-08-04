@@ -3,13 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "prisma generate && tsc --noEmit -p tsconfig.build.json && swc src -d dist --strip-leading-paths --quiet",
+    "build": "prisma generate --sql && tsc --noEmit -p tsconfig.build.json && swc src -d dist --strip-leading-paths --quiet",
     "start:dev": "swc src -d dist --strip-leading-paths --quiet && concurrently \"swc src -d dist --strip-leading-paths -w --quiet\" \"node --watch dist/main.js\"",
     "start:prod": "node dist/main.js",
     "lint": "biome check src",
     "test": "vitest run",
     "test:e2e": "vitest run --config ./test/vitest.e2e.config.ts",
-    "db:generate": "prisma generate",
+    "db:generate": "prisma generate --sql",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev"
   },
@@ -19,6 +19,7 @@
     "@aws-sdk/client-ses": "3.1079.0",
     "@aws-sdk/client-sns": "3.1079.0",
     "@aws-sdk/client-sqs": "3.1079.0",
+    "@aws-sdk/cloudfront-signer": "3.1078.0",
     "@aws-sdk/s3-request-presigner": "3.1079.0",
     "@casl/ability": "7.0.0",
     "@fastify/static": "10.1.2",

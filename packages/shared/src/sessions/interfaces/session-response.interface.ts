@@ -5,4 +5,5 @@ export interface SessionResponseInterface {
   readonly createdAt: string;
   readonly lastActiveAt: string;
   readonly isCurrent: boolean;
+  readonly isImpersonated: boolean;
 }

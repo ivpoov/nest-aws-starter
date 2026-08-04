@@ -8,8 +8,10 @@ export async function createTestApp(): Promise<NestFastifyApplication> {
     imports: [AppModule],
   }).compile();
 
+  // Mirrors main.ts's trustProxy wiring — e2e specs vary x-forwarded-for per
+  // request to exercise per-ip logic (throttling, lockouts, session ip).
   const app: NestFastifyApplication = moduleRef.createNestApplication<NestFastifyApplication>(
-    new FastifyAdapter(),
+    new FastifyAdapter({ trustProxy: process.env.TRUST_PROXY === 'true' }),
   );
 
   configureApp(app);

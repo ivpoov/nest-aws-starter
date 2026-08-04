@@ -6,6 +6,7 @@ import type { EmailFlowService } from '@modules/auth/services/email-flow.service
 import { MethodLinkingService } from '@modules/auth/services/method-linking.service.js';
 import { ConflictError } from '@modules/common/errors/conflict.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
+import type { EventBusService } from '@modules/event/services/event-bus.service.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
 import type { UserService } from '@modules/user/services/user.service.js';
 import { AuthMethodTypeEnum } from '@nest-aws-starter/shared';
@@ -36,6 +37,7 @@ interface SetupInterface {
     removeMethod: ReturnType<typeof vi.fn>;
   };
   readonly emailFlow: { requestEmailVerification: ReturnType<typeof vi.fn> };
+  readonly emit: ReturnType<typeof vi.fn>;
 }
 
 function setup(methods: AuthMethodInterface[]): SetupInterface {
@@ -47,17 +49,20 @@ function setup(methods: AuthMethodInterface[]): SetupInterface {
     removeMethod: vi.fn().mockResolvedValue(true),
   };
   const emailFlow = { requestEmailVerification: vi.fn().mockResolvedValue(undefined) };
+  const emit = vi.fn();
+  const eventBus = { emit } as unknown as EventBusService;
   const service: MethodLinkingService = new MethodLinkingService(
     users as unknown as UserService,
     emailFlow as unknown as EmailFlowService,
+    eventBus,
   );
 
-  return { service, users, emailFlow };
+  return { service, users, emailFlow, emit };
 }
 
 describe('MethodLinkingService addEmailMethod', () => {
   it('hashes the password, stores the method and kicks off verification', async () => {
-    const { service, users, emailFlow } = setup([
+    const { service, users, emailFlow, emit } = setup([
       method({ type: AuthMethodTypeEnum.GOOGLE, providerAccountId: 'acc' }),
     ]);
 
@@ -69,6 +74,10 @@ describe('MethodLinkingService addEmailMethod', () => {
     expect(email).toBe('new@example.com');
     expect(passwordHash).toMatch(/^\$argon2id\$/);
     expect(emailFlow.requestEmailVerification).toHaveBeenCalledWith('u-1');
+    expect(emit).toHaveBeenCalledWith('auth.method-linked', {
+      userId: 'u-1',
+      type: AuthMethodTypeEnum.EMAIL,
+    });
   });
 
   it('rejects when an email method already exists', async () => {
@@ -139,7 +148,7 @@ describe('MethodLinkingService addEmailMethod', () => {
 
 describe('MethodLinkingService unlinkMethod', () => {
   it('removes a linked method when another remains', async () => {
-    const { service, users } = setup([
+    const { service, users, emit } = setup([
       method({}),
       method({ id: 'm-2', type: AuthMethodTypeEnum.GOOGLE, providerAccountId: 'acc' }),
     ]);
@@ -147,6 +156,10 @@ describe('MethodLinkingService unlinkMethod', () => {
     await service.unlinkMethod('u-1', AuthMethodTypeEnum.GOOGLE);
 
     expect(users.removeMethod).toHaveBeenCalledWith('u-1', AuthMethodTypeEnum.GOOGLE);
+    expect(emit).toHaveBeenCalledWith('auth.method-unlinked', {
+      userId: 'u-1',
+      type: AuthMethodTypeEnum.GOOGLE,
+    });
   });
 
   it('rejects unlinking a method that is not linked', async () => {
