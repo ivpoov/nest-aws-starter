@@ -118,13 +118,14 @@ const NON_REMOVABLE = [
   {
     id: 'suspicious-activity',
     reason:
-      'AuthService.login() synchronously gates credential verification on ' +
-      'LoginLockoutService.assertNotLocked() and branches AUTH_NEW_DEVICE_EVENT ' +
-      'emission on NewDeviceService.check() — a security-critical control-flow ' +
-      'dependency, not a fire-and-forget side effect. auth.service.spec.ts has six ' +
-      'dedicated test cases asserting this ordering. Fencing it would require ' +
-      'restructuring AuthService.login() itself and half its spec file — the ' +
-      'coupling is real, not incidental. Left as a core-adjacent module.',
+      'Fenceable in principle — multi-line/block fences exist elsewhere in this PR — ' +
+      'but disproportionately invasive here: it is a synchronous security gate inside ' +
+      'AuthService.login() (LoginLockoutService.assertNotLocked() blocks credential ' +
+      'verification; NewDeviceService.check() branches AUTH_NEW_DEVICE_EVENT emission), ' +
+      'and fencing it would touch most of auth.service.spec.ts (six of its test cases ' +
+      'exist solely to assert this ordering). Removing a login-hardening module should ' +
+      'never be a quiet one-line subtraction that silently weakens auth — so it is ' +
+      'deliberately kept non-removable rather than fenced.',
   },
   {
     id: 'activity',
