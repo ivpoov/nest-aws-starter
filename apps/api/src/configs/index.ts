@@ -7,6 +7,7 @@ import { facebookOauthConfig } from '@configs/facebook-oauth.config.js'; // <mod
 import { googleOauthConfig } from '@configs/google-oauth.config.js'; // <module:oauth-google>
 import { lambdaConfig } from '@configs/lambda.config.js';
 import { mailConfig } from '@configs/mail.config.js';
+import { paymentConfig } from '@configs/payment.config.js'; // <module:payment>
 import { redisConfig } from '@configs/redis.config.js';
 import { s3Config } from '@configs/s3.config.js';
 import { schedulerConfig } from '@configs/scheduler.config.js';
@@ -26,6 +27,7 @@ export const configs = [
   googleOauthConfig, // <module:oauth-google>
   lambdaConfig,
   mailConfig,
+  paymentConfig, // <module:payment>
   redisConfig,
   s3Config,
   schedulerConfig,
