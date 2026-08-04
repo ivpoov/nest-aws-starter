@@ -12,7 +12,10 @@ import { WebhookIngestService } from '@modules/payment/services/webhook-ingest.s
 import type { SqsProviderInterface } from '@providers/sqs/interfaces/sqs-provider.interface.js';
 import { describe, expect, it, vi } from 'vitest';
 
-const payment: PaymentConfig = { webhookQueueUrl: 'https://sqs.local/queue/payment-webhooks' };
+const payment: PaymentConfig = {
+  webhookQueueUrl: 'https://sqs.local/queue/payment-webhooks',
+  consumerEnabled: true,
+};
 
 const providerEvent: ProviderEventInterface = {
   providerEventId: 'evt_123',
@@ -59,6 +62,11 @@ function createService(
     upsertReceived: vi
       .fn()
       .mockResolvedValue(options.upsertResult ?? { event: webhookEvent, isNew: true }),
+    findById: vi.fn(),
+    markProcessed: vi.fn(),
+    markSkipped: vi.fn(),
+    markFailed: vi.fn(),
+    recordFailure: vi.fn(),
   };
   const sqsProvider: SqsProviderInterface = {
     sendMessage: vi.fn().mockResolvedValue('message-id'),

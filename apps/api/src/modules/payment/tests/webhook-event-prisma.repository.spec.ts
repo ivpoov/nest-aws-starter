@@ -32,6 +32,8 @@ function createRepository(overrides: Record<string, ReturnType<typeof vi.fn>> = 
   const webhookEvent = {
     create: vi.fn().mockResolvedValue(row),
     findUniqueOrThrow: vi.fn().mockResolvedValue(row),
+    findUnique: vi.fn().mockResolvedValue(row),
+    update: vi.fn().mockResolvedValue(row),
     ...overrides,
   };
   const prisma = { webhookEvent } as unknown as PrismaService;
@@ -104,5 +106,68 @@ describe('WebhookEventPrismaRepository.upsertReceived', () => {
     await expect(
       repository.upsertReceived('STRIPE', 'evt_123', 'CHECKOUT_COMPLETED', payload),
     ).rejects.toBe(other);
+  });
+});
+
+describe('WebhookEventPrismaRepository — status transitions', () => {
+  it('findById maps an existing row to the domain interface', async () => {
+    const { repository } = createRepository();
+
+    const result = await repository.findById(row.id);
+
+    expect(result?.id).toBe(row.id);
+  });
+
+  it('findById returns null when no row matches', async () => {
+    const { repository } = createRepository({ findUnique: vi.fn().mockResolvedValue(null) });
+
+    await expect(repository.findById('missing')).resolves.toBeNull();
+  });
+
+  it('markProcessed sets status PROCESSED and stamps processedAt', async () => {
+    const { repository, webhookEvent } = createRepository();
+
+    await repository.markProcessed(row.id);
+
+    expect(webhookEvent.update).toHaveBeenCalledWith({
+      where: { id: row.id },
+      data: { status: WebhookEventStatusEnum.PROCESSED, processedAt: expect.any(Date) },
+    });
+  });
+
+  it('markSkipped sets status SKIPPED and stamps processedAt', async () => {
+    const { repository, webhookEvent } = createRepository();
+
+    await repository.markSkipped(row.id);
+
+    expect(webhookEvent.update).toHaveBeenCalledWith({
+      where: { id: row.id },
+      data: { status: WebhookEventStatusEnum.SKIPPED, processedAt: expect.any(Date) },
+    });
+  });
+
+  it('markFailed sets status FAILED and stamps processedAt', async () => {
+    const { repository, webhookEvent } = createRepository();
+
+    await repository.markFailed(row.id);
+
+    expect(webhookEvent.update).toHaveBeenCalledWith({
+      where: { id: row.id },
+      data: { status: WebhookEventStatusEnum.FAILED, processedAt: expect.any(Date) },
+    });
+  });
+
+  it('recordFailure increments attempts, sets lastError, and returns the new count', async () => {
+    const { repository, webhookEvent } = createRepository({
+      update: vi.fn().mockResolvedValue({ ...row, attempts: 2 }),
+    });
+
+    const attempts = await repository.recordFailure(row.id, 'boom');
+
+    expect(webhookEvent.update).toHaveBeenCalledWith({
+      where: { id: row.id },
+      data: { attempts: { increment: 1 }, lastError: 'boom' },
+    });
+    expect(attempts).toBe(2);
   });
 });
