@@ -1,0 +1,65 @@
+import { randomUUID } from 'node:crypto';
+import type { ScheduledJobInterface } from '@modules/task-scheduler/interfaces/scheduled-job.interface.js';
+import { ScheduledJobRegistryService } from '@modules/task-scheduler/services/scheduled-job-registry.service.js';
+import { TaskSchedulerRunnerService } from '@modules/task-scheduler/services/task-scheduler-runner.service.js';
+import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { SchedulerRegistry } from '@nestjs/schedule';
+import { REDIS_CLIENT } from '@providers/redis/constants/redis.constants.js';
+import type { RedisClientType } from '@providers/redis/types/redis-client.type.js';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createTestApp } from './app.factory.js';
+
+// Two real Nest apps against one Redis, exactly as the brief asks. Cron
+// wall-time is never awaited: the job is registered post-boot on both
+// instances and its lock-guarded run is triggered directly (the same path
+// SchedulerRegistry's onTick would call), so the outcome is deterministic
+// instead of racing a fast cron interval against test timeouts.
+describe('task scheduler (2 instances, 1 redis)', () => {
+  let appA: NestFastifyApplication;
+  let appB: NestFastifyApplication;
+  let redis: RedisClientType;
+
+  beforeAll(async () => {
+    appA = await createTestApp();
+    appB = await createTestApp();
+    redis = appA.get<RedisClientType>(REDIS_CLIENT);
+  });
+
+  afterAll(async () => {
+    await appA.close();
+    await appB.close();
+  });
+
+  it('wires no real cron jobs by default (SCHEDULER_ENABLED=false in the e2e env)', () => {
+    const schedulerRegistry: SchedulerRegistry = appA.get(SchedulerRegistry);
+
+    expect(schedulerRegistry.getCronJobs().size).toBe(0);
+  });
+
+  it('a job registered on both instances runs exactly once when they race for the same lock', async () => {
+    const jobName: string = `noop-${randomUUID()}`;
+    const counterKey: string = `task-scheduler-e2e:${jobName}`;
+    const job: ScheduledJobInterface = {
+      name: jobName,
+      cronExpression: '* * * * *',
+      run: async (): Promise<void> => {
+        await redis.incr(counterKey);
+      },
+    };
+
+    // Mirrors two processes booting with the same job wiring registered.
+    appA.get(ScheduledJobRegistryService).register(job);
+    appB.get(ScheduledJobRegistryService).register(job);
+
+    const runnerA: TaskSchedulerRunnerService = appA.get(TaskSchedulerRunnerService);
+    const runnerB: TaskSchedulerRunnerService = appB.get(TaskSchedulerRunnerService);
+
+    await Promise.all([runnerA.runJob(job), runnerB.runJob(job)]);
+
+    const executions: string | null = await redis.get(counterKey);
+
+    expect(executions).toBe('1');
+
+    await redis.del(counterKey);
+  });
+});
