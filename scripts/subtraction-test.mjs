@@ -117,8 +117,9 @@ const MODULES = [
     // (models/enums in schema.prisma) and the two `User` back-relation
     // lines strip cleanly.
     id: 'payment',
-    summary: 'Plans, subscriptions, payment transactions, and webhook events (schema).',
-    paths: [],
+    summary:
+      'Plans, subscriptions, payment transactions, and webhook events (schema + core module).',
+    paths: ['apps/api/src/modules/payment'],
     envVars: [],
   },
 ];
