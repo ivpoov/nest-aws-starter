@@ -124,7 +124,7 @@ describe('files', () => {
     const response = await request(app.getHttpServer())
       .post(`/api/v1/files/${upload.fileId}/confirm`)
       .set('authorization', `Bearer ${ownerToken}`)
-      .expect(400);
+      .expect(409);
 
     expect(response.body.code).toBe('FILE_NOT_UPLOADED');
   });
@@ -209,7 +209,7 @@ describe('files', () => {
     const response = await request(app.getHttpServer())
       .get(`/api/v1/files/${upload.fileId}/download-url`)
       .set('authorization', `Bearer ${ownerToken}`)
-      .expect(400);
+      .expect(409);
 
     expect(response.body.code).toBe('FILE_NOT_READY');
   });
