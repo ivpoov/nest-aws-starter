@@ -39,6 +39,7 @@ model User {
   // through — back-relation only, never queried from the User side today.
   impersonatedByMe Session[]    @relation("SessionSignedAsAdmin")
   notes            Note[]
+  files            File[]
 
   @@index([role, status])
   @@index([createdAt])
@@ -125,6 +126,7 @@ enum ActivityType {
   AUTH_NEW_DEVICE
   ADMIN_LOGIN_AS
   CONTACT_RECEIVED
+  FILE_UPLOADED
 }
 
 // Append-only audit trail, driven entirely by domain events — no relation to
@@ -166,4 +168,34 @@ model ContactMessage {
   // Admin inbox cursor: filter by status, page by id (UUIDv7 = creation order).
   @@index([status, id])
   @@map("contact_messages")
+}
+
+enum FileIntent {
+  AVATAR
+  ATTACHMENT
+}
+
+enum FileStatus {
+  PENDING
+  READY
+}
+
+// Formalizes what avatars started: a presigned-upload/confirm/download flow
+// backed by S3, with PENDING rows written before the client has actually put
+// bytes. Orphan PENDING rows (client requests an upload but never confirms)
+// are a known gap — see modules/file/README.md for the v0.4 sweep TODO.
+model File {
+  id          String     @id @default(uuid(7))
+  ownerId     String
+  intent      FileIntent
+  key         String     @unique
+  contentType String
+  size        Int
+  status      FileStatus @default(PENDING)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  owner       User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, id])
+  @@map("files")
 }
