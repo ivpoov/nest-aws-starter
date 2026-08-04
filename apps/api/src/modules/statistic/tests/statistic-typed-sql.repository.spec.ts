@@ -1,7 +1,9 @@
 import type { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import type { StatisticsCountRowInterface } from '@modules/statistic/interfaces/statistics-count-row.interface.js';
 import type { StatisticsDayPointInterface } from '@modules/statistic/interfaces/statistics-day-point.interface.js';
+// <module:payment>
 import type { StatisticsRevenueByPlanRowInterface } from '@modules/statistic/interfaces/statistics-revenue-by-plan-row.interface.js';
+// </module:payment>
 import { StatisticTypedSqlRepository } from '@modules/statistic/repositories/statistic-typed-sql.repository.js';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -74,6 +76,7 @@ describe('StatisticTypedSqlRepository', () => {
     expect(points).toEqual([{ date: '2026-08-03', count: 1 }]);
   });
 
+  // <module:payment>
   it('formats revenueByDay rows as YYYY-MM-DD points, defaulting null amounts to zero', async () => {
     const { repository, queryRawTyped } = createRepository([
       { day: new Date('2026-08-01T00:00:00.000Z'), amountCents: 2000 },
@@ -118,4 +121,5 @@ describe('StatisticTypedSqlRepository', () => {
       { planId: 'plan-2', planName: 'Basic', amountCents: 0 },
     ]);
   });
+  // </module:payment>
 });
