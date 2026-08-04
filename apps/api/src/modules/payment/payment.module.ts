@@ -8,11 +8,13 @@ import {
 } from '@modules/payment/constants/payment.constants.js';
 import { BillingController } from '@modules/payment/controllers/billing.controller.js';
 import { PlanAdminController } from '@modules/payment/controllers/plan-admin.controller.js';
+import { TransactionAdminController } from '@modules/payment/controllers/transaction-admin.controller.js';
 import { WebhookController } from '@modules/payment/controllers/webhook.controller.js';
 import { RequiresSubscriptionGuard } from '@modules/payment/guards/requires-subscription.guard.js';
 import type { SubscriptionLifecycleInterface } from '@modules/payment/interfaces/subscription-lifecycle.interface.js';
 import { SubscriptionExpiryJob } from '@modules/payment/jobs/subscription-expiry.job.js';
 import { planPermissions } from '@modules/payment/permissions/plan.permissions.js';
+import { transactionPermissions } from '@modules/payment/permissions/transaction.permissions.js';
 import { PaymentTransactionPrismaRepository } from '@modules/payment/repositories/payment-transaction-prisma.repository.js';
 import { PlanPrismaRepository } from '@modules/payment/repositories/plan-prisma.repository.js';
 import { SubscriptionPrismaRepository } from '@modules/payment/repositories/subscription-prisma.repository.js';
@@ -23,6 +25,7 @@ import { PaymentWebhookConsumerService } from '@modules/payment/services/payment
 import { PlanAdminService } from '@modules/payment/services/plan-admin.service.js';
 import { SubscriptionService } from '@modules/payment/services/subscription.service.js';
 import { SubscriptionLifecycleService } from '@modules/payment/services/subscription-lifecycle.service.js';
+import { TransactionService } from '@modules/payment/services/transaction.service.js';
 import { WebhookEventDispatcherService } from '@modules/payment/services/webhook-event-dispatcher.service.js';
 import { WebhookIngestService } from '@modules/payment/services/webhook-ingest.service.js';
 import { ScheduledJobRegistryService } from '@modules/task-scheduler/services/scheduled-job-registry.service.js';
@@ -49,8 +52,16 @@ const scheduledJobRegistrationProvider: Provider = {
 // mirrors OauthModule.
 @Global()
 @Module({
-  imports: [CaslModule.forFeature({ permissions: planPermissions })],
-  controllers: [BillingController, WebhookController, PlanAdminController],
+  imports: [
+    CaslModule.forFeature({ permissions: planPermissions }),
+    CaslModule.forFeature({ permissions: transactionPermissions }),
+  ],
+  controllers: [
+    BillingController,
+    WebhookController,
+    PlanAdminController,
+    TransactionAdminController,
+  ],
   providers: [
     PaymentProviderRegistryService,
     BillingService,
@@ -60,6 +71,7 @@ const scheduledJobRegistrationProvider: Provider = {
     PaymentWebhookConsumerService,
     RequiresSubscriptionGuard,
     PlanAdminService,
+    TransactionService,
     { provide: PLAN_REPOSITORY, useClass: PlanPrismaRepository },
     { provide: SUBSCRIPTION_REPOSITORY, useClass: SubscriptionPrismaRepository },
     { provide: WEBHOOK_EVENT_REPOSITORY, useClass: WebhookEventPrismaRepository },
