@@ -6,17 +6,11 @@ import type { SubscriptionLifecycleInterface } from '@modules/payment/interfaces
 import type { WebhookEventInterface } from '@modules/payment/interfaces/webhook-event.interface.js';
 import { Inject, Injectable } from '@nestjs/common';
 
-// Maps a normalized event to its SubscriptionLifecycleInterface target.
-// SUBSCRIPTION_UPDATED and SUBSCRIPTION_CANCELED both route to `cancel` —
-// the interface (plan Task 7) has no other method shaped for a bare
-// "subscription changed" webhook. Stripe's own `customer.subscription.
-// updated` actually fires on ANY field change (plan swap, quantity, trial
-// end, discounts, ...), not only when `cancel_at_period_end` toggles — this
-// dispatcher only acts on it when `canceledAtPeriodEnd` is explicitly true
-// (see dispatchSubscriptionUpdated below) and is a no-op otherwise, so the
-// breadth of the underlying Stripe event is safe to ignore for now. PR 7
-// may extend this mapping (e.g. a real "plan changed" method) once the real
-// lifecycle service exposes more transitions.
+// Maps a normalized event to its SubscriptionLifecycleInterface target. The
+// row's provider (WebhookEventInterface.provider) is threaded through to
+// every lifecycle call because the local Subscription's identity key is the
+// (provider, providerRef) pair — the lifecycle service has no other way to
+// resolve which row a bare subscriptionRef refers to.
 @Injectable()
 export class WebhookEventDispatcherService {
   private readonly logger = new CustomLoggerService(WebhookEventDispatcherService.name);
@@ -37,13 +31,13 @@ export class WebhookEventDispatcherService {
       case NormalizedEventTypeEnum.CHECKOUT_COMPLETED:
         return this.dispatchCheckoutCompleted(event.provider, payload);
       case NormalizedEventTypeEnum.PAYMENT_SUCCEEDED:
-        return this.dispatchPaymentSucceeded(payload);
+        return this.dispatchPaymentSucceeded(event.provider, payload);
       case NormalizedEventTypeEnum.PAYMENT_FAILED:
-        return this.dispatchPaymentFailed(payload);
+        return this.dispatchPaymentFailed(event.provider, payload);
       case NormalizedEventTypeEnum.SUBSCRIPTION_UPDATED:
-        return this.dispatchSubscriptionUpdated(payload);
+        return this.dispatchSubscriptionUpdated(event.provider, payload);
       case NormalizedEventTypeEnum.SUBSCRIPTION_CANCELED:
-        return this.dispatchSubscriptionCanceled(payload);
+        return this.dispatchSubscriptionCanceled(event.provider, payload);
       default:
         this.logger.warn(
           `No dispatch target for normalized event type: ${event.type} (${event.id})`,
@@ -69,7 +63,10 @@ export class WebhookEventDispatcherService {
     });
   }
 
-  private async dispatchPaymentSucceeded(payload: ProviderEventInterface): Promise<void> {
+  private async dispatchPaymentSucceeded(
+    provider: string,
+    payload: ProviderEventInterface,
+  ): Promise<void> {
     if (!payload.subscriptionRef || !payload.transactionData || !payload.periodEndsAt) {
       this.logger.warn('PAYMENT_SUCCEEDED event missing required fields — skipping dispatch');
 
@@ -77,39 +74,77 @@ export class WebhookEventDispatcherService {
     }
 
     await this.lifecycle.recordRenewal({
+      provider,
       subscriptionRef: payload.subscriptionRef,
       periodEndsAt: new Date(payload.periodEndsAt),
       transactionData: payload.transactionData,
     });
   }
 
-  private async dispatchPaymentFailed(payload: ProviderEventInterface): Promise<void> {
+  private async dispatchPaymentFailed(
+    provider: string,
+    payload: ProviderEventInterface,
+  ): Promise<void> {
     if (!payload.subscriptionRef) {
       this.logger.warn('PAYMENT_FAILED event missing subscriptionRef — skipping dispatch');
 
       return;
     }
 
-    await this.lifecycle.markPastDue(payload.subscriptionRef);
+    await this.lifecycle.markPastDue(provider, payload.subscriptionRef);
   }
 
-  private async dispatchSubscriptionUpdated(payload: ProviderEventInterface): Promise<void> {
-    if (!payload.subscriptionRef || payload.canceledAtPeriodEnd !== true) {
-      this.logger.debug('SUBSCRIPTION_UPDATED event carries no cancellation hint — no-op');
+  // Stripe's `customer.subscription.updated` fires on ANY field change (plan
+  // swap, quantity, trial end, discounts, ...), not only when
+  // cancel_at_period_end toggles. canceledAtPeriodEnd=true routes to a
+  // cancel; otherwise the only thing this starter's local row can
+  // meaningfully reconcile is the current period end, so a present
+  // periodEndsAt routes to syncPeriodFromProvider and anything else is a
+  // deliberate no-op — the breadth of the underlying Stripe event is safe to
+  // ignore beyond those two fields for now.
+  private async dispatchSubscriptionUpdated(
+    provider: string,
+    payload: ProviderEventInterface,
+  ): Promise<void> {
+    if (!payload.subscriptionRef) {
+      this.logger.warn('SUBSCRIPTION_UPDATED event missing subscriptionRef — skipping dispatch');
 
       return;
     }
 
-    await this.lifecycle.cancel(payload.subscriptionRef, true);
+    if (payload.canceledAtPeriodEnd === true) {
+      await this.lifecycle.cancel(provider, payload.subscriptionRef, true);
+
+      return;
+    }
+
+    if (!payload.periodEndsAt) {
+      this.logger.debug('SUBSCRIPTION_UPDATED event carries nothing actionable — no-op');
+
+      return;
+    }
+
+    await this.lifecycle.syncPeriodFromProvider(
+      provider,
+      payload.subscriptionRef,
+      new Date(payload.periodEndsAt),
+    );
   }
 
-  private async dispatchSubscriptionCanceled(payload: ProviderEventInterface): Promise<void> {
+  private async dispatchSubscriptionCanceled(
+    provider: string,
+    payload: ProviderEventInterface,
+  ): Promise<void> {
     if (!payload.subscriptionRef) {
       this.logger.warn('SUBSCRIPTION_CANCELED event missing subscriptionRef — skipping dispatch');
 
       return;
     }
 
-    await this.lifecycle.cancel(payload.subscriptionRef, payload.canceledAtPeriodEnd ?? false);
+    await this.lifecycle.cancel(
+      provider,
+      payload.subscriptionRef,
+      payload.canceledAtPeriodEnd ?? false,
+    );
   }
 }
