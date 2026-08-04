@@ -11,6 +11,9 @@ fence markers in the codebase — do not hand-edit; re-run the generator instead
 - `apps/api/src/modules/stripe` (delete)
 - `apps/api/src/configs/stripe.config.ts` (delete)
 - `apps/api/src/configs/payment.config.ts` (delete)
+- `apps/api/prisma/sql/revenueByDay.sql` (delete)
+- `apps/api/prisma/sql/mrrCurrent.sql` (delete)
+- `apps/api/prisma/sql/revenueByPlan.sql` (delete)
 
 ## 2. Strip cross-module references
 
@@ -28,6 +31,21 @@ the marked lines/blocks and the markers themselves.
   - line 16: `import { stripeConfig } from '@configs/stripe.config.js'; // <module:payment>`
   - line 30: `paymentConfig, // <module:payment>`
   - line 36: `stripeConfig, // <module:payment>`
+- `apps/api/src/modules/statistic/interfaces/statistic-repository.interface.ts`
+  - lines 3-5 (block)
+  - lines 13-17 (block)
+- `apps/api/src/modules/statistic/repositories/statistic-typed-sql.repository.ts`
+  - line 4: `mrrCurrent, // <module:payment>`
+  - line 6: `revenueByDay, // <module:payment>`
+  - line 7: `revenueByPlan, // <module:payment>`
+  - lines 12-14 (block)
+  - lines 18-20 (block)
+  - lines 77-110 (block)
+- `apps/api/src/modules/statistic/services/statistic.service.ts`
+  - lines 11-13 (block)
+  - lines 70-72 (block)
+  - lines 89-107 (block)
+  - lines 132-136 (block)
 - `apps/api/prisma/schema.prisma`
   - line 44: `subscriptions       Subscription[] // <module:payment>`
   - line 45: `paymentTransactions PaymentTransaction[] // <module:payment>`
