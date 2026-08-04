@@ -19,6 +19,7 @@ import { PaymentModule } from '@modules/payment/payment.module.js'; // <module:p
 import { PrismaModule } from '@modules/prisma/prisma.module.js';
 import { SessionModule } from '@modules/session/session.module.js';
 import { StatisticModule } from '@modules/statistic/statistic.module.js'; // <module:statistic>
+import { StripeModule } from '@modules/stripe/stripe.module.js'; // <module:payment>
 import { SuspiciousActivityModule } from '@modules/suspicious-activity/suspicious-activity.module.js';
 import { TaskSchedulerModule } from '@modules/task-scheduler/task-scheduler.module.js';
 import { TokenModule } from '@modules/token/token.module.js';
@@ -79,6 +80,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     ContactUsModule, // <module:contact-us>
     ApiKeyModule, // <module:api-key>
     PaymentModule, // <module:payment>
+    StripeModule, // <module:payment>
   ],
   providers: [
     // Order matters: throttling runs before authentication.
