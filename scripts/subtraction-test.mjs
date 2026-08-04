@@ -341,14 +341,7 @@ function subtractionSteps(worktreeDir) {
       'build shared',
       () => run('pnpm', ['--dir', 'packages/shared', 'run', 'build'], { cwd: worktreeDir }),
     ],
-    [
-      'copy generated prisma client',
-      () => {
-        copyGeneratedPrismaClient(worktreeDir);
-
-        return { status: 0, output: '' };
-      },
-    ],
+    ['copy generated prisma client', () => copyGeneratedPrismaClient(worktreeDir)],
     [
       'tsc --noEmit',
       () =>
