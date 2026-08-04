@@ -19,6 +19,7 @@ of the app still type-checks and passes its unit tests — see
 - [`oauth-facebook`](./oauth-facebook.md) — Facebook OAuth login/link provider.
 - [`oauth-discord`](./oauth-discord.md) — Discord OAuth login/link provider.
 - [`cloudfront`](./cloudfront.md) — CloudFront signed download URLs (optional common provider).
+- [`payment`](./payment.md) — Plans, subscriptions, payment transactions, and webhook events (schema + core module).
 
 ## Scope note: v0.1 providers
 
