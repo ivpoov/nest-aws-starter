@@ -78,6 +78,13 @@ function createService(
     findCurrentByUserId: vi
       .fn()
       .mockResolvedValue(options.subscription === undefined ? subscription : options.subscription),
+    findLatestByUserId: vi.fn(),
+    createFromCheckout: vi.fn(),
+    findByProviderRef: vi.fn(),
+    updatePeriodEnd: vi.fn(),
+    updateStatus: vi.fn(),
+    setCanceledAt: vi.fn(),
+    findOverdue: vi.fn(),
   };
   const registry: PaymentProviderRegistryService = new PaymentProviderRegistryService();
 
