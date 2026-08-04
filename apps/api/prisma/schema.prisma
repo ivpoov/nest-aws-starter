@@ -39,8 +39,8 @@ model User {
   // through — back-relation only, never queried from the User side today.
   impersonatedByMe Session[]    @relation("SessionSignedAsAdmin")
   notes            Note[]
-  files            File[]
-  apiKeys          ApiKey[]
+  files            File[] // <module:file>
+  apiKeys          ApiKey[] // <module:api-key>
 
   @@index([role, status])
   @@index([createdAt])
@@ -151,6 +151,7 @@ model Activity {
   @@map("activities")
 }
 
+// <module:contact-us>
 enum ContactMessageStatus {
   OPEN
   RESOLVED
@@ -173,6 +174,9 @@ model ContactMessage {
   @@map("contact_messages")
 }
 
+// </module:contact-us>
+
+// <module:file>
 enum FileIntent {
   AVATAR
   ATTACHMENT
@@ -203,6 +207,9 @@ model File {
   @@map("files")
 }
 
+// </module:file>
+
+// <module:api-key>
 // Long-lived service credentials, deliberately modeled in Postgres rather
 // than as Redis sessions — they are issued once, live for months/years, and
 // must survive independently of any single request/refresh cycle. The
@@ -225,3 +232,5 @@ model ApiKey {
   @@index([ownerId, id])
   @@map("api_keys")
 }
+
+// </module:api-key>
