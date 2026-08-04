@@ -120,6 +120,15 @@ const MODULES = [
       'apps/api/src/modules/stripe',
       'apps/api/src/configs/stripe.config.ts',
       'apps/api/src/configs/payment.config.ts',
+      // Revenue TypedSQL reads payment_transactions/subscriptions/plans
+      // directly (statistic module's own repository, not a feature import —
+      // see docs/conventions/backend.md's TypedSQL section) — the tables
+      // vanish with the module, so the SQL files must too. Whole-file
+      // deletion here; their repository/service call sites are fenced
+      // instead (apps/api/src/modules/statistic).
+      'apps/api/prisma/sql/revenueByDay.sql',
+      'apps/api/prisma/sql/mrrCurrent.sql',
+      'apps/api/prisma/sql/revenueByPlan.sql',
     ],
     envVars: [
       'STRIPE_ENABLED',
