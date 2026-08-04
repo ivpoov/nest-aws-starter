@@ -1,4 +1,6 @@
 import type { AdminLoginAsPayloadInterface } from '@modules/activity/interfaces/admin-login-as-payload.interface.js';
+import type { ApiKeyCreatedPayloadInterface } from '@modules/activity/interfaces/api-key-created-payload.interface.js';
+import type { ApiKeyRevokedPayloadInterface } from '@modules/activity/interfaces/api-key-revoked-payload.interface.js';
 import type { AuthLoginFailedPayloadInterface } from '@modules/activity/interfaces/auth-login-failed-payload.interface.js';
 import type { AuthLoginPayloadInterface } from '@modules/activity/interfaces/auth-login-payload.interface.js';
 import type { AuthLogoutPayloadInterface } from '@modules/activity/interfaces/auth-logout-payload.interface.js';
@@ -17,6 +19,8 @@ import type { UserUnblockedPayloadInterface } from '@modules/activity/interfaces
 import { ActivityService } from '@modules/activity/services/activity.service.js';
 import {
   ADMIN_LOGIN_AS_EVENT,
+  API_KEY_CREATED_EVENT,
+  API_KEY_REVOKED_EVENT,
   AUTH_LOGIN_EVENT,
   AUTH_LOGIN_FAILED_EVENT,
   AUTH_LOGOUT_EVENT,
@@ -180,6 +184,24 @@ export class ActivityListener {
       userId: payload.userId,
       type: ActivityTypeEnum.FILE_UPLOADED,
       meta: { fileId: payload.fileId, intent: payload.intent },
+    });
+  }
+
+  @OnDomainEvent(API_KEY_CREATED_EVENT)
+  public async onApiKeyCreated(payload: ApiKeyCreatedPayloadInterface): Promise<void> {
+    await this.safeRecord({
+      actorId: payload.actorId,
+      type: ActivityTypeEnum.API_KEY_CREATED,
+      meta: { apiKeyId: payload.apiKeyId, name: payload.name },
+    });
+  }
+
+  @OnDomainEvent(API_KEY_REVOKED_EVENT)
+  public async onApiKeyRevoked(payload: ApiKeyRevokedPayloadInterface): Promise<void> {
+    await this.safeRecord({
+      actorId: payload.actorId,
+      type: ActivityTypeEnum.API_KEY_REVOKED,
+      meta: { apiKeyId: payload.apiKeyId },
     });
   }
 
