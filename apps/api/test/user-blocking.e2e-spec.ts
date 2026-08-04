@@ -4,6 +4,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp } from './app.factory.js';
+import { waitForActivity } from './helpers/wait-for-activity.helper.js';
 
 describe('admin user blocking', () => {
   let app: NestFastifyApplication;
@@ -143,15 +144,19 @@ describe('admin user blocking', () => {
   });
 
   it('records a USER_BLOCKED activity row with the reason in meta', async () => {
-    const activities = await request(app.getHttpServer())
-      .get(`/api/v1/admin/activities?type=USER_BLOCKED&userId=${userId}`)
-      .set('authorization', `Bearer ${adminToken}`)
-      .expect(200);
+    const activity = await waitForActivity(async () => {
+      const activities = await request(app.getHttpServer())
+        .get(`/api/v1/admin/activities?type=USER_BLOCKED&userId=${userId}`)
+        .set('authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-    expect(activities.body.items.length).toBeGreaterThanOrEqual(1);
-    expect(activities.body.items[0].userId).toBe(userId);
-    expect(activities.body.items[0].actorId).toBe(adminId);
-    expect(activities.body.items[0].meta).toEqual({ reason: 'Repeated ToS violations' });
+      return activities.body.items[0] ?? null;
+    });
+
+    expect(activity).toBeDefined();
+    expect(activity.userId).toBe(userId);
+    expect(activity.actorId).toBe(adminId);
+    expect(activity.meta).toEqual({ reason: 'Repeated ToS violations' });
   });
 
   it('unblocks a user and restores login', async () => {
@@ -173,15 +178,19 @@ describe('admin user blocking', () => {
   });
 
   it('records a USER_UNBLOCKED activity row with the reason in meta', async () => {
-    const activities = await request(app.getHttpServer())
-      .get(`/api/v1/admin/activities?type=USER_UNBLOCKED&userId=${userId}`)
-      .set('authorization', `Bearer ${adminToken}`)
-      .expect(200);
+    const activity = await waitForActivity(async () => {
+      const activities = await request(app.getHttpServer())
+        .get(`/api/v1/admin/activities?type=USER_UNBLOCKED&userId=${userId}`)
+        .set('authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-    expect(activities.body.items.length).toBeGreaterThanOrEqual(1);
-    expect(activities.body.items[0].userId).toBe(userId);
-    expect(activities.body.items[0].actorId).toBe(adminId);
-    expect(activities.body.items[0].meta).toEqual({ reason: 'False positive' });
+      return activities.body.items[0] ?? null;
+    });
+
+    expect(activity).toBeDefined();
+    expect(activity.userId).toBe(userId);
+    expect(activity.actorId).toBe(adminId);
+    expect(activity.meta).toEqual({ reason: 'False positive' });
   });
 
   it('returns 404 for an unknown user id', async () => {

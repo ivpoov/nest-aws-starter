@@ -4,6 +4,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp } from './app.factory.js';
+import { waitForActivity } from './helpers/wait-for-activity.helper.js';
 
 describe('suspicious activity', () => {
   let app: NestFastifyApplication;
@@ -214,13 +215,17 @@ describe('suspicious activity', () => {
         .send({ email: target.email, password: target.password })
         .expect(200);
 
-      const newIpActivities = await request(app.getHttpServer())
-        .get(`/api/v1/admin/activities?type=AUTH_NEW_DEVICE&userId=${targetId}`)
-        .set('authorization', `Bearer ${adminToken}`)
-        .expect(200);
+      const newIpActivity = await waitForActivity(async () => {
+        const newIpActivities = await request(app.getHttpServer())
+          .get(`/api/v1/admin/activities?type=AUTH_NEW_DEVICE&userId=${targetId}`)
+          .set('authorization', `Bearer ${adminToken}`)
+          .expect(200);
 
-      expect(newIpActivities.body.items.length).toBeGreaterThanOrEqual(1);
-      expect(newIpActivities.body.items[0].userId).toBe(targetId);
+        return newIpActivities.body.items[0] ?? null;
+      });
+
+      expect(newIpActivity).toBeDefined();
+      expect(newIpActivity.userId).toBe(targetId);
     });
   });
 });

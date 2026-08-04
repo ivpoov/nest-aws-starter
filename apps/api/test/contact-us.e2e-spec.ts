@@ -4,6 +4,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp } from './app.factory.js';
+import { waitForActivity } from './helpers/wait-for-activity.helper.js';
 
 interface ContactMessageBodyInterface {
   readonly id: string;
@@ -140,14 +141,16 @@ describe('contact us', () => {
     await submitContact({ subject }, ip).expect(204);
     await findMessageBySubject(subject);
 
-    const activities = await request(app.getHttpServer())
-      .get('/api/v1/admin/activities?type=CONTACT_RECEIVED&limit=100')
-      .set('authorization', `Bearer ${adminToken}`)
-      .expect(200);
+    const matching = await waitForActivity(async () => {
+      const activities = await request(app.getHttpServer())
+        .get('/api/v1/admin/activities?type=CONTACT_RECEIVED&limit=100')
+        .set('authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-    const matching = (
-      activities.body.items as { ip: string | null; meta: { contactMessageId: string } }[]
-    ).find((item) => item.ip === ip);
+      return (
+        activities.body.items as { ip: string | null; meta: { contactMessageId: string } }[]
+      ).find((item) => item.ip === ip);
+    });
 
     expect(matching).toBeDefined();
     expect(matching?.meta.contactMessageId).toBeTruthy();
