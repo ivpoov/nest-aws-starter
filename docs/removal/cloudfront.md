@@ -36,7 +36,9 @@ the marked lines/blocks and the markers themselves.
   - lines 59-63 (block)
   - lines 69-72 (block)
   - line 80: `cloudFrontSigner, // <module:cloudfront>`
-  - lines 218-238 (block)
+  - line 211: `cloudFrontSigner, // <module:cloudfront>`
+  - line 220: `expect(cloudFrontSigner.getSignedUrl).not.toHaveBeenCalled(); // <module:cloudfront>`
+  - lines 223-243 (block)
 
 ## 3. Drop `.env` variables
 
