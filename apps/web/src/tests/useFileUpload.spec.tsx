@@ -99,6 +99,24 @@ describe('useFileUpload', () => {
     expect(result.current.error?.details).toBe('Upload link expired, try again');
   });
 
+  it('surfaces a network error when the PUT never reaches the server', async () => {
+    vi.mocked(apiClient.uploadToUrl).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const { result } = renderHook(() => useFileUpload(FileIntentEnum.ATTACHMENT));
+    const file: File = textFile('report.pdf', 1024, 'application/pdf');
+
+    await act(async (): Promise<void> => {
+      await result.current.upload(file);
+    });
+
+    expect(filesApi.confirmFileUpload).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('error');
+    expect(result.current.error?.code).toBe('FILE_UPLOAD_NETWORK_ERROR');
+    expect(result.current.error?.details).toBe(
+      'Could not reach the upload service, check your connection and try again',
+    );
+  });
+
   it('surfaces a 409 confirm conflict from the backend envelope', async () => {
     vi.mocked(filesApi.confirmFileUpload).mockRejectedValue({
       statusCode: 409,
