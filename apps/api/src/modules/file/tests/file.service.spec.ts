@@ -205,7 +205,11 @@ describe('FileService.confirmUpload', () => {
 
 describe('FileService.getDownloadUrl', () => {
   it('returns a presigned s3 url when cloudfront is disabled', async () => {
-    const { service, s3Provider } = createService({
+    const {
+      service,
+      s3Provider,
+      cloudFrontSigner, // <module:cloudfront>
+    } = createService({
       findById: vi.fn().mockResolvedValue(readyFile),
     });
 
@@ -213,6 +217,7 @@ describe('FileService.getDownloadUrl', () => {
 
     expect(result).toEqual({ downloadUrl: 'https://s3.example/download' });
     expect(s3Provider.getPresignedUrl).toHaveBeenCalledWith(readyFile.key, 300);
+    expect(cloudFrontSigner.getSignedUrl).not.toHaveBeenCalled(); // <module:cloudfront>
   });
 
   // <module:cloudfront>
