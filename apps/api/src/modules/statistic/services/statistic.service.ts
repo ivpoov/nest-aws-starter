@@ -1,3 +1,4 @@
+import { ValidationError } from '@modules/common/errors/validation.error.js';
 import { STATISTIC_REPOSITORY } from '@modules/statistic/constants/statistic.constants.js';
 import {
   buildStatisticSeriesCacheKey,
@@ -8,6 +9,7 @@ import {
   STATISTIC_OVERVIEW_CACHE_TTL_MS,
   STATISTIC_SERIES_CACHE_TTL_MS,
 } from '@modules/statistic/constants/statistic-cache-ttl.constants.js';
+import { STATISTIC_REVENUE_UNAVAILABLE } from '@modules/statistic/constants/statistic-errors.constants.js';
 // <module:payment>
 import { STATISTIC_REVENUE_WINDOW_DAYS } from '@modules/statistic/constants/statistic-revenue.constants.js';
 // </module:payment>
@@ -25,12 +27,24 @@ import { Inject, Injectable } from '@nestjs/common';
 
 @Injectable()
 export class StatisticService {
+  // Payment is a subtraction-removable module (see
+  // scripts/subtraction-test.mjs). Defaults false; flipped true only by the
+  // fenced constructor line below, which is stripped along with payment.
+  // fetchSeriesPoints reads this to hard-fail metric=REVENUE with a coded
+  // 400 instead of silently substituting registration data once the
+  // payment-dependent TypedSQL path is gone.
+  private revenueAvailable: boolean = false;
+
   constructor(
     @Inject(STATISTIC_REPOSITORY)
     private readonly statisticRepository: StatisticRepositoryInterface,
     private readonly statisticCache: StatisticCacheService,
     private readonly onlineUsersService: OnlineUsersService,
-  ) {}
+  ) {
+    // <module:payment>
+    this.revenueAvailable = true;
+    // </module:payment>
+  }
 
   public getOverview(): Promise<StatisticsOverviewInterface> {
     return this.statisticCache.wrap(
@@ -68,7 +82,9 @@ export class StatisticService {
     let revenueByPlan: StatisticsRevenueByPlanRowInterface[] = [];
 
     // <module:payment>
-    [revenue, mrrCents, revenueByPlan] = await this.fetchRevenueData();
+    if (this.revenueAvailable) {
+      [revenue, mrrCents, revenueByPlan] = await this.fetchRevenueData();
+    }
     // </module:payment>
 
     return {
@@ -125,6 +141,8 @@ export class StatisticService {
     metric: StatisticsMetricEnum,
     days: number,
   ): Promise<StatisticsDayPointInterface[]> {
+    this.assertRevenueMetricAvailable(metric);
+
     if (metric === StatisticsMetricEnum.NEW_DEVICES) {
       return this.statisticRepository.findNewDevicesByDay(days);
     }
@@ -136,6 +154,13 @@ export class StatisticService {
     // </module:payment>
 
     return this.statisticRepository.findRegistrationsByDay(days);
+  }
+
+  // Coded 400, not a silent substitution — see `revenueAvailable`.
+  private assertRevenueMetricAvailable(metric: StatisticsMetricEnum): void {
+    if (metric === StatisticsMetricEnum.REVENUE && !this.revenueAvailable) {
+      throw new ValidationError(STATISTIC_REVENUE_UNAVAILABLE);
+    }
   }
 
   private sumCounts(rows: StatisticsCountRowInterface[]): number {
