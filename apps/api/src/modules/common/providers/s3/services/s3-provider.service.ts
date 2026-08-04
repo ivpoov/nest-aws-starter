@@ -1,11 +1,14 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
+  type HeadObjectCommandOutput,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
+import type { HeadObjectResultInterface } from '@providers/s3/interfaces/head-object-result.interface.js';
 import type { S3ProviderInterface } from '@providers/s3/interfaces/s3-provider.interface.js';
 import type { UploadFileDataInterface } from '@providers/s3/interfaces/upload-file-data.interface.js';
 import type { EnabledS3ConfigType } from '@providers/s3/types/enabled-s3-config.type.js';
@@ -68,5 +71,26 @@ export class S3ProviderService implements S3ProviderInterface {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.config.bucketName, Key: key }));
 
     this.logger.log(`Deleted object: ${key}`);
+  }
+
+  public async headObject(key: string): Promise<HeadObjectResultInterface | null> {
+    try {
+      const output: HeadObjectCommandOutput = await this.client.send(
+        new HeadObjectCommand({ Bucket: this.config.bucketName, Key: key }),
+      );
+
+      return {
+        contentLength: output.ContentLength ?? 0,
+        contentType: output.ContentType ?? 'application/octet-stream',
+      };
+    } catch (caught) {
+      if (this.isNotFound(caught)) return null;
+
+      throw caught;
+    }
+  }
+
+  private isNotFound(caught: unknown): boolean {
+    return caught instanceof Error && caught.name === 'NotFound';
   }
 }

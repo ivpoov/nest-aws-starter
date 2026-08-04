@@ -25,7 +25,7 @@ export function LoginPage(): ReactElement {
       const tokens: AuthTokensResponseInterface = await login({ email, password });
 
       setTokens(tokens.accessToken, tokens.refreshToken);
-      await navigate('/users');
+      await navigate('/dashboard');
     } catch (caught) {
       setError(toApiError(caught));
     } finally {

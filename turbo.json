@@ -1,7 +1,11 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
-    "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "env": ["DATABASE_URL"]
+    },
     "lint": {},
     "test": { "dependsOn": ["build"] },
     "test:e2e": {
@@ -20,6 +24,7 @@
         "S3_BUCKET_NAME",
         "S3_ACCESS_KEY",
         "S3_SECRET_KEY",
+        "CLOUDFRONT_ENABLED",
         "SQS_ENABLED",
         "SNS_ENABLED",
         "MAIL_ENABLED",

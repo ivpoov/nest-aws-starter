@@ -7,8 +7,11 @@ import { SessionModule } from '@modules/session/session.module.js';
 import { UserModule } from '@modules/user/user.module.js';
 import { Global, Module } from '@nestjs/common';
 
-// Global so provider modules (google/facebook/discord) can inject the registry
-// with a single import line in AppModule.
+// Global so provider modules (google/facebook/discord) — and any other
+// module, e.g. admin login-as injecting OauthFlowService — can use its
+// exports with a single import line in AppModule. No forwardRef needed
+// anywhere: @Global() makes exports injectable repo-wide regardless of
+// which modules list OauthModule in their own `imports`.
 @Global()
 @Module({
   imports: [UserModule, SessionModule],
@@ -18,6 +21,6 @@ import { Global, Module } from '@nestjs/common';
     OauthFlowService,
     { provide: OAUTH_STORE_REPOSITORY, useClass: OauthStoreRedisRepository },
   ],
-  exports: [OauthProviderRegistryService],
+  exports: [OauthProviderRegistryService, OauthFlowService],
 })
 export class OauthModule {}

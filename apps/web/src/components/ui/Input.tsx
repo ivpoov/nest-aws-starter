@@ -5,6 +5,7 @@ interface InputPropsInterface {
   readonly value: string;
   readonly onChange: (value: string) => void;
   readonly type?: 'text' | 'email' | 'password';
+  readonly maxLength?: number;
   readonly error?: string | null;
 }
 
@@ -13,6 +14,7 @@ export function Input({
   value,
   onChange,
   type = 'text',
+  maxLength,
   error = null,
 }: InputPropsInterface): ReactElement {
   function handleChange(event: ChangeEvent<HTMLInputElement>): void {
@@ -26,6 +28,7 @@ export function Input({
         type={type}
         value={value}
         onChange={handleChange}
+        maxLength={maxLength}
         className="rounded-lg border border-edge bg-surface-raised px-3 py-2 text-content outline-none focus:border-accent"
       />
       {error ? <span className="text-danger">{error}</span> : null}

@@ -1,6 +1,7 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["typedSql"]
 }
 
 datasource db {
@@ -25,18 +26,24 @@ enum AuthMethodType {
 }
 
 model User {
-  id          String       @id @default(uuid(7))
-  role        UserRole     @default(USER)
-  status      UserStatus   @default(ACTIVE)
-  displayName String       @db.VarChar(120)
-  avatarKey   String? // S3 object key, served via presigned URL
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  authMethods AuthMethod[]
-  sessions    Session[]
-  notes       Note[]
+  id               String       @id @default(uuid(7))
+  role             UserRole     @default(USER)
+  status           UserStatus   @default(ACTIVE)
+  displayName      String       @db.VarChar(120)
+  avatarKey        String? // S3 object key, served via presigned URL
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  authMethods      AuthMethod[]
+  sessions         Session[]
+  // Sessions this user (as an admin) is currently impersonating a target
+  // through — back-relation only, never queried from the User side today.
+  impersonatedByMe Session[]    @relation("SessionSignedAsAdmin")
+  notes            Note[]
+  files            File[] // <module:file>
+  apiKeys          ApiKey[] // <module:api-key>
 
   @@index([role, status])
+  @@index([createdAt])
   @@map("users")
 }
 
@@ -64,16 +71,23 @@ model AuthMethod {
 // Postgres, ever: all tokens are TTL'd Redis allowlist keys (see token module);
 // a session is alive iff its Redis refresh key exists.
 model Session {
-  id           String   @id @default(uuid(7))
-  userId       String
-  device       String   @db.VarChar(255) // parsed "Chrome on Fedora"
-  ip           String   @db.VarChar(45)
-  createdAt    DateTime @default(now())
-  lastActiveAt DateTime @default(now())
-  activeUntil  DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String   @id @default(uuid(7))
+  userId          String
+  device          String   @db.VarChar(255) // parsed "Chrome on Fedora"
+  ip              String   @db.VarChar(45)
+  createdAt       DateTime @default(now())
+  lastActiveAt    DateTime @default(now())
+  activeUntil     DateTime
+  // Set only for sessions minted by admin login-as — the token's optional
+  // actAsBy claim is re-derived from this column on every refresh, never
+  // trusted from the old token.
+  signedAsAdminId String?
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  signedAsAdmin   User?    @relation("SessionSignedAsAdmin", fields: [signedAsAdminId], references: [id])
 
   @@index([userId, activeUntil])
+  @@index([signedAsAdminId])
+  @@index([activeUntil])
   @@map("sessions")
 }
 
@@ -97,3 +111,126 @@ model Note {
   @@index([status])
   @@map("notes")
 }
+
+enum ActivityType {
+  USER_REGISTERED
+  USER_OAUTH_REGISTERED
+  AUTH_LOGIN
+  AUTH_LOGIN_FAILED
+  AUTH_LOGOUT
+  AUTH_PASSWORD_CHANGED
+  AUTH_METHOD_LINKED
+  AUTH_METHOD_UNLINKED
+  USER_BLOCKED
+  USER_UNBLOCKED
+  AUTH_SUSPICIOUS_LOGIN
+  AUTH_NEW_DEVICE
+  ADMIN_LOGIN_AS
+  CONTACT_RECEIVED
+  FILE_UPLOADED
+  API_KEY_CREATED
+  API_KEY_REVOKED
+}
+
+// Append-only audit trail, driven entirely by domain events — no relation to
+// User on purpose: rows must survive independently of user lifecycle changes
+// and actorId/userId are both plain references, never enforced FKs.
+model Activity {
+  id        String       @id @default(uuid(7))
+  userId    String?
+  actorId   String?
+  sessionId String?
+  type      ActivityType
+  meta      Json?
+  ip        String?      @db.VarChar(45)
+  createdAt DateTime     @default(now())
+
+  @@index([userId, id])
+  @@index([type, id])
+  @@index([type, createdAt])
+  @@map("activities")
+}
+
+// <module:contact-us>
+enum ContactMessageStatus {
+  OPEN
+  RESOLVED
+}
+
+// Public contact-form submissions — not append-only like Activity: an admin
+// resolving a message is a genuine update, so updatedAt is real.
+model ContactMessage {
+  id        String               @id @default(uuid(7))
+  name      String               @db.VarChar(120)
+  email     String               @db.VarChar(320)
+  subject   String               @db.VarChar(200)
+  body      String               @db.VarChar(5000)
+  status    ContactMessageStatus @default(OPEN)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  // Admin inbox cursor: filter by status, page by id (UUIDv7 = creation order).
+  @@index([status, id])
+  @@map("contact_messages")
+}
+
+// </module:contact-us>
+
+// <module:file>
+enum FileIntent {
+  AVATAR
+  ATTACHMENT
+}
+
+enum FileStatus {
+  PENDING
+  READY
+}
+
+// Formalizes what avatars started: a presigned-upload/confirm/download flow
+// backed by S3, with PENDING rows written before the client has actually put
+// bytes. Orphan PENDING rows (client requests an upload but never confirms)
+// are a known gap — see modules/file/README.md for the v0.4 sweep TODO.
+model File {
+  id          String     @id @default(uuid(7))
+  ownerId     String
+  intent      FileIntent
+  key         String     @unique
+  contentType String
+  size        Int
+  status      FileStatus @default(PENDING)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  owner       User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, id])
+  @@map("files")
+}
+
+// </module:file>
+
+// <module:api-key>
+// Long-lived service credentials, deliberately modeled in Postgres rather
+// than as Redis sessions — they are issued once, live for months/years, and
+// must survive independently of any single request/refresh cycle. The
+// plaintext key is shown exactly once at creation; only its sha256 (unique,
+// used for guard lookups) and a short display prefix are ever persisted.
+// Revocation is a soft delete (revokedAt) — keys are auditable credentials,
+// never hard-deleted.
+model ApiKey {
+  id         String    @id @default(uuid(7))
+  name       String    @db.VarChar(120)
+  hashedKey  String    @unique
+  prefix     String    @db.VarChar(12)
+  ownerId    String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  owner      User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // UUIDv7 cursor pagination scans for the admin list
+  @@index([ownerId, id])
+  @@map("api_keys")
+}
+
+// </module:api-key>

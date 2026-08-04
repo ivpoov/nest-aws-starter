@@ -29,4 +29,8 @@ export class SessionResponseDto implements SessionResponseInterface {
   @ApiProperty({ type: Boolean, example: true })
   @Expose()
   readonly isCurrent: boolean;
+
+  @ApiProperty({ type: Boolean, example: false })
+  @Expose()
+  readonly isImpersonated: boolean;
 }

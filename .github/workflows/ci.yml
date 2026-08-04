@@ -33,13 +33,27 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: docker compose up -d --wait
-      # turbo fans out: api tsc+swc, web/admin tsc + vite build, shared tsc
-      - run: pnpm run build
+      # Migrate BEFORE build: `prisma generate --sql` (inside `pnpm run build`)
+      # type-checks TypedSQL queries against the real schema, not just a
+      # reachable port — a fresh runner's Postgres is empty until this runs.
       - run: pnpm --dir apps/api run db:migrate
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
-      # turbo fans out: api + web + admin vitest suites
+      # turbo fans out: api tsc+swc, web/admin tsc + vite build, shared tsc.
+      # DATABASE_URL is required here too: `prisma generate --sql` type-checks
+      # TypedSQL queries against a live database, not just the schema.
+      - run: pnpm run build
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+      # turbo fans out: api + web + admin vitest suites. `test` depends on
+      # `build` in turbo.json, and DATABASE_URL is in that task's env
+      # allowlist — so it's part of the build cache signature. Without it
+      # here, turbo sees a different signature than the dedicated build step
+      # above, misses cache, and re-runs the api build (prisma generate
+      # --sql) with no DB access.
       - run: pnpm run test
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
       - run: pnpm run test:e2e
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"

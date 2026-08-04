@@ -6,4 +6,7 @@ export interface SessionInterface {
   readonly createdAt: Date;
   readonly lastActiveAt: Date;
   readonly activeUntil: Date;
+  // Admin user id when this session was minted by login-as — the source of
+  // truth for the access token's optional actAsBy claim.
+  readonly signedAsAdminId: string | null;
 }

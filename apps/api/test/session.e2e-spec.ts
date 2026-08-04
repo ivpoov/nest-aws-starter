@@ -57,8 +57,10 @@ describe('sessions and the global auth guard', () => {
       'id',
       'ip',
       'isCurrent',
+      'isImpersonated',
       'lastActiveAt',
     ]);
+    expect(response.body[0].isImpersonated).toBe(false);
   });
 
   it('logout revokes the access token instantly via the allowlist', async () => {

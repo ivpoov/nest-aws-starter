@@ -14,3 +14,13 @@ export const USER_AVATAR_TYPE_NOT_ALLOWED: ErrorArgsInterface = {
   code: 'USER_AVATAR_TYPE_NOT_ALLOWED',
   details: 'Avatar must be a jpeg, png, webp or gif image',
 };
+
+export const USER_CANNOT_BLOCK_SELF: ErrorArgsInterface = {
+  code: 'USER_CANNOT_BLOCK_SELF',
+  details: 'Admins cannot block their own account',
+};
+
+export const ADMIN_CANNOT_IMPERSONATE_ADMIN: ErrorArgsInterface = {
+  code: 'ADMIN_CANNOT_IMPERSONATE_ADMIN',
+  details: 'Admins cannot impersonate other admins',
+};

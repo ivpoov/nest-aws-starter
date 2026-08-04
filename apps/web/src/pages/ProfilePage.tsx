@@ -1,3 +1,4 @@
+import { FileIntentEnum } from '@nest-aws-starter/shared';
 import type { ChangeEvent, ReactElement } from 'react';
 import { useState } from 'react';
 import { Button } from '../components/ui/Button';
@@ -5,10 +6,13 @@ import { Card } from '../components/ui/Card';
 import { ErrorMessage } from '../components/ui/ErrorMessage';
 import { Input } from '../components/ui/Input';
 import { Loader } from '../components/ui/Loader';
+import { ALLOWED_FILE_CONTENT_TYPES } from '../constants/file-upload.constants';
 import { useProfile } from '../hooks/users/useProfile';
 
+const AVATAR_ACCEPT: string = ALLOWED_FILE_CONTENT_TYPES[FileIntentEnum.AVATAR].join(',');
+
 export function ProfilePage(): ReactElement {
-  const { profile, isLoading, error, rename, uploadAvatar } = useProfile();
+  const { profile, isLoading, isUploadingAvatar, error, rename, uploadAvatar } = useProfile();
   const [displayName, setDisplayName] = useState<string | null>(null);
 
   if (isLoading && !profile) return <Loader />;
@@ -37,11 +41,12 @@ export function ProfilePage(): ReactElement {
             </div>
           )}
           <label className="cursor-pointer text-sm text-accent">
-            Change avatar
+            {isUploadingAvatar ? 'Uploading…' : 'Change avatar'}
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
+              accept={AVATAR_ACCEPT}
               onChange={handleFile}
+              disabled={isUploadingAvatar}
               className="hidden"
             />
           </label>

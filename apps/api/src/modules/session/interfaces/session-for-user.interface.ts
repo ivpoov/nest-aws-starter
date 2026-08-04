@@ -2,4 +2,5 @@ import type { SessionInterface } from '@modules/session/interfaces/session.inter
 
 export interface SessionForUserInterface extends SessionInterface {
   readonly isCurrent: boolean;
+  readonly isImpersonated: boolean;
 }

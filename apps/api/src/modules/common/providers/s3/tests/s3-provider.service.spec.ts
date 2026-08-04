@@ -77,4 +77,41 @@ describe('S3ProviderService', () => {
     expect(key).toBe('avatars/1.png');
     expect(send).toHaveBeenCalledOnce();
   });
+
+  it('returns object metadata on a successful head request', async () => {
+    const service: S3ProviderService = new S3ProviderService({
+      isEnabled: true,
+      region: 'us-east-1',
+      bucketName: 'starter',
+      accessKeyId: 'a',
+      secretAccessKey: 'b',
+    });
+    const send = vi.fn().mockResolvedValue({ ContentLength: 1024, ContentType: 'image/png' });
+
+    // biome-ignore lint/suspicious/noExplicitAny: reaching into the private client for mocking
+    (service as any).client.send = send;
+
+    const result = await service.headObject('avatars/1.png');
+
+    expect(result).toEqual({ contentLength: 1024, contentType: 'image/png' });
+  });
+
+  it('returns null when the object does not exist', async () => {
+    const service: S3ProviderService = new S3ProviderService({
+      isEnabled: true,
+      region: 'us-east-1',
+      bucketName: 'starter',
+      accessKeyId: 'a',
+      secretAccessKey: 'b',
+    });
+    const notFound = Object.assign(new Error('not found'), { name: 'NotFound' });
+    const send = vi.fn().mockRejectedValue(notFound);
+
+    // biome-ignore lint/suspicious/noExplicitAny: reaching into the private client for mocking
+    (service as any).client.send = send;
+
+    const result = await service.headObject('missing.png');
+
+    expect(result).toBeNull();
+  });
 });
