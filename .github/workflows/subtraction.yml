@@ -1,0 +1,50 @@
+name: subtraction
+
+# Proves "modular by subtraction": every optional module can be deleted
+# (folder + its fenced cross-references) and the rest of the app still
+# type-checks and passes its unit tests. Too slow to run on every PR — one
+# `pnpm install` + `tsc --noEmit` + unit-test pass per module, in its own
+# git worktree — so this runs nightly and on pushes to release branches only.
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  push:
+    branches: [staging, main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  subtraction:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: docker compose up -d --wait
+      # Build once, in the primary checkout: migrates the DB and produces
+      # apps/api/src/generated/ (Prisma client + TypedSQL), which the
+      # script copies verbatim into every per-module worktree instead of
+      # running `prisma generate --sql` (and standing up a DB) per module.
+      - run: pnpm --dir apps/api run db:migrate
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+      - run: pnpm run build
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+      # Fails loudly per module: the script logs `PASS`/`FAIL` per module as
+      # it goes and exits non-zero if any module failed, so the job fails
+      # and the log scrolls straight to the offending module's tsc/test output.
+      - run: node scripts/subtraction-test.mjs
+      - name: Regenerate removal docs and fail if they drifted
+        run: |
+          node scripts/subtraction-test.mjs --emit-docs
+          git diff --exit-code -- docs/removal
