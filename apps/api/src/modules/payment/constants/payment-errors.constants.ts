@@ -28,3 +28,9 @@ export const PAYMENT_PROVIDER_NOT_FOUND: ErrorArgsInterface = {
   code: 'PAYMENT_PROVIDER_NOT_FOUND',
   details: 'No payment provider is registered under this name',
 };
+
+// Category: ForbiddenError (403) — thrown by RequiresSubscriptionGuard.
+export const PAYMENT_SUBSCRIPTION_REQUIRED: ErrorArgsInterface = {
+  code: 'PAYMENT_SUBSCRIPTION_REQUIRED',
+  details: 'An active subscription is required to access this resource',
+};
