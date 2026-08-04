@@ -14,3 +14,5 @@ export const AUTH_NEW_DEVICE_EVENT = 'auth.new-device';
 export const ADMIN_LOGIN_AS_EVENT = 'admin.login-as';
 export const CONTACT_RECEIVED_EVENT = 'contact.received';
 export const FILE_UPLOADED_EVENT = 'file.uploaded';
+export const API_KEY_CREATED_EVENT = 'api-key.created';
+export const API_KEY_REVOKED_EVENT = 'api-key.revoked';
