@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { ValidationError } from '@modules/common/errors/validation.error.js';
 import type { PaymentProviderInterface } from '@modules/payment/interfaces/payment-provider.interface.js';
 import type { ProviderEventInterface } from '@modules/payment/interfaces/provider-event.interface.js';
@@ -26,6 +26,11 @@ const FAKE_SIGNATURE_INVALID = {
   details: 'The webhook signature could not be verified',
 };
 
+// Captured by the fake provider on every call — the raw-bytes e2e case below
+// reads it to prove request.rawBody reached verifyAndParseWebhook untouched,
+// not a reconstruction (see that test's comment for why this matters).
+let lastRawBodySha256: string | undefined;
+
 const fakeProvider: PaymentProviderInterface = {
   name: 'STRIPE',
   createCheckoutSession: async () => {
@@ -38,6 +43,8 @@ const fakeProvider: PaymentProviderInterface = {
     rawBody: Buffer,
     signature: string,
   ): Promise<ProviderEventInterface> => {
+    lastRawBodySha256 = createHash('sha256').update(rawBody).digest('hex');
+
     if (signature !== VALID_SIGNATURE) throw new ValidationError(FAKE_SIGNATURE_INVALID);
 
     return JSON.parse(rawBody.toString('utf-8')) as ProviderEventInterface;
@@ -75,6 +82,39 @@ describe('webhooks (fake stripe provider)', () => {
       );
     });
   }
+
+  // Proves the raw-body pipe end to end, not just that JSON round-trips.
+  // supertest's .send(object) would serialize deterministically either way
+  // (real Fastify rawBody vs. a bug reconstructing it via
+  // JSON.stringify(request.body)), so a fixture built from a plain object
+  // can't distinguish a byte-identical pipe from a "re-stringified but
+  // semantically equal" one. This fixture is deliberately hostile to that
+  // reconstruction: numeric-string keys out of ascending order get pulled to
+  // the front by JS's integer-key enumeration rule, and the stray whitespace
+  // is collapsed — so JSON.stringify(JSON.parse(raw)) never equals raw. If
+  // request.rawBody ever regressed to a reconstruction, the provider's
+  // received bytes would hash differently from what was actually sent.
+  it('delivers the exact raw bytes to the provider', async () => {
+    const providerEventId = `evt_e2e_raw_${randomUUID()}`;
+    const rawFixture =
+      `{"2": "c",  "1":"b",\n"providerEventId":"${providerEventId}",` +
+      `"type":  "CHECKOUT_COMPLETED", "0":"a"}`;
+
+    expect(JSON.stringify(JSON.parse(rawFixture))).not.toBe(rawFixture);
+
+    const expectedSha256: string = createHash('sha256').update(rawFixture, 'utf-8').digest('hex');
+
+    lastRawBodySha256 = undefined;
+
+    await request(app.getHttpServer())
+      .post('/api/v1/webhooks/stripe')
+      .set('content-type', 'application/json')
+      .set('stripe-signature', VALID_SIGNATURE)
+      .send(rawFixture)
+      .expect(200);
+
+    expect(lastRawBodySha256).toBe(expectedSha256);
+  });
 
   it('replays the same fixture twice: one row, one queue message', async () => {
     const providerEventId = `evt_e2e_${randomUUID()}`;
