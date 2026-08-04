@@ -1,0 +1,16 @@
+{
+  "id": "evt_test_invoice_failed",
+  "type": "invoice.payment_failed",
+  "data": {
+    "object": {
+      "id": "in_test_failed_1",
+      "amount_due": 1999,
+      "currency": "usd",
+      "parent": {
+        "subscription_details": {
+          "subscription": "sub_test_1"
+        }
+      }
+    }
+  }
+}

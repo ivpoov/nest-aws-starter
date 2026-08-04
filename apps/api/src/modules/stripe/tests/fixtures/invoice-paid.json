@@ -1,0 +1,26 @@
+{
+  "id": "evt_test_invoice_paid",
+  "type": "invoice.paid",
+  "data": {
+    "object": {
+      "id": "in_test_paid_1",
+      "amount_paid": 1999,
+      "currency": "usd",
+      "parent": {
+        "subscription_details": {
+          "subscription": "sub_test_1"
+        }
+      },
+      "lines": {
+        "data": [
+          {
+            "period": {
+              "start": 1750000000,
+              "end": 1752678400
+            }
+          }
+        ]
+      }
+    }
+  }
+}
