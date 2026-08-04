@@ -12,6 +12,7 @@ import { s3Config } from '@configs/s3.config.js';
 import { schedulerConfig } from '@configs/scheduler.config.js';
 import { snsConfig } from '@configs/sns.config.js';
 import { sqsConfig } from '@configs/sqs.config.js';
+import { stripeConfig } from '@configs/stripe.config.js'; // <module:payment>
 import { suspiciousActivityConfig } from '@configs/suspicious-activity.config.js';
 import { webAppConfig } from '@configs/web-app.config.js';
 
@@ -30,6 +31,7 @@ export const configs = [
   schedulerConfig,
   snsConfig,
   sqsConfig,
+  stripeConfig, // <module:payment>
   suspiciousActivityConfig,
   webAppConfig,
 ];
