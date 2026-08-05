@@ -4,6 +4,7 @@ import {
 } from '@nest-aws-starter/shared';
 import type { ReactElement } from 'react';
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { ContactMessageDrawer } from '../components/Contact/ContactMessageDrawer';
 import { ContactStatusFilter } from '../components/Contact/ContactStatusFilter';
 import { Badge } from '../components/ui/Badge';
@@ -29,10 +30,30 @@ const COLUMNS: Array<TableColumnInterface<ContactMessageResponseInterface>> = [
 
 export function InboxPage(): ReactElement {
   const [status, setStatus] = useState<ContactMessageStatusEnum | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Deep link from a CONTACT_MESSAGE notification (see
+  // resolveNotificationLink.ts). There is no fetch-by-id endpoint, so this
+  // only actually opens the drawer once the id shows up in a loaded page —
+  // `selectedMessage` below already tolerates an id with no match (renders
+  // nothing), so no extra loading state is needed here.
+  const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('messageId'));
   const { messages, hasMore, isLoading, error, loadMore, reload } = useContactMessages(status);
   const selectedMessage: ContactMessageResponseInterface | null =
     messages.find((message): boolean => message.id === selectedId) ?? null;
+
+  function closeDrawer(): void {
+    setSelectedId(null);
+    setSearchParams(
+      (current: URLSearchParams): URLSearchParams => {
+        const next: URLSearchParams = new URLSearchParams(current);
+
+        next.delete('messageId');
+
+        return next;
+      },
+      { replace: true },
+    );
+  }
 
   if (error && messages.length === 0) return <ErrorMessage error={error} onRetry={reload} />;
 
@@ -56,7 +77,7 @@ export function InboxPage(): ReactElement {
       ) : null}
       <ContactMessageDrawer
         message={selectedMessage}
-        onClose={(): void => setSelectedId(null)}
+        onClose={closeDrawer}
         onStatusChanged={(): void => void reload()}
       />
     </div>
