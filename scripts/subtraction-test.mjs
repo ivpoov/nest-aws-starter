@@ -164,13 +164,14 @@ const MODULES = [
     // as the dispatcher/history API/email digest land in the same folder.
     id: 'notification',
     summary:
-      'Notification/receipt/preference schema, WS gateway, and the persist-first dispatcher ' +
-      '(IN_APP only — email channel and history API are PR 4/5).',
+      'Notification/receipt/preference schema, WS gateway, the persist-first dispatcher, and the ' +
+      'history API (list/unread-count/mark-read/read-all) — IN_APP only, email digest is PR 5.',
     paths: [
       'apps/api/src/modules/notification',
       'apps/api/src/configs/websocket.config.ts',
       'apps/api/test/websocket.e2e-spec.ts',
       'apps/api/test/notification-dispatcher.e2e-spec.ts',
+      'apps/api/test/notification-api.e2e-spec.ts',
     ],
     envVars: ['WEBSOCKET_ENABLED', 'WEBSOCKET_HEARTBEAT_INTERVAL_MS'],
   },
