@@ -124,7 +124,7 @@ describe('webhook consumer (real postgres/redis/localstack, manual drive)', () =
     dispatchSpy.mockRestore();
   });
 
-  it('increments attempts on failure and marks FAILED (message deleted) at the 5th', async () => {
+  it('increments attempts on failure, marks FAILED, and notifies admins at the 5th', async () => {
     const seeded = await seedEvent(NormalizedEventTypeEnum.CHECKOUT_COMPLETED, {
       checkoutData: { userId: 'user-1', planId: 'plan-1', customerRef: 'cus_1' },
     });
@@ -150,6 +150,25 @@ describe('webhook consumer (real postgres/redis/localstack, manual drive)', () =
 
     expect(finalRow.attempts).toBe(5);
     expect(finalRow.status).toBe(WebhookEventStatusEnum.FAILED);
+
+    // <module:notification>
+    // The FAILED ceiling emits WEBHOOK_FAILED_EVENT, which the notification
+    // module's dispatcher (a separate, subtractable module — see
+    // apps/api/src/modules/notification) turns into a single ADMIN-audience
+    // row. Proven here rather than in the notification module's own e2e
+    // suite because this is the one real emit site for that event.
+    const notification = await waitForActivity(() =>
+      prisma.notification.findFirst({
+        where: { type: 'WEBHOOK_FAILED', meta: { path: ['webhookEventId'], equals: seeded.id } },
+      }),
+    );
+
+    expect(notification).toMatchObject({
+      audience: 'ADMIN',
+      userId: null,
+      type: 'WEBHOOK_FAILED',
+    });
+    // </module:notification>
 
     const remaining: SqsMessageInterface[] = await sqs.receiveMessages(queueUrl, 10);
 
