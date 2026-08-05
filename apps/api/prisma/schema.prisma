@@ -197,7 +197,8 @@ enum FileStatus {
 // Formalizes what avatars started: a presigned-upload/confirm/download flow
 // backed by S3, with PENDING rows written before the client has actually put
 // bytes. Orphan PENDING rows (client requests an upload but never confirms)
-// are a known gap — see modules/file/README.md for the v0.4 sweep TODO.
+// are swept by OrphanFileSweepJob (modules/file/jobs) — see
+// modules/file/README.md.
 model File {
   id          String     @id @default(uuid(7))
   ownerId     String
@@ -211,6 +212,8 @@ model File {
   owner       User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   @@index([ownerId, id])
+  // Backs OrphanFileSweepJob's findStalePending(cutoff) query.
+  @@index([status, createdAt])
   @@map("files")
 }
 
