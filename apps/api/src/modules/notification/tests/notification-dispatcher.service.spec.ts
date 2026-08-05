@@ -264,6 +264,34 @@ describe('NotificationDispatcherService', () => {
       });
       expect(to).toHaveBeenCalledWith(ADMIN_ROOM);
     });
+
+    it('webhook.failed -> WEBHOOK_FAILED, ADMIN audience, admins room', async () => {
+      const { dispatcher, create, to } = createDispatcher();
+
+      await dispatcher.onWebhookFailed({
+        webhookEventId: 'webhook-1',
+        provider: 'STRIPE',
+        type: 'PAYMENT_FAILED',
+        attempts: 5,
+        lastError: 'lifecycle unreachable',
+      });
+
+      expect(create).toHaveBeenCalledWith({
+        audience: NotificationAudienceEnum.ADMIN,
+        userId: null,
+        type: NotificationTypeEnum.WEBHOOK_FAILED,
+        title: 'Webhook processing failed',
+        body: 'A STRIPE webhook (PAYMENT_FAILED) failed after 5 attempt(s).',
+        meta: {
+          webhookEventId: 'webhook-1',
+          provider: 'STRIPE',
+          type: 'PAYMENT_FAILED',
+          attempts: 5,
+          lastError: 'lifecycle unreachable',
+        },
+      });
+      expect(to).toHaveBeenCalledWith(ADMIN_ROOM);
+    });
   });
 
   describe('persist-first ordering and containment', () => {

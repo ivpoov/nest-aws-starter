@@ -11,6 +11,7 @@ import {
   SUBSCRIPTION_PAST_DUE_EVENT,
   SUBSCRIPTION_RENEWED_EVENT,
   USER_BLOCKED_EVENT,
+  WEBHOOK_FAILED_EVENT,
 } from '@modules/event/constants/event-names.constants.js';
 import { OnDomainEvent } from '@modules/event/decorators/on-domain-event.decorator.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
@@ -24,6 +25,7 @@ import { buildSubscriptionEndedContent } from '@modules/notification/builders/su
 import { buildSubscriptionRenewedContent } from '@modules/notification/builders/subscription-renewed.builder.js';
 import { buildSuspiciousLoginContent } from '@modules/notification/builders/suspicious-login.builder.js';
 import { buildUserBlockedContent } from '@modules/notification/builders/user-blocked.builder.js';
+import { buildWebhookFailedContent } from '@modules/notification/builders/webhook-failed.builder.js';
 import { NOTIFICATION_REPOSITORY } from '@modules/notification/constants/notification.constants.js';
 import { NOTIFICATION_EVENT } from '@modules/notification/constants/notification-events.constants.js';
 import {
@@ -46,6 +48,7 @@ import type { SubscriptionExpiredPayloadInterface } from '@modules/notification/
 import type { SubscriptionPastDuePayloadInterface } from '@modules/notification/interfaces/subscription-past-due-payload.interface.js';
 import type { SubscriptionRenewedPayloadInterface } from '@modules/notification/interfaces/subscription-renewed-payload.interface.js';
 import type { UserBlockedPayloadInterface } from '@modules/notification/interfaces/user-blocked-payload.interface.js';
+import type { WebhookFailedPayloadInterface } from '@modules/notification/interfaces/webhook-failed-payload.interface.js';
 import {
   NotificationAudienceEnum,
   type NotificationResponseInterface,
@@ -54,17 +57,16 @@ import {
 import { Inject, Injectable } from '@nestjs/common';
 
 // The only bus subscriber in the module (task-3-brief.md's event -> type
-// matrix). Every handler below funnels into dispatch(): persist first, fan
-// out second — a channel/socket failure must never lose or roll back the
-// row (backend.md's "persist-first" rule), and a persistence failure must
-// never break the emitting feature (same containment pattern as
-// ActivityListener.safeRecord).
+// matrix, all 11 rows mapped). Every handler below funnels into dispatch():
+// persist first, fan out second — a channel/socket failure must never lose
+// or roll back the row (backend.md's "persist-first" rule), and a
+// persistence failure must never break the emitting feature (same
+// containment pattern as ActivityListener.safeRecord).
 //
-// webhook.failed / WEBHOOK_FAILED is a matrix row with no backing event —
-// there is no WEBHOOK_FAILED_EVENT in event-names.constants.ts and no
-// existing emit site in the payment webhook consumer. Per this PR's brief,
-// wiring it up would mean touching a feature service, which is out of
-// scope here — left unmapped, see task-3-report.md.
+// webhook.failed's WEBHOOK_FAILED_EVENT is emitted by
+// PaymentWebhookConsumerService at the FAILED ceiling (payment module) —
+// the release plan's matrix line, not this module's brief, governs that
+// emit site; see task-3-report.md for the correction.
 @Injectable()
 export class NotificationDispatcherService {
   private readonly logger = new CustomLoggerService(NotificationDispatcherService.name);
@@ -196,6 +198,16 @@ export class NotificationDispatcherService {
       userId: null,
       type: NotificationTypeEnum.CONTACT_MESSAGE,
       content: buildContactMessageContent(payload),
+    });
+  }
+
+  @OnDomainEvent(WEBHOOK_FAILED_EVENT)
+  public async onWebhookFailed(payload: WebhookFailedPayloadInterface): Promise<void> {
+    await this.dispatch({
+      audience: NotificationAudienceEnum.ADMIN,
+      userId: null,
+      type: NotificationTypeEnum.WEBHOOK_FAILED,
+      content: buildWebhookFailedContent(payload),
     });
   }
 
