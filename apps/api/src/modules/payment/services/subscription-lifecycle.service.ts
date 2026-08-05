@@ -116,6 +116,13 @@ export class SubscriptionLifecycleService implements SubscriptionLifecycleInterf
         providerRef: data.transactionData.providerRef,
       });
 
+    // Even on replay (isNew=false), the period extension must still run: it is
+    // monotonic-guarded in the repository, so a harmless no-op if already applied,
+    // and load-bearing if a prior attempt recorded the transaction but crashed
+    // before extending the period (see subscription-lifecycle.service.ts's
+    // binding idempotency contract).
+    await this.subscriptionRepository.updatePeriodEnd(subscription.id, data.periodEndsAt);
+
     if (!txResult.isNew) {
       this.logger.debug(
         `Renewal replay — transaction already recorded: ${txResult.transaction.id}`,
@@ -123,8 +130,6 @@ export class SubscriptionLifecycleService implements SubscriptionLifecycleInterf
 
       return;
     }
-
-    await this.subscriptionRepository.updatePeriodEnd(subscription.id, data.periodEndsAt);
 
     this.logger.log(`Subscription renewed: ${subscription.id}`);
     this.eventBus.emit(SUBSCRIPTION_RENEWED_EVENT, {
