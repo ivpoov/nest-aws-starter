@@ -163,11 +163,14 @@ const MODULES = [
     // briefly broke the subtracted tree). Tasks 3-5 extend `paths` further
     // as the dispatcher/history API/email digest land in the same folder.
     id: 'notification',
-    summary: 'Notification/receipt/preference history, WS gateway, and email digest (schema).',
+    summary:
+      'Notification/receipt/preference schema, WS gateway, and the persist-first dispatcher ' +
+      '(IN_APP only — email channel and history API are PR 4/5).',
     paths: [
       'apps/api/src/modules/notification',
       'apps/api/src/configs/websocket.config.ts',
       'apps/api/test/websocket.e2e-spec.ts',
+      'apps/api/test/notification-dispatcher.e2e-spec.ts',
     ],
     envVars: ['WEBSOCKET_ENABLED', 'WEBSOCKET_HEARTBEAT_INTERVAL_MS'],
   },
