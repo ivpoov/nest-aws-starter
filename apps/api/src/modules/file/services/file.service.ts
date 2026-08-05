@@ -151,19 +151,48 @@ export class FileService {
       FILE_SWEEP_BATCH_LIMIT,
     );
     const outcomes: FileSweepOutcomeEnum[] = [];
+    let failedCount: number = 0;
 
     for (const file of stale) {
-      outcomes.push(await this.sweepOne(file));
+      failedCount += await this.sweepOneContained(file, outcomes);
     }
 
-    const result: FileSweepResultInterface = this.tallySweepOutcomes(outcomes);
+    const result: FileSweepResultInterface = { ...this.tallySweepOutcomes(outcomes), failedCount };
 
     this.logger.log(
       `Orphan file sweep: scanned=${stale.length} ready=${result.markedReadyCount} ` +
-        `deletedAbsent=${result.deletedAbsentCount} deletedInvalid=${result.deletedInvalidCount}`,
+        `deletedAbsent=${result.deletedAbsentCount} deletedInvalid=${result.deletedInvalidCount} ` +
+        `failed=${result.failedCount}`,
     );
 
     return result;
+  }
+
+  // A transient failure (S3 throttle/timeout — headObject rethrows anything
+  // that isn't a 404) on one row must never abort the rest of a 200-row
+  // batch: the failing row stays PENDING and is retried on the next run,
+  // same containment shape as WebhookRetryService.enqueue on the payment
+  // side. Returns 1/0 instead of throwing so the caller's loop is a plain
+  // sum, not a nested try/catch.
+  private async sweepOneContained(
+    file: FileInterface,
+    outcomes: FileSweepOutcomeEnum[],
+  ): Promise<number> {
+    try {
+      outcomes.push(await this.sweepOne(file));
+
+      return 0;
+    } catch (caught) {
+      this.logSweepFailure(file.id, caught);
+
+      return 1;
+    }
+  }
+
+  private logSweepFailure(fileId: string, caught: unknown): void {
+    const stack: string | undefined = caught instanceof Error ? caught.stack : undefined;
+
+    this.logger.error(`Orphan sweep failed for file ${fileId}, left for the next run`, stack);
   }
 
   // Object present but failing the same allowlist/size check confirmUpload
@@ -199,7 +228,9 @@ export class FileService {
     return FileSweepOutcomeEnum.MARKED_READY;
   }
 
-  private tallySweepOutcomes(outcomes: FileSweepOutcomeEnum[]): FileSweepResultInterface {
+  private tallySweepOutcomes(
+    outcomes: FileSweepOutcomeEnum[],
+  ): Omit<FileSweepResultInterface, 'failedCount'> {
     return {
       markedReadyCount: this.countOutcome(outcomes, FileSweepOutcomeEnum.MARKED_READY),
       deletedAbsentCount: this.countOutcome(outcomes, FileSweepOutcomeEnum.DELETED_ABSENT),
