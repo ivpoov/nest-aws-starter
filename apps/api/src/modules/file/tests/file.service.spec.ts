@@ -277,6 +277,7 @@ describe('FileService.sweepOrphans', () => {
       markedReadyCount: 0,
       deletedAbsentCount: 0,
       deletedInvalidCount: 0,
+      failedCount: 0,
     });
     expect(fileRepository.findStalePending).toHaveBeenCalledWith(expect.any(Date), 200);
   });
@@ -293,7 +294,12 @@ describe('FileService.sweepOrphans', () => {
 
     const result = await service.sweepOrphans();
 
-    expect(result).toEqual({ markedReadyCount: 1, deletedAbsentCount: 0, deletedInvalidCount: 0 });
+    expect(result).toEqual({
+      markedReadyCount: 1,
+      deletedAbsentCount: 0,
+      deletedInvalidCount: 0,
+      failedCount: 0,
+    });
     expect(fileRepository.markReady).toHaveBeenCalledWith(pendingFile.id, {
       contentType: 'application/pdf',
       size: 1024,
@@ -315,7 +321,12 @@ describe('FileService.sweepOrphans', () => {
 
     const result = await service.sweepOrphans();
 
-    expect(result).toEqual({ markedReadyCount: 0, deletedAbsentCount: 1, deletedInvalidCount: 0 });
+    expect(result).toEqual({
+      markedReadyCount: 0,
+      deletedAbsentCount: 1,
+      deletedInvalidCount: 0,
+      failedCount: 0,
+    });
     expect(fileRepository.deleteById).toHaveBeenCalledWith(pendingFile.id);
     expect(s3Provider.delete).not.toHaveBeenCalled();
     expect(fileRepository.markReady).not.toHaveBeenCalled();
@@ -336,7 +347,12 @@ describe('FileService.sweepOrphans', () => {
 
     const result = await service.sweepOrphans();
 
-    expect(result).toEqual({ markedReadyCount: 0, deletedAbsentCount: 0, deletedInvalidCount: 1 });
+    expect(result).toEqual({
+      markedReadyCount: 0,
+      deletedAbsentCount: 0,
+      deletedInvalidCount: 1,
+      failedCount: 0,
+    });
     expect(s3Provider.delete).toHaveBeenCalledWith(pendingFile.key);
     expect(fileRepository.deleteById).toHaveBeenCalledWith(pendingFile.id);
     expect(fileRepository.markReady).not.toHaveBeenCalled();
@@ -354,7 +370,12 @@ describe('FileService.sweepOrphans', () => {
 
     const result = await service.sweepOrphans();
 
-    expect(result).toEqual({ markedReadyCount: 0, deletedAbsentCount: 0, deletedInvalidCount: 1 });
+    expect(result).toEqual({
+      markedReadyCount: 0,
+      deletedAbsentCount: 0,
+      deletedInvalidCount: 1,
+      failedCount: 0,
+    });
     expect(s3Provider.delete).toHaveBeenCalledWith(pendingFile.key);
     expect(fileRepository.deleteById).toHaveBeenCalledWith(pendingFile.id);
   });
@@ -388,6 +409,42 @@ describe('FileService.sweepOrphans', () => {
 
     const result = await service.sweepOrphans();
 
-    expect(result).toEqual({ markedReadyCount: 1, deletedAbsentCount: 1, deletedInvalidCount: 1 });
+    expect(result).toEqual({
+      markedReadyCount: 1,
+      deletedAbsentCount: 1,
+      deletedInvalidCount: 1,
+      failedCount: 0,
+    });
+  });
+
+  // Regression: a transient S3 error (throttle/timeout) on one row must not
+  // abort the batch — the failing row is skipped (left PENDING for the next
+  // run) and every remaining row still gets swept, same containment shape
+  // as WebhookRetryService.enqueue on the payment side.
+  it('continues sweeping remaining rows when headObject rejects for an earlier row', async () => {
+    const failingFile: FileInterface = { ...pendingFile, id: 'file-failing', key: 'files/failing' };
+    const okFile: FileInterface = { ...pendingFile, id: 'file-ok', key: 'files/ok' };
+    const headObject = vi.fn().mockImplementation((key: string) => {
+      if (key === failingFile.key) return Promise.reject(new Error('S3 throttled'));
+
+      return Promise.resolve({ contentLength: 1024, contentType: 'application/pdf' });
+    });
+    const { service, fileRepository } = createService(
+      { findStalePending: vi.fn().mockResolvedValue([failingFile, okFile]) },
+      { headObject },
+    );
+
+    const result = await service.sweepOrphans();
+
+    expect(result).toEqual({
+      markedReadyCount: 1,
+      deletedAbsentCount: 0,
+      deletedInvalidCount: 0,
+      failedCount: 1,
+    });
+    expect(headObject).toHaveBeenCalledWith(failingFile.key);
+    expect(headObject).toHaveBeenCalledWith(okFile.key);
+    expect(fileRepository.markReady).toHaveBeenCalledWith(okFile.id, expect.anything());
+    expect(fileRepository.deleteById).not.toHaveBeenCalledWith(failingFile.id);
   });
 });
