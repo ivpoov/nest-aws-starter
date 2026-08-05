@@ -50,6 +50,8 @@ export * from './notes/interfaces/note-list-response.interface.js';
 export * from './notes/interfaces/note-response.interface.js';
 export * from './notes/interfaces/update-note-request.interface.js';
 export * from './notes/types/note-error-code.type.js';
+export * from './notifications/enums/notification-audience.enum.js';
+export * from './notifications/enums/notification-type.enum.js';
 export * from './payments/constants/payment-error-codes.constants.js';
 export * from './payments/enums/subscription-status.enum.js';
 export * from './payments/enums/transaction-status.enum.js';
