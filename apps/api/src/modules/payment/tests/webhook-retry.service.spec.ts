@@ -126,6 +126,59 @@ describe('WebhookRetryService.sweep', () => {
     expect(result.staleReceivedRetriedCount).toBe(1);
   });
 
+  it('does not double-enqueue a row that is both freshly-reset by retryFailed and older than the stale cutoff', async () => {
+    // Stateful fake modeling real DB semantics: findStaleReceived only
+    // matches rows currently RECEIVED; markRetryQueued flips FAILED->RECEIVED
+    // in place without touching createdAt. A row starting FAILED with an old
+    // createdAt is "stale" by the RECEIVED query's cutoff the instant it gets
+    // reset — proving the fix requires running the stale sweep BEFORE the
+    // reset happens, not just passing the right args to each query.
+    const oldCreatedAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const row: { status: WebhookEventStatusEnum; event: WebhookEventInterface } = {
+      status: WebhookEventStatusEnum.FAILED,
+      event: makeEvent({ id: 'evt-both', createdAt: oldCreatedAt, attempts: 1 }),
+    };
+    const webhookEventRepository: WebhookEventRepositoryInterface = {
+      upsertReceived: vi.fn(),
+      findById: vi.fn(),
+      markProcessed: vi.fn(),
+      markSkipped: vi.fn(),
+      markFailed: vi.fn(),
+      recordFailure: vi.fn(),
+      findRetryableFailed: vi
+        .fn()
+        .mockImplementation(async (cutoff: Date, maxAttempts: number) =>
+          row.status === WebhookEventStatusEnum.FAILED &&
+          row.event.createdAt < cutoff &&
+          row.event.attempts < maxAttempts
+            ? [row.event]
+            : [],
+        ),
+      findStaleReceived: vi
+        .fn()
+        .mockImplementation(async (cutoff: Date) =>
+          row.status === WebhookEventStatusEnum.RECEIVED && row.event.createdAt < cutoff
+            ? [row.event]
+            : [],
+        ),
+      markRetryQueued: vi.fn().mockImplementation(async () => {
+        row.status = WebhookEventStatusEnum.RECEIVED;
+      }),
+    };
+    const sqsProvider: SqsProviderInterface = {
+      sendMessage: vi.fn().mockResolvedValue('message-id'),
+      receiveMessages: vi.fn(),
+      deleteMessage: vi.fn(),
+    };
+    const service = new WebhookRetryService(webhookEventRepository, sqsProvider, payment);
+
+    const result = await service.sweep();
+
+    expect(sqsProvider.sendMessage).toHaveBeenCalledTimes(1);
+    expect(result.staleReceivedRetriedCount).toBe(0);
+    expect(result.failedRetriedCount).toBe(1);
+  });
+
   it('swallows an enqueue failure for one event without aborting the rest of the batch', async () => {
     const first = makeEvent({ id: 'evt-1' });
     const second = makeEvent({ id: 'evt-2' });
