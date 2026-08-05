@@ -27,7 +27,10 @@ import { buildSuspiciousLoginContent } from '@modules/notification/builders/susp
 import { buildUserBlockedContent } from '@modules/notification/builders/user-blocked.builder.js';
 import { buildWebhookFailedContent } from '@modules/notification/builders/webhook-failed.builder.js';
 import { NOTIFICATION_REPOSITORY } from '@modules/notification/constants/notification.constants.js';
-import { NOTIFICATION_EVENT } from '@modules/notification/constants/notification-events.constants.js';
+import {
+  NOTIFICATION_EVENT,
+  UNREAD_COUNT_EVENT,
+} from '@modules/notification/constants/notification-events.constants.js';
 import {
   ADMIN_ROOM,
   buildUserRoom,
@@ -241,7 +244,9 @@ export class NotificationDispatcherService {
   }
 
   // Channel failures log a warning and never roll back the already-persisted
-  // row (backend.md's binding "persist-first" rule).
+  // row (backend.md's binding "persist-first" rule). The unread-count push
+  // is a separate, independently-contained step (see emitUnreadCount) so a
+  // count-query failure can never take down the notification emit above it.
   private async fanOut(notification: NotificationInterface): Promise<void> {
     try {
       const room: string =
@@ -255,6 +260,33 @@ export class NotificationDispatcherService {
         `Notification channel delivery failed for ${notification.id}: ${this.describe(caught)}`,
       );
     }
+
+    if (notification.audience === NotificationAudienceEnum.USER && notification.userId) {
+      await this.emitUnreadCount(notification.userId);
+    }
+  }
+
+  // USER-audience only: PR 3 deferred this push because it needs the
+  // read-side query PR 4 built (NotificationRepositoryInterface.countUnread).
+  // Scoped to the recipient's own USER-audience unread count, even if they
+  // happen to hold the ADMIN role — a merged count would need a User lookup
+  // this hot path doesn't otherwise need; GET /notifications/unread-count
+  // returns the full merged figure for an admin who wants it. No
+  // broadcast-wide equivalent exists for ADMIN-audience rows: unlike a
+  // single user's count, admins have independent per-admin read histories
+  // (lazy receipts), so there is no single number to push to the whole
+  // admins room.
+  private async emitUnreadCount(userId: string): Promise<void> {
+    try {
+      const count: number = await this.notificationRepository.countUnread({
+        userId,
+        includeAdmin: false,
+      });
+
+      this.gateway.server.to(buildUserRoom(userId)).emit(UNREAD_COUNT_EVENT, count);
+    } catch (caught) {
+      this.logger.warn(`Unread-count emission failed for ${userId}: ${this.describe(caught)}`);
+    }
   }
 
   private toResponse(notification: NotificationInterface): NotificationResponseInterface {
@@ -267,6 +299,8 @@ export class NotificationDispatcherService {
       body: notification.body,
       meta: notification.meta,
       createdAt: notification.createdAt.toISOString(),
+      // Brand-new at the moment of this push — never yet read.
+      readAt: null,
     };
   }
 
