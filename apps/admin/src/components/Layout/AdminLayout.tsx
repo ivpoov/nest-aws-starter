@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { useLogout } from '../../hooks/auth/useLogout';
+import { NotificationBell } from '../Notifications/NotificationBell';
 import { ThemeToggle } from '../ui/ThemeToggle';
 
 const NAV_ITEMS: ReadonlyArray<{ readonly to: string; readonly label: string }> = [
@@ -11,6 +12,7 @@ const NAV_ITEMS: ReadonlyArray<{ readonly to: string; readonly label: string }> 
   { to: '/transactions', label: 'Transactions' },
   { to: '/activities', label: 'Activity' },
   { to: '/inbox', label: 'Inbox' },
+  { to: '/notifications', label: 'Notifications' },
 ];
 
 export function AdminLayout(): ReactElement {
@@ -55,6 +57,7 @@ export function AdminLayout(): ReactElement {
             Menu
           </button>
           <div className="ml-auto flex items-center gap-3">
+            <NotificationBell />
             <ThemeToggle />
             <button
               type="button"
