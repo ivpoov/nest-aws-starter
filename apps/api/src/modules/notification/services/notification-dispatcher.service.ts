@@ -52,6 +52,7 @@ import type { SubscriptionPastDuePayloadInterface } from '@modules/notification/
 import type { SubscriptionRenewedPayloadInterface } from '@modules/notification/interfaces/subscription-renewed-payload.interface.js';
 import type { UserBlockedPayloadInterface } from '@modules/notification/interfaces/user-blocked-payload.interface.js';
 import type { WebhookFailedPayloadInterface } from '@modules/notification/interfaces/webhook-failed-payload.interface.js';
+import { NotificationEmailService } from '@modules/notification/services/notification-email.service.js';
 import {
   NotificationAudienceEnum,
   type NotificationResponseInterface,
@@ -70,6 +71,14 @@ import { Inject, Injectable } from '@nestjs/common';
 // PaymentWebhookConsumerService at the FAILED ceiling (payment module) —
 // the release plan's matrix line, not this module's brief, governs that
 // emit site; see task-3-report.md for the correction.
+//
+// PR 5 adds a third, independently-contained fan-out step: the EMAIL
+// channel (NotificationEmailService), gated on the recipient's stored
+// preference (or its default) behind mail's own isEnabled — see
+// task-5-report.md. This file is already past backend.md's 300-line split
+// guideline (it was at 316 before this PR); the 11-row event matrix is the
+// bulk of it and splitting the matrix out is left as a follow-up rather
+// than risking PR 3/4's existing dispatcher tests in this PR.
 @Injectable()
 export class NotificationDispatcherService {
   private readonly logger = new CustomLoggerService(NotificationDispatcherService.name);
@@ -78,6 +87,7 @@ export class NotificationDispatcherService {
     @Inject(NOTIFICATION_REPOSITORY)
     private readonly notificationRepository: NotificationRepositoryInterface,
     private readonly gateway: NotificationGateway,
+    private readonly emailService: NotificationEmailService,
   ) {}
 
   @OnDomainEvent(AUTH_NEW_DEVICE_EVENT)
@@ -263,6 +273,27 @@ export class NotificationDispatcherService {
 
     if (notification.audience === NotificationAudienceEnum.USER && notification.userId) {
       await this.emitUnreadCount(notification.userId);
+      await this.sendEmail(notification);
+    }
+  }
+
+  // EMAIL channel, independently contained like the socket pushes above —
+  // a mail failure must never affect the persisted row or the IN_APP push
+  // (backend.md's "preferences gate channels, never persistence").
+  private async sendEmail(notification: NotificationInterface): Promise<void> {
+    if (!notification.userId) return;
+
+    try {
+      await this.emailService.sendIfEnabled(
+        notification.userId,
+        notification.type,
+        notification.title,
+        notification.body,
+      );
+    } catch (caught) {
+      this.logger.warn(
+        `Notification email delivery failed for ${notification.id}: ${this.describe(caught)}`,
+      );
     }
   }
 
