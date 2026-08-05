@@ -1,0 +1,37 @@
+import type {
+  NotificationListResponseInterface,
+  UnreadCountResponseInterface,
+} from '@nest-aws-starter/shared';
+import type { FetchNotificationsParamsInterface } from '../../interfaces/fetch-notifications-params.interface';
+import { apiClient } from '../../utils/apiClient';
+
+// Same endpoint serves both roles — the API merges an admin's own
+// USER-audience rows with every ADMIN-audience row server-side (see
+// notification.controller.ts); there is no separate /admin/notifications.
+export function fetchNotifications(
+  params: FetchNotificationsParamsInterface,
+): Promise<NotificationListResponseInterface> {
+  const query = new URLSearchParams();
+
+  if (params.cursor) query.set('cursor', params.cursor);
+  if (params.limit) query.set('limit', String(params.limit));
+  if (params.unreadOnly) query.set('unreadOnly', 'true');
+
+  const queryString: string = query.toString();
+
+  return apiClient.get<NotificationListResponseInterface>(
+    `/notifications${queryString ? `?${queryString}` : ''}`,
+  );
+}
+
+export function fetchUnreadCount(): Promise<UnreadCountResponseInterface> {
+  return apiClient.get<UnreadCountResponseInterface>('/notifications/unread-count');
+}
+
+export function markNotificationRead(id: string): Promise<void> {
+  return apiClient.patch<void>(`/notifications/${id}/read`, undefined);
+}
+
+export function markAllNotificationsRead(): Promise<void> {
+  return apiClient.post<void>('/notifications/read-all');
+}
