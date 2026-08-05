@@ -156,15 +156,20 @@ const MODULES = [
     ],
   },
   {
-    // Schema-only for now (v0.5 Task 1): no module folder exists yet — the
-    // dispatcher/gateway/API code lands in Tasks 2-5, which will add their
-    // paths to `paths` below. Until then this entry proves only the schema
-    // fences (models/enums in schema.prisma) and the single `User`
-    // back-relation line strip cleanly.
+    // Task 1 shipped schema-only (no module folder). Task 2 (this round)
+    // adds the Socket.IO gateway — its own module folder plus e2e spec are
+    // included here in the same commit series (see task-1-report.md's note
+    // for PR 2-5 implementers: v0.4's payment entry missed this once and
+    // briefly broke the subtracted tree). Tasks 3-5 extend `paths` further
+    // as the dispatcher/history API/email digest land in the same folder.
     id: 'notification',
     summary: 'Notification/receipt/preference history, WS gateway, and email digest (schema).',
-    paths: [],
-    envVars: [],
+    paths: [
+      'apps/api/src/modules/notification',
+      'apps/api/src/configs/websocket.config.ts',
+      'apps/api/test/websocket.e2e-spec.ts',
+    ],
+    envVars: ['WEBSOCKET_ENABLED', 'WEBSOCKET_HEARTBEAT_INTERVAL_MS'],
   },
 ];
 
