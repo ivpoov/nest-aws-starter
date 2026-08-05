@@ -14,6 +14,13 @@ fence markers in the codebase — do not hand-edit; re-run the generator instead
 - `apps/api/prisma/sql/revenueByDay.sql` (delete)
 - `apps/api/prisma/sql/mrrCurrent.sql` (delete)
 - `apps/api/prisma/sql/revenueByPlan.sql` (delete)
+- `apps/api/test/billing.e2e-spec.ts` (delete)
+- `apps/api/test/plans-admin.e2e-spec.ts` (delete)
+- `apps/api/test/transactions.e2e-spec.ts` (delete)
+- `apps/api/test/webhooks.e2e-spec.ts` (delete)
+- `apps/api/test/webhook-consumer.e2e-spec.ts` (delete)
+- `apps/api/test/subscription-access.e2e-spec.ts` (delete)
+- `apps/api/test/subscription-lifecycle.e2e-spec.ts` (delete)
 
 ## 2. Strip cross-module references
 
@@ -51,12 +58,36 @@ the marked lines/blocks and the markers themselves.
   - lines 4-6 (block)
   - lines 79-124 (block)
 - `apps/api/src/modules/statistic/tests/statistic.service.spec.ts`
+  - line 44: `findRevenueByDay: vi.fn().mockResolvedValue(revenuePoints), // <module:payment>`
+  - line 45: `findMrrCents: vi.fn().mockResolvedValue(4_900), // <module:payment>`
+  - line 46: `findRevenueByPlan: vi.fn().mockResolvedValue(revenueByPlanRows), // <module:payment>`
   - lines 80-100 (block)
   - lines 155-172 (block)
+  - line 188: `expect(repository.findRevenueByDay).not.toHaveBeenCalled(); // <module:payment>`
+- `apps/api/test/maintenance-jobs.e2e-spec.ts`
+  - line 2: `import { NormalizedEventTypeEnum } from '@modules/payment/enums/normalized-event-type.enum.js'; // <module:payment>`
+  - line 3: `import { WebhookEventStatusEnum } from '@modules/payment/enums/webhook-event-status.enum.js'; // <module:payment>`
+  - lines 11-15 (block)
+  - lines 21-25 (block)
+  - lines 28-30 (block)
+  - line 41: `let sqs: SqsProviderInterface; // <module:payment>`
+  - line 50: `sqs = app.get<SqsProviderInterface>(SQS_PROVIDER); // <module:payment>`
+  - line 52: `await neutralizeStaleWebhookEventBacklog(); // <module:payment>`
+  - line 53: `await drainQueue(); // <module:payment>`
+  - lines 61-117 (block)
+  - lines 245-353 (block)
+- `apps/api/test/statistics.e2e-spec.ts`
+  - lines 40-80 (block)
+  - lines 146-155 (block)
+  - lines 162-212 (block)
 - `apps/api/prisma/schema.prisma`
   - line 44: `subscriptions       Subscription[] // <module:payment>`
   - line 45: `paymentTransactions PaymentTransaction[] // <module:payment>`
   - lines 248-344 (block)
+- `apps/api/prisma/seed.ts`
+  - lines 15-40 (block)
+  - lines 48-64 (block)
+  - lines 70-74 (block)
 
 ## 3. Drop `.env` variables
 
