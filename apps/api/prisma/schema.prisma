@@ -26,23 +26,24 @@ enum AuthMethodType {
 }
 
 model User {
-  id                  String               @id @default(uuid(7))
-  role                UserRole             @default(USER)
-  status              UserStatus           @default(ACTIVE)
-  displayName         String               @db.VarChar(120)
-  avatarKey           String? // S3 object key, served via presigned URL
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  authMethods         AuthMethod[]
-  sessions            Session[]
+  id                      String                   @id @default(uuid(7))
+  role                    UserRole                 @default(USER)
+  status                  UserStatus               @default(ACTIVE)
+  displayName             String                   @db.VarChar(120)
+  avatarKey               String? // S3 object key, served via presigned URL
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  authMethods             AuthMethod[]
+  sessions                Session[]
   // Sessions this user (as an admin) is currently impersonating a target
   // through — back-relation only, never queried from the User side today.
-  impersonatedByMe    Session[]            @relation("SessionSignedAsAdmin")
-  notes               Note[]
-  files               File[] // <module:file>
-  apiKeys             ApiKey[] // <module:api-key>
-  subscriptions       Subscription[] // <module:payment>
-  paymentTransactions PaymentTransaction[] // <module:payment>
+  impersonatedByMe        Session[]                @relation("SessionSignedAsAdmin")
+  notes                   Note[]
+  files                   File[] // <module:file>
+  apiKeys                 ApiKey[] // <module:api-key>
+  subscriptions           Subscription[] // <module:payment>
+  paymentTransactions     PaymentTransaction[] // <module:payment>
+  notificationPreferences NotificationPreference[] // <module:notification>
 
   @@index([role, status])
   @@index([createdAt])
@@ -342,3 +343,51 @@ model WebhookEvent {
 }
 
 // </module:payment>
+
+// <module:notification>
+enum NotificationAudience {
+  USER // targeted at one user
+  ADMIN // broadcast to the admin role
+}
+
+model Notification {
+  id        String                @id @default(uuid(7))
+  audience  NotificationAudience
+  userId    String? // set when audience = USER
+  type      String                @db.VarChar(60) // NotificationTypeEnum (shared)
+  title     String                @db.VarChar(200)
+  body      String                @db.VarChar(1000)
+  meta      Json                  @default("{}") // deep-link data, denormalized
+  createdAt DateTime              @default(now())
+  receipts  NotificationReceipt[]
+
+  @@index([userId, id])
+  @@index([audience, id])
+  @@map("notifications")
+}
+
+model NotificationReceipt {
+  id             String       @id @default(uuid(7))
+  notificationId String
+  userId         String // reader (admin id for ADMIN audience)
+  readAt         DateTime?
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, userId])
+  @@index([userId, readAt])
+  @@map("notification_receipts")
+}
+
+model NotificationPreference {
+  id      String  @id @default(uuid(7))
+  userId  String
+  type    String  @db.VarChar(60)
+  channel String  @db.VarChar(20) // 'EMAIL'
+  enabled Boolean @default(true)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, channel])
+  @@map("notification_preferences")
+}
+
+// </module:notification>
