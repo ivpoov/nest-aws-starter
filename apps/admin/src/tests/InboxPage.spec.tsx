@@ -3,11 +3,20 @@ import {
   ContactMessageStatusEnum,
 } from '@nest-aws-starter/shared';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as contactApi from '../apis/contact';
 import { InboxPage } from '../pages/InboxPage';
 
 vi.mock('../apis/contact');
+
+function renderInboxPage(initialEntry = '/inbox'): ReturnType<typeof render> {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <InboxPage />
+    </MemoryRouter>,
+  );
+}
 
 const OPEN_PAGE: ContactMessageListResponseInterface = {
   items: [
@@ -31,7 +40,7 @@ describe('InboxPage', () => {
   });
 
   it('renders the subject, from, and an OPEN badge for each message', async () => {
-    render(<InboxPage />);
+    renderInboxPage();
 
     const subjectCell: HTMLElement = await screen.findByText('Pricing question');
     const row: HTMLElement | null = subjectCell.closest('tr');
@@ -42,7 +51,7 @@ describe('InboxPage', () => {
   });
 
   it('refetches with the selected status when a filter chip is clicked', async () => {
-    render(<InboxPage />);
+    renderInboxPage();
 
     await screen.findByText('Pricing question');
 
@@ -58,11 +67,25 @@ describe('InboxPage', () => {
   });
 
   it('opens the drawer for the selected message on row click', async () => {
-    render(<InboxPage />);
+    renderInboxPage();
 
     fireEvent.click(await screen.findByText('Pricing question'));
 
     expect(await screen.findByText('Message detail')).toBeInTheDocument();
     expect(screen.getByText('Hi, I would like to know more.')).toBeInTheDocument();
+  });
+
+  it('opens the drawer for the message id carried in a ?messageId= deep link', async () => {
+    renderInboxPage('/inbox?messageId=m-1');
+
+    expect(await screen.findByText('Message detail')).toBeInTheDocument();
+  });
+
+  it('does not open a drawer when the deep-linked id is not in the loaded page', async () => {
+    renderInboxPage('/inbox?messageId=does-not-exist');
+
+    await screen.findByText('Pricing question');
+
+    expect(screen.queryByText('Message detail')).not.toBeInTheDocument();
   });
 });
