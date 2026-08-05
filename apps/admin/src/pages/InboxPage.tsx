@@ -3,7 +3,7 @@ import {
   ContactMessageStatusEnum,
 } from '@nest-aws-starter/shared';
 import type { ReactElement } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { ContactMessageDrawer } from '../components/Contact/ContactMessageDrawer';
 import { ContactStatusFilter } from '../components/Contact/ContactStatusFilter';
@@ -36,10 +36,23 @@ export function InboxPage(): ReactElement {
   // only actually opens the drawer once the id shows up in a loaded page —
   // `selectedMessage` below already tolerates an id with no match (renders
   // nothing), so no extra loading state is needed here.
-  const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('messageId'));
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const { messages, hasMore, isLoading, error, loadMore, reload } = useContactMessages(status);
   const selectedMessage: ContactMessageResponseInterface | null =
     messages.find((message): boolean => message.id === selectedId) ?? null;
+
+  // Syncs from the URL on every change, not just first mount — an admin
+  // already on /inbox who clicks a second CONTACT_MESSAGE notification
+  // (bell dropdown or history page) gets a new `?messageId=` on the same
+  // mounted page, which a mount-only initializer would miss. Only acts
+  // when the param is present: an unrelated re-render (status filter,
+  // page load) with no messageId must not force the drawer closed —
+  // closing already goes through closeDrawer, which clears both.
+  useEffect(() => {
+    const messageId: string | null = searchParams.get('messageId');
+
+    if (messageId) setSelectedId(messageId);
+  }, [searchParams]);
 
   function closeDrawer(): void {
     setSelectedId(null);
