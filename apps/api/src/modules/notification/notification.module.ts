@@ -10,6 +10,7 @@ import { NotificationPrismaRepository } from '@modules/notification/repositories
 import { NotificationService } from '@modules/notification/services/notification.service.js';
 import { NotificationDispatcherService } from '@modules/notification/services/notification-dispatcher.service.js';
 import { NotificationEmailService } from '@modules/notification/services/notification-email.service.js';
+import { NotificationFanOutService } from '@modules/notification/services/notification-fan-out.service.js';
 import { NotificationPreferenceService } from '@modules/notification/services/notification-preference.service.js';
 import { UserModule } from '@modules/user/user.module.js';
 import { Module } from '@nestjs/common';
@@ -26,7 +27,9 @@ import { Module } from '@nestjs/common';
 // lookup — `user` is a core module (docs/removal/README.md), so this is a
 // core dependency, not a feature-to-feature import. CacheModule/MailModule
 // are @Global(), so CacheFactoryService/MAIL_TRANSPORT need no import here
-// (PR 5).
+// (PR 5). NotificationFanOutService is the dispatcher's fan-out orchestrator
+// (IN_APP/unread-count/EMAIL), extracted out of the dispatcher itself in
+// PR 5 code review.
 @Module({
   imports: [CaslModule.forFeature({ permissions: notificationPermissions }), UserModule],
   controllers: [NotificationController, NotificationPreferenceController],
@@ -34,6 +37,7 @@ import { Module } from '@nestjs/common';
     NotificationGateway,
     NotificationDispatcherService,
     NotificationEmailService,
+    NotificationFanOutService,
     NotificationPreferenceService,
     NotificationService,
     { provide: NOTIFICATION_REPOSITORY, useClass: NotificationPrismaRepository },
