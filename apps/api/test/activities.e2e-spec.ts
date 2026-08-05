@@ -4,6 +4,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp } from './app.factory.js';
+import { waitForActivity } from './helpers/wait-for-activity.helper.js';
 
 describe('admin activities', () => {
   let app: NestFastifyApplication;
@@ -104,6 +105,27 @@ describe('admin activities', () => {
   });
 
   it('filters by userId and pages by cursor', async () => {
+    // The three beforeAll-triggered rows (USER_REGISTERED, AUTH_LOGIN,
+    // AUTH_LOGOUT) are written by fire-and-forget listeners, so wait until
+    // all three have landed before exercising pagination against a settled
+    // state — otherwise the page-size/cursor assertions below race the writes.
+    const settled = await waitForActivity(async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/admin/activities?userId=${targetUserId}&limit=100`)
+        .set('authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const types = new Set((response.body.items as { type: string }[]).map((item) => item.type));
+      const hasAll = ['USER_REGISTERED', 'AUTH_LOGIN', 'AUTH_LOGOUT'].every((type) =>
+        types.has(type),
+      );
+
+      return hasAll ? response.body.items : null;
+    });
+
+    expect(settled).toBeTruthy();
+    expect(settled).toHaveLength(3);
+
     // Scoping by userId isolates this from other e2e suites running
     // concurrently against the same database — a randomUUID-derived user
     // never collides, unlike a plain type filter which any suite can pollute.
@@ -138,29 +160,40 @@ describe('admin activities', () => {
   });
 
   it('filters by type, exposing the failed-login meta', async () => {
-    const filtered = await request(app.getHttpServer())
-      .get('/api/v1/admin/activities?type=AUTH_LOGIN_FAILED&limit=100')
-      .set('authorization', `Bearer ${adminToken}`)
-      .expect(200);
+    const filtered = await waitForActivity(async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/admin/activities?type=AUTH_LOGIN_FAILED&limit=100')
+        .set('authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-    const matching = filtered.body.items.filter(
-      (item: { meta: { email: string } }) => item.meta.email === targetEmail,
-    );
+      const items = response.body.items as { type: string; meta: { email: string } }[];
+      const matching = items.filter((item) => item.meta.email === targetEmail);
+
+      return matching.length >= 3 ? items : null;
+    });
+
+    expect(filtered).toBeTruthy();
+    const matching = (filtered ?? []).filter((item) => item.meta.email === targetEmail);
 
     expect(matching.length).toBeGreaterThanOrEqual(3);
-    for (const item of filtered.body.items) {
+    for (const item of filtered ?? []) {
       expect(item.type).toBe('AUTH_LOGIN_FAILED');
     }
   });
 
   it('returns only the given user activities through the nested endpoint', async () => {
-    const nested = await request(app.getHttpServer())
-      .get(`/api/v1/admin/users/${targetUserId}/activities`)
-      .set('authorization', `Bearer ${adminToken}`)
-      .expect(200);
+    const items = await waitForActivity(async () => {
+      const nested = await request(app.getHttpServer())
+        .get(`/api/v1/admin/users/${targetUserId}/activities`)
+        .set('authorization', `Bearer ${adminToken}`)
+        .expect(200);
 
-    expect(nested.body.items.length).toBeGreaterThanOrEqual(3);
-    for (const item of nested.body.items) {
+      return nested.body.items.length >= 3 ? nested.body.items : null;
+    });
+
+    expect(items).toBeTruthy();
+    expect((items ?? []).length).toBeGreaterThanOrEqual(3);
+    for (const item of items ?? []) {
       expect(item.userId).toBe(targetUserId);
     }
   });
