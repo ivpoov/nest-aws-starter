@@ -30,6 +30,8 @@ the marked lines/blocks and the markers themselves.
 - `apps/api/test/app.factory.ts`
   - line 2: `import { RedisIoAdapter } from '@modules/notification/adapters/redis-io.adapter.js'; // <module:notification>`
   - lines 20-27 (block)
+- `apps/api/test/webhook-consumer.e2e-spec.ts`
+  - lines 154-171 (block)
 - `apps/api/prisma/schema.prisma`
   - line 46: `notificationPreferences NotificationPreference[] // <module:notification>`
   - lines 347-393 (block)
