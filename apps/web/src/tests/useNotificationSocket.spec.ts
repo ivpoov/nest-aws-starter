@@ -1,10 +1,11 @@
 import type { NotificationResponseInterface } from '@nest-aws-starter/shared';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { Socket } from 'socket.io-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as notificationsApi from '../apis/notifications';
 import { useNotificationSocket } from '../hooks/notifications/useNotificationSocket';
 import { useAuthStore } from '../stores/auth.store';
+import { logger } from '../utils/logger';
 
 vi.mock('../apis/notifications');
 
@@ -133,5 +134,110 @@ describe('useNotificationSocket', () => {
 
     expect(ioMock).not.toHaveBeenCalled();
     expect(notificationsApi.fetchUnreadCount).not.toHaveBeenCalled();
+  });
+
+  it('manually reconnects on an io server disconnect', async () => {
+    useAuthStore.getState().setTokens('access-1', 'refresh-1');
+
+    renderHook(() => useNotificationSocket());
+
+    await waitFor(() => expect(ioMock).toHaveBeenCalledTimes(1));
+
+    emit('disconnect', 'io server disconnect');
+
+    expect(mockSocket.connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not manually reconnect on a transport-level disconnect', async () => {
+    useAuthStore.getState().setTokens('access-1', 'refresh-1');
+
+    renderHook(() => useNotificationSocket());
+
+    await waitFor(() => expect(ioMock).toHaveBeenCalledTimes(1));
+
+    emit('disconnect', 'transport close');
+
+    expect(mockSocket.connect).not.toHaveBeenCalled();
+  });
+
+  it('bounds manual reconnect attempts and logs a warning once exhausted', async () => {
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+
+    useAuthStore.getState().setTokens('access-1', 'refresh-1');
+
+    renderHook(() => useNotificationSocket());
+
+    await waitFor(() => expect(ioMock).toHaveBeenCalledTimes(1));
+
+    // Three server-initiated disconnects (never followed by a real
+    // `connect` event in this mock, so the attempt counter never resets)
+    // exhaust the bound; a fourth must not trigger a fourth `connect()`.
+    emit('disconnect', 'io server disconnect');
+    emit('disconnect', 'io server disconnect');
+    emit('disconnect', 'io server disconnect');
+    emit('disconnect', 'io server disconnect');
+
+    expect(mockSocket.connect).toHaveBeenCalledTimes(3);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('giving up after repeated server-initiated disconnects'),
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it('reads the freshly rotated token on a manual reconnect, not the one captured at mount', async () => {
+    useAuthStore.getState().setTokens('access-1', 'refresh-1');
+
+    renderHook(() => useNotificationSocket());
+
+    await waitFor(() => expect(ioMock).toHaveBeenCalledTimes(1));
+
+    const [, options] = ioMock.mock.calls[0] as [string, MockSocketOptionsInterface];
+    let firstPayload: unknown;
+
+    options.auth((payload) => {
+      firstPayload = payload;
+    });
+    expect(firstPayload).toEqual({ token: 'access-1' });
+
+    // A silent refresh rotates the store's token, then the gateway's
+    // heartbeat sweep rejects the *original* token the socket connected
+    // with — a server-initiated disconnect.
+    useAuthStore.getState().setTokens('access-2', 'refresh-2');
+    emit('disconnect', 'io server disconnect');
+
+    expect(mockSocket.connect).toHaveBeenCalledTimes(1);
+    expect(ioMock).toHaveBeenCalledTimes(1); // same socket reused, not recreated
+
+    let secondPayload: unknown;
+
+    options.auth((payload) => {
+      secondPayload = payload;
+    });
+    expect(secondPayload).toEqual({ token: 'access-2' });
+  });
+
+  it('tears down the socket and stops reconnecting once logged out', async () => {
+    useAuthStore.getState().setTokens('access-1', 'refresh-1');
+
+    renderHook(() => useNotificationSocket());
+
+    await waitFor(() => expect(ioMock).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      useAuthStore.getState().clear();
+    });
+
+    await waitFor(() => expect(mockSocket.disconnect).toHaveBeenCalledTimes(1));
+
+    mockSocket.connect.mockClear();
+
+    // Even a stray disconnect event arriving after logout (the listener is
+    // still wired in this mock, unlike a real socket after
+    // removeAllListeners()) must not reconnect: the guard reads the store,
+    // not a snapshot taken at connect time.
+    emit('disconnect', 'io server disconnect');
+
+    expect(mockSocket.connect).not.toHaveBeenCalled();
   });
 });
