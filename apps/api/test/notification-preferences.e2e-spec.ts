@@ -208,6 +208,40 @@ describe('notification preferences (e2e)', () => {
     expect(response.body.code).toBe('NOTIFICATION_PREFERENCE_CHANNEL_IMMUTABLE');
   });
 
+  // Atomicity, end to end: a batch with one valid row and one invalid row
+  // is rejected whole — the valid row must never land, even though it
+  // would have been perfectly fine on its own.
+  it('a mixed valid/invalid batch is rejected whole — the valid row is never persisted', async () => {
+    const user = await registerUser();
+
+    const response = await putMatrix(user.accessToken, [
+      {
+        type: NotificationTypeEnum.PASSWORD_CHANGED,
+        channel: NotificationChannelEnum.EMAIL,
+        enabled: false,
+      },
+      {
+        type: NotificationTypeEnum.NEW_DEVICE_LOGIN,
+        channel: NotificationChannelEnum.IN_APP,
+        enabled: false,
+      },
+    ]).expect(400);
+
+    expect(response.body.code).toBe('NOTIFICATION_PREFERENCE_CHANNEL_IMMUTABLE');
+
+    const matrix = await getMatrix(user.accessToken).expect(200);
+    const passwordEmail = (
+      matrix.body as NotificationPreferencesResponseInterface
+    ).preferences.find(
+      (row) =>
+        row.type === NotificationTypeEnum.PASSWORD_CHANGED &&
+        row.channel === NotificationChannelEnum.EMAIL,
+    );
+
+    // Still the default (true) — the valid row in the same batch never persisted.
+    expect(passwordEmail?.enabled).toBe(true);
+  });
+
   it('rejects a write for an ADMIN-audience type with no per-user preference', async () => {
     const user = await registerUser();
 
