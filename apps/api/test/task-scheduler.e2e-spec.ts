@@ -34,11 +34,13 @@ describe('task scheduler (2 instances, 1 redis)', () => {
     await appB.close();
   });
 
-  // No production module registers a real job at boot yet, so this only
-  // shows the registry starts empty — it does NOT prove the
-  // SCHEDULER_ENABLED=false gate suppresses scheduling (that's proven by
-  // TaskSchedulerRunnerService's onModuleInit unit test). Once a real job is
-  // wired at boot, this becomes a genuine gate check.
+  // The e2e harness pins SCHEDULER_ENABLED=false (vitest.e2e.config.ts), so
+  // this suite always runs with the gate closed. No production module
+  // registers a real job at boot yet either, so this assertion only shows
+  // the registry starts empty — it does NOT exercise the gate itself (both
+  // enabled and disabled are covered by TaskSchedulerRunnerService's
+  // onModuleInit unit test). Once a real job is wired at boot, this becomes
+  // a genuine "gate suppresses scheduling" check.
   it('starts with no cron jobs registered (no production job wired yet)', () => {
     const schedulerRegistry: SchedulerRegistry = appA.get(SchedulerRegistry);
 
