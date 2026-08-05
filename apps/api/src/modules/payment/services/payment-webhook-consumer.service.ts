@@ -1,4 +1,6 @@
 import { type PaymentConfig, paymentConfig } from '@configs/payment.config.js';
+import { WEBHOOK_FAILED_EVENT } from '@modules/event/constants/event-names.constants.js';
+import { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { WEBHOOK_EVENT_REPOSITORY } from '@modules/payment/constants/payment.constants.js';
 import {
@@ -46,6 +48,7 @@ export class PaymentWebhookConsumerService
     private readonly sqsProvider: SqsProviderInterface,
     private readonly redisLock: RedisLockService,
     private readonly dispatcher: WebhookEventDispatcherService,
+    private readonly eventBus: EventBusService,
     @Inject(paymentConfig.KEY)
     private readonly payment: PaymentConfig,
   ) {}
@@ -239,26 +242,33 @@ export class PaymentWebhookConsumerService
 
       return true;
     } catch (caught) {
-      return this.recordDispatchFailure(event.id, caught);
+      return this.recordDispatchFailure(event, caught);
     }
   }
 
-  private async recordDispatchFailure(webhookEventId: string, caught: unknown): Promise<boolean> {
+  private async recordDispatchFailure(
+    event: WebhookEventInterface,
+    caught: unknown,
+  ): Promise<boolean> {
     const message: string = this.extractErrorMessage(caught);
-    const attempts: number = await this.webhookEventRepository.recordFailure(
-      webhookEventId,
-      message,
-    );
+    const attempts: number = await this.webhookEventRepository.recordFailure(event.id, message);
 
     this.logError(
-      `Webhook event dispatch failed (attempt ${attempts}/${MAX_WEBHOOK_ATTEMPTS}): ${webhookEventId}`,
+      `Webhook event dispatch failed (attempt ${attempts}/${MAX_WEBHOOK_ATTEMPTS}): ${event.id}`,
       caught,
     );
 
     if (attempts < MAX_WEBHOOK_ATTEMPTS) return false;
 
-    await this.webhookEventRepository.markFailed(webhookEventId);
-    this.logger.error(`Webhook event exhausted retries, marked FAILED: ${webhookEventId}`);
+    await this.webhookEventRepository.markFailed(event.id);
+    this.logger.error(`Webhook event exhausted retries, marked FAILED: ${event.id}`);
+    this.eventBus.emit(WEBHOOK_FAILED_EVENT, {
+      webhookEventId: event.id,
+      provider: event.provider,
+      type: event.type,
+      attempts,
+      lastError: message,
+    });
 
     return true;
   }
