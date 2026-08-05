@@ -67,10 +67,13 @@ jobs:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
           SQS_ENABLED: "true"
+          SQS_PAYMENT_WEBHOOK_QUEUE_URL: http://localhost:4567/000000000000/starter-payment-webhook-queue
           SNS_ENABLED: "true"
           MAIL_ENABLED: "true"
           MAIL_FROM_ADDRESS: no-reply@example.com
           LAMBDA_ENABLED: "true"
+          SCHEDULER_ENABLED: "false"
+          PAYMENT_WEBHOOK_CONSUMER_ENABLED: "false"
           AUTH_JWT_SECRET: ci-only-secret-with-at-least-32-characters
           TRUST_PROXY: "true"
 

@@ -1,0 +1,13 @@
+{
+  "id": "evt_test_sub_updated",
+  "type": "customer.subscription.updated",
+  "data": {
+    "object": {
+      "id": "sub_test_1",
+      "cancel_at_period_end": true,
+      "items": {
+        "data": [{ "current_period_end": 1752678400 }]
+      }
+    }
+  }
+}

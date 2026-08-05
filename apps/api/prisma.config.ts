@@ -9,4 +9,9 @@ export default defineConfig({
     url:
       process.env.DATABASE_URL ?? 'postgresql://placeholder:placeholder@localhost:5432/placeholder',
   },
+  migrations: {
+    // Dev/staging only — CI and the e2e suite never run this (they seed
+    // their own data per-test).
+    seed: 'tsx prisma/seed.ts',
+  },
 });

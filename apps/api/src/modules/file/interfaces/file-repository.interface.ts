@@ -6,4 +6,8 @@ export interface FileRepositoryInterface {
   create(data: CreateFileDataInterface): Promise<FileInterface>;
   findById(id: string): Promise<FileInterface | null>;
   markReady(id: string, data: MarkFileReadyDataInterface): Promise<FileInterface | null>;
+  // Orphan-sweep candidates: PENDING rows older than the cutoff, oldest
+  // first, capped at limit.
+  findStalePending(cutoff: Date, limit: number): Promise<FileInterface[]>;
+  deleteById(id: string): Promise<void>;
 }

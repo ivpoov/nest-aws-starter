@@ -8,10 +8,12 @@ export async function createTestApp(): Promise<NestFastifyApplication> {
     imports: [AppModule],
   }).compile();
 
-  // Mirrors main.ts's trustProxy wiring — e2e specs vary x-forwarded-for per
-  // request to exercise per-ip logic (throttling, lockouts, session ip).
+  // Mirrors main.ts's trustProxy + rawBody wiring — e2e specs vary
+  // x-forwarded-for per request to exercise per-ip logic (throttling,
+  // lockouts, session ip), and the webhook e2e suite needs request.rawBody.
   const app: NestFastifyApplication = moduleRef.createNestApplication<NestFastifyApplication>(
     new FastifyAdapter({ trustProxy: process.env.TRUST_PROXY === 'true' }),
+    { rawBody: true },
   );
 
   configureApp(app);

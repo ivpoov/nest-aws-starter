@@ -38,7 +38,13 @@ async function bootstrap(): Promise<void> {
   const app: NestFastifyApplication = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     adapter,
-    { bufferLogs: true },
+    // rawBody: true exposes request.rawBody (a Buffer of the exact bytes
+    // received) alongside the normal parsed body, on every route — Fastify's
+    // JSON parsing is untouched. Only the webhook ingest controller reads
+    // it today (Stripe's constructEvent needs the exact bytes to verify a
+    // signature), but this is application-wide because rawBody is a NestJS
+    // bootstrap option, not something a single route can opt into.
+    { bufferLogs: true, rawBody: true },
   );
   const config: AppConfig = app.get(ConfigService).getOrThrow<AppConfig>('app');
 

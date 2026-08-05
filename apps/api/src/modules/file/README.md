@@ -6,28 +6,34 @@ object landed (existence + size) and flips it to `READY`, `getDownloadUrl`
 returns a CloudFront signed URL when `CLOUDFRONT_ENABLED=true`, otherwise a
 presigned S3 GET.
 
-## Known gap: orphan sweep (deferred to v0.4)
+## Orphan sweep
 
-Two situations currently leave orphaned state with nothing to clean them up:
+`OrphanFileSweepJob` (`modules/file/jobs/`) closes the v0.3 gap described
+above: `File` rows can end up `PENDING` forever when a client never PUTs to
+the presigned URL, never calls `confirm`, or PUTs an object that
+`confirmUpload` would have rejected.
 
-- A client calls `POST /files/upload-request` and never PUTs to the presigned
-  URL (or PUTs and never calls `confirm`) — the `File` row stays `PENDING`
-  forever, and no S3 object exists (or one exists that the app never learns
-  about).
-- A client PUTs an object that is later rejected by `confirmUpload` (too
-  large, or the presigned URL expires and a stale PUT lands) — the S3 object
-  can end up orphaned with no corresponding `READY` row.
+Registered through the Task 2 scheduler (Redis-locked, per the operational
+rules in `docs/conventions/backend.md`), it runs daily
+(`FILE_SWEEP_CRON_EXPRESSION`, `0 3 * * *` — the 24h staleness threshold makes
+a tighter cadence pointless) and, for every `PENDING` row older than
+`FILE_SWEEP_STALE_THRESHOLD_MS` (24h), capped at `FILE_SWEEP_BATCH_LIMIT`
+(200) rows per run so a large backlog can't push a single run past the job's
+lock TTL:
 
-This is a known, explicit gap, not an oversight: v0.4 adds a task-scheduler
-module, and the fix belongs there — a scheduled job (Redis-locked, per the
-operational rules in `docs/conventions/backend.md`) that:
+1. `HeadObject`s the row's S3 key.
+2. **Object absent** — the upload never landed (or landed and was later
+   removed). Deletes the `File` row.
+3. **Object present and valid** — the same content-type allowlist and size
+   check `confirmUpload` applies (`FileService.isUploadedObjectValid`)
+   passes. This is a missed `confirm` call, not an abandoned upload —
+   reconciles the row to `READY` with the size/content-type S3 actually
+   observed, and emits `FILE_UPLOADED_EVENT` exactly as `confirmUpload` does.
+4. **Object present but invalid** (wrong content-type or over size) — never
+   reconciled to `READY`: a type/size the upload flow would have rejected at
+   `confirmUpload` time must not become downloadable just because the client
+   abandoned the confirm step. Deletes the S3 object and the `File` row.
 
-1. Deletes `File` rows in `PENDING` status older than the upload TTL window
-   (`FILE_UPLOAD_TTL_SEC` plus a safety margin), and best-effort deletes the
-   matching S3 object via `S3ProviderInterface.delete`.
-2. Optionally reconciles S3 listing against `File` rows to catch objects that
-   were PUT but never confirmed at all.
-
-Until that job exists, disk/storage cost from abandoned uploads is bounded
-only by client behavior (most clients confirm immediately after a successful
-PUT) — acceptable for now, not for production scale.
+See `FileService.sweepOrphans()` / `tests/file.service.spec.ts` for the
+per-outcome unit coverage and `test/maintenance-jobs.e2e-spec.ts` for the
+end-to-end proof against real S3 (LocalStack/MinIO).

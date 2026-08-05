@@ -17,10 +17,10 @@ the marked lines/blocks and the markers themselves.
 
 - `apps/api/src/app.module.ts`
   - line 11: `import { FileModule } from '@modules/file/file.module.js'; // <module:file>`
-  - line 72: `FileModule, // <module:file>`
+  - line 76: `FileModule, // <module:file>`
 - `apps/api/prisma/schema.prisma`
-  - line 42: `files            File[] // <module:file>`
-  - lines 179-210 (block)
+  - line 42: `files               File[] // <module:file>`
+  - lines 186-220 (block)
 
 ## 3. Drop `.env` variables
 

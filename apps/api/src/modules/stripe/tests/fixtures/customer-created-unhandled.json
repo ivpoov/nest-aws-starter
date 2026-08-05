@@ -1,0 +1,7 @@
+{
+  "id": "evt_test_unhandled",
+  "type": "customer.created",
+  "data": {
+    "object": { "id": "cus_test_999" }
+  }
+}

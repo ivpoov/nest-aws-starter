@@ -29,7 +29,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const FENCE_SCAN_ROOTS = ['apps/api/src', 'apps/api/prisma/schema.prisma'];
+const FENCE_SCAN_ROOTS = [
+  'apps/api/src',
+  'apps/api/test',
+  'apps/api/prisma/schema.prisma',
+  'apps/api/prisma/seed.ts',
+];
 const FENCE_FILE_EXTENSIONS = new Set(['.ts', '.prisma']);
 const SKIP_DIR_NAMES = new Set(['node_modules', 'dist', 'generated', '.git']);
 
@@ -108,6 +113,46 @@ const MODULES = [
       'CLOUDFRONT_KEY_PAIR_ID',
       'CLOUDFRONT_PRIVATE_KEY',
       'CLOUDFRONT_URL_TTL_SEC',
+    ],
+  },
+  {
+    id: 'payment',
+    summary:
+      'Plans, subscriptions, payment transactions, webhook events, and the Stripe provider ' +
+      '(schema + core module + Stripe implementation).',
+    paths: [
+      'apps/api/src/modules/payment',
+      'apps/api/src/modules/stripe',
+      'apps/api/src/configs/stripe.config.ts',
+      'apps/api/src/configs/payment.config.ts',
+      // Revenue TypedSQL reads payment_transactions/subscriptions/plans
+      // directly (statistic module's own repository, not a feature import —
+      // see docs/conventions/backend.md's TypedSQL section) — the tables
+      // vanish with the module, so the SQL files must too. Whole-file
+      // deletion here; their repository/service call sites are fenced
+      // instead (apps/api/src/modules/statistic).
+      'apps/api/prisma/sql/revenueByDay.sql',
+      'apps/api/prisma/sql/mrrCurrent.sql',
+      'apps/api/prisma/sql/revenueByPlan.sql',
+      // Whole e2e specs that exist solely to exercise payment endpoints —
+      // partial specs that merely touch payment (maintenance-jobs,
+      // statistics) are handled by fence markers instead, since most of
+      // their content is non-payment.
+      'apps/api/test/billing.e2e-spec.ts',
+      'apps/api/test/plans-admin.e2e-spec.ts',
+      'apps/api/test/transactions.e2e-spec.ts',
+      'apps/api/test/webhooks.e2e-spec.ts',
+      'apps/api/test/webhook-consumer.e2e-spec.ts',
+      'apps/api/test/subscription-access.e2e-spec.ts',
+      'apps/api/test/subscription-lifecycle.e2e-spec.ts',
+    ],
+    envVars: [
+      'STRIPE_ENABLED',
+      'STRIPE_SECRET_KEY',
+      'STRIPE_WEBHOOK_SECRET',
+      'STRIPE_PORTAL_RETURN_URL',
+      'SQS_PAYMENT_WEBHOOK_QUEUE_URL',
+      'PAYMENT_WEBHOOK_CONSUMER_ENABLED',
     ],
   },
 ];

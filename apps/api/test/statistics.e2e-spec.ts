@@ -4,14 +4,16 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { REDIS_CLIENT } from '@providers/redis/constants/redis.constants.js';
 import type { RedisClientType } from '@providers/redis/types/redis-client.type.js';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createTestApp } from './app.factory.js';
 
 describe('admin statistics', () => {
   let app: NestFastifyApplication;
+  let prisma: PrismaService;
   let redis: RedisClientType;
   let adminToken: string;
   let userToken: string;
+  let userId: string;
 
   function uniqueIp(): string {
     return `10.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
@@ -19,7 +21,7 @@ describe('admin statistics', () => {
 
   async function registerUser(
     displayName: string,
-  ): Promise<{ email: string; accessToken: string }> {
+  ): Promise<{ email: string; accessToken: string; id: string }> {
     const email: string = `statistics-e2e-${randomUUID()}@example.com`;
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/register')
@@ -27,17 +29,66 @@ describe('admin statistics', () => {
       .send({ displayName, email, password: 'correct-horse-battery' })
       .expect(201);
 
-    return { email, accessToken: response.body.accessToken };
+    const me = await request(app.getHttpServer())
+      .get('/api/v1/users/me')
+      .set('authorization', `Bearer ${response.body.accessToken}`)
+      .expect(200);
+
+    return { email, accessToken: response.body.accessToken, id: me.body.id };
   }
+
+  // <module:payment>
+  // Direct Prisma writes (plan/subscription/transaction) mirror the pattern
+  // in test/transactions.e2e-spec.ts — there is no checkout flow to hit in
+  // this suite (that lives in payment's own e2e specs), and the statistics
+  // TypedSQL reads these tables regardless of how the rows got there.
+  async function seedRevenueFixture(): Promise<{ planId: string; amountCents: number }> {
+    const amountCents = 2_500;
+    const plan = await prisma.plan.create({
+      data: {
+        name: `Statistics E2E Plan ${randomUUID()}`,
+        amountCents,
+        currency: 'USD',
+        intervalDays: 30,
+      },
+    });
+    const subscription = await prisma.subscription.create({
+      data: {
+        userId,
+        planId: plan.id,
+        status: 'ACTIVE',
+        provider: 'FAKE',
+        providerRef: `sub_${randomUUID()}`,
+        currentPeriodEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    await prisma.paymentTransaction.create({
+      data: {
+        userId,
+        subscriptionId: subscription.id,
+        status: 'SUCCEEDED',
+        amountCents,
+        currency: 'USD',
+        provider: 'FAKE',
+        providerRef: `txn_${randomUUID()}`,
+      },
+    });
+
+    return { planId: plan.id, amountCents };
+  }
+  // </module:payment>
 
   beforeAll(async () => {
     app = await createTestApp();
+    prisma = app.get(PrismaService);
     redis = app.get<RedisClientType>(REDIS_CLIENT);
 
     const admin = await registerUser('Statistics Admin E2E');
     const user = await registerUser('Statistics User E2E');
 
     userToken = user.accessToken;
+    userId = user.id;
 
     // promote directly in the database — there is deliberately no promote endpoint
     await app.get(PrismaService).user.updateMany({
@@ -92,12 +143,73 @@ describe('admin statistics', () => {
     expect(response.body.totals.activeSessions).toBeGreaterThanOrEqual(2);
     expect(response.body.totals.onlineNow).toBeGreaterThanOrEqual(1);
     expect(response.body.totals.newToday).toBeGreaterThanOrEqual(2);
-    expect(response.body.totals.revenue).toBeNull();
+    // <module:payment>
+    // The payment module is present in this suite, so revenue/mrr are real
+    // numbers (>= 0) rather than the v0.3 null stub — see the dedicated
+    // revenue-fixture test below for the exact-delta proof.
+    expect(typeof response.body.totals.revenue).toBe('number');
+    expect(response.body.totals.revenue).toBeGreaterThanOrEqual(0);
+    expect(typeof response.body.totals.mrrCents).toBe('number');
+    expect(response.body.totals.mrrCents).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(response.body.revenueByPlan)).toBe(true);
+    // </module:payment>
     expect(Array.isArray(response.body.usersByStatus)).toBe(true);
     expect(response.body.usersByStatus.length).toBeGreaterThan(0);
     expect(Array.isArray(response.body.authMethodDistribution)).toBe(true);
     expect(response.body.authMethodDistribution.length).toBeGreaterThan(0);
   });
+
+  // <module:payment>
+  it('reflects a new plan/subscription/transaction in revenue, mrr, and the by-plan breakdown', async () => {
+    await redis.del('statistic:overview');
+
+    const before = await request(app.getHttpServer())
+      .get('/api/v1/admin/statistics/overview')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    const fixture = await seedRevenueFixture();
+
+    await redis.del('statistic:overview');
+
+    const after = await request(app.getHttpServer())
+      .get('/api/v1/admin/statistics/overview')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    // Exact deltas: e2e specs run sequentially in this suite
+    // (fileParallelism: false) and nothing else writes payment_transactions
+    // between the two calls above, so the fixture's contribution is isolated.
+    expect(after.body.totals.revenue - before.body.totals.revenue).toBe(fixture.amountCents);
+    expect(after.body.totals.mrrCents - before.body.totals.mrrCents).toBe(fixture.amountCents);
+
+    const planRow = after.body.revenueByPlan.find(
+      (row: { planId: string }) => row.planId === fixture.planId,
+    );
+
+    expect(planRow).toEqual({
+      planId: fixture.planId,
+      planName: expect.any(String),
+      amountCents: fixture.amountCents,
+    });
+  });
+
+  it('serves REVENUE series points reflecting the day-bucketed transaction totals', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/admin/statistics/series?metric=REVENUE&days=5')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(response.body.metric).toBe('REVENUE');
+    expect(response.body.days).toBe(5);
+    expect(response.body.points).toHaveLength(5);
+
+    for (const point of response.body.points) {
+      expect(typeof point.date).toBe('string');
+      expect(typeof point.value).toBe('number');
+    }
+  });
+  // </module:payment>
 
   it('rejects an unknown metric with 400', async () => {
     const response = await request(app.getHttpServer())
@@ -152,5 +264,32 @@ describe('admin statistics', () => {
       .expect(200);
 
     expect(second.body).toEqual(first.body);
+  });
+
+  it('serves the second overview call entirely from cache — zero TypedSQL queries', async () => {
+    await redis.del('statistic:overview');
+
+    const querySpy = vi.spyOn(prisma, '$queryRawTyped');
+
+    await request(app.getHttpServer())
+      .get('/api/v1/admin/statistics/overview')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    // The cache miss above must have run at least one TypedSQL query — a
+    // spy asserting zero calls on both legs would trivially pass if wiring
+    // broke and nothing ever queried at all.
+    expect(querySpy.mock.calls.length).toBeGreaterThan(0);
+
+    querySpy.mockClear();
+
+    await request(app.getHttpServer())
+      .get('/api/v1/admin/statistics/overview')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(querySpy).not.toHaveBeenCalled();
+
+    querySpy.mockRestore();
   });
 });

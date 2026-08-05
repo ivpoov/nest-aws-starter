@@ -17,8 +17,8 @@ Every line/block below carries a `// <module:statistic>` (or
 the marked lines/blocks and the markers themselves.
 
 - `apps/api/src/app.module.ts`
-  - line 20: `import { StatisticModule } from '@modules/statistic/statistic.module.js'; // <module:statistic>`
-  - line 75: `StatisticModule, // <module:statistic>`
+  - line 21: `import { StatisticModule } from '@modules/statistic/statistic.module.js'; // <module:statistic>`
+  - line 79: `StatisticModule, // <module:statistic>`
 
 ## 3. Drop `.env` variables
 
