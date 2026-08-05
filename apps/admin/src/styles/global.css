@@ -10,6 +10,9 @@
   --accent-content: oklch(0.99 0 0);
   --danger: oklch(0.55 0.2 27);
   --edge: oklch(0.9 0.01 262);
+  /* Modal backdrop scrim — deliberately theme-invariant (a dimming layer,
+     not a surface), so it doesn't get a light/dark override below. */
+  --overlay: oklch(0 0 0 / 50%);
 }
 
 :root[data-theme="dark"] {
@@ -32,6 +35,7 @@
   --color-accent-content: var(--accent-content);
   --color-danger: var(--danger);
   --color-edge: var(--edge);
+  --color-overlay: var(--overlay);
 }
 
 body {

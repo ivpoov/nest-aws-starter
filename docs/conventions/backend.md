@@ -291,6 +291,11 @@ Prisma model types appear only here, only as local variable types. A future
 `NoteMongooseRepository` implements the same contract in a sibling file; the module
 binding is the only other line that changes.
 
+The only Prisma error codes a repository may branch on are `P2025` (not-found
+signal, e.g. `update`/`delete` on a missing row) and `P2002` (idempotent-replay
+signal, e.g. a unique-constraint hit on a repeated create) — both confined to the
+repository, never leaked as raw Prisma errors past its boundary.
+
 ### TypedSQL — the blessed pattern for hand-optimized queries
 
 When the query builder is the wrong tool (aggregations, reports, window functions),

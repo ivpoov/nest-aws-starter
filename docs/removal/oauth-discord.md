@@ -18,10 +18,10 @@ the marked lines/blocks and the markers themselves.
 
 - `apps/api/src/app.module.ts`
   - line 15: `import { DiscordOauthModule } from '@modules/oauth-discord/discord-oauth.module.js'; // <module:oauth-discord>`
-  - line 70: `DiscordOauthModule, // <module:oauth-discord>`
+  - line 74: `DiscordOauthModule, // <module:oauth-discord>`
 - `apps/api/src/configs/index.ts`
   - line 5: `import { discordOauthConfig } from '@configs/discord-oauth.config.js'; // <module:oauth-discord>`
-  - line 22: `discordOauthConfig, // <module:oauth-discord>`
+  - line 25: `discordOauthConfig, // <module:oauth-discord>`
 
 ## 3. Drop `.env` variables
 

@@ -3,6 +3,8 @@ export interface StatisticsTotalsInterface {
   readonly activeSessions: number;
   readonly onlineNow: number;
   readonly newToday: number;
-  // Stubbed until v0.4 wires real revenue KPIs.
+  // Null when the payment module is absent (subtraction-removable) — see
+  // StatisticService.composeOverview.
   readonly revenue: number | null;
+  readonly mrrCents: number | null;
 }

@@ -1,6 +1,9 @@
 import type { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import type { StatisticsCountRowInterface } from '@modules/statistic/interfaces/statistics-count-row.interface.js';
 import type { StatisticsDayPointInterface } from '@modules/statistic/interfaces/statistics-day-point.interface.js';
+// <module:payment>
+import type { StatisticsRevenueByPlanRowInterface } from '@modules/statistic/interfaces/statistics-revenue-by-plan-row.interface.js';
+// </module:payment>
 import { StatisticTypedSqlRepository } from '@modules/statistic/repositories/statistic-typed-sql.repository.js';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -72,4 +75,51 @@ describe('StatisticTypedSqlRepository', () => {
 
     expect(points).toEqual([{ date: '2026-08-03', count: 1 }]);
   });
+
+  // <module:payment>
+  it('formats revenueByDay rows as YYYY-MM-DD points, defaulting null amounts to zero', async () => {
+    const { repository, queryRawTyped } = createRepository([
+      { day: new Date('2026-08-01T00:00:00.000Z'), amountCents: 2000 },
+      { day: new Date('2026-08-02T00:00:00.000Z'), amountCents: null },
+    ]);
+
+    const points: StatisticsDayPointInterface[] = await repository.findRevenueByDay(2);
+
+    expect(points).toEqual([
+      { date: '2026-08-01', count: 2000 },
+      { date: '2026-08-02', count: 0 },
+    ]);
+    expect(queryRawTyped).toHaveBeenCalledOnce();
+  });
+
+  it('reads the single mrrCurrent row, converting bigint cents to a number', async () => {
+    const { repository } = createRepository([{ mrrCents: 4_900n }]);
+
+    const mrrCents: number = await repository.findMrrCents();
+
+    expect(mrrCents).toBe(4_900);
+  });
+
+  it('defaults mrrCurrent to zero when no active subscriptions exist', async () => {
+    const { repository } = createRepository([]);
+
+    const mrrCents: number = await repository.findMrrCents();
+
+    expect(mrrCents).toBe(0);
+  });
+
+  it('maps revenueByPlan rows, defaulting null amounts to zero', async () => {
+    const { repository } = createRepository([
+      { planId: 'plan-1', planName: 'Pro', amountCents: 3000 },
+      { planId: 'plan-2', planName: 'Basic', amountCents: null },
+    ]);
+
+    const rows: StatisticsRevenueByPlanRowInterface[] = await repository.findRevenueByPlan(30);
+
+    expect(rows).toEqual([
+      { planId: 'plan-1', planName: 'Pro', amountCents: 3000 },
+      { planId: 'plan-2', planName: 'Basic', amountCents: 0 },
+    ]);
+  });
+  // </module:payment>
 });

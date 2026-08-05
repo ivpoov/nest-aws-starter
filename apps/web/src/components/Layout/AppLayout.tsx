@@ -10,6 +10,7 @@ const NAV_ITEMS: ReadonlyArray<{ readonly to: string; readonly label: string }> 
   { to: '/profile', label: 'Profile' },
   { to: '/settings/methods', label: 'Sign-in methods' },
   { to: '/settings/sessions', label: 'Sessions' },
+  { to: '/settings/billing', label: 'Billing' },
 ];
 
 export function AppLayout(): ReactElement {

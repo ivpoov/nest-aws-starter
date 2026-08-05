@@ -15,10 +15,13 @@ import { OauthModule } from '@modules/oauth/oauth.module.js';
 import { DiscordOauthModule } from '@modules/oauth-discord/discord-oauth.module.js'; // <module:oauth-discord>
 import { FacebookOauthModule } from '@modules/oauth-facebook/facebook-oauth.module.js'; // <module:oauth-facebook>
 import { GoogleOauthModule } from '@modules/oauth-google/google-oauth.module.js'; // <module:oauth-google>
+import { PaymentModule } from '@modules/payment/payment.module.js'; // <module:payment>
 import { PrismaModule } from '@modules/prisma/prisma.module.js';
 import { SessionModule } from '@modules/session/session.module.js';
 import { StatisticModule } from '@modules/statistic/statistic.module.js'; // <module:statistic>
+import { StripeModule } from '@modules/stripe/stripe.module.js'; // <module:payment>
 import { SuspiciousActivityModule } from '@modules/suspicious-activity/suspicious-activity.module.js';
+import { TaskSchedulerModule } from '@modules/task-scheduler/task-scheduler.module.js';
 import { TokenModule } from '@modules/token/token.module.js';
 import { UserModule } from '@modules/user/user.module.js';
 import { Module } from '@nestjs/common';
@@ -51,6 +54,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     RedisModule,
     CacheModule,
     EventModule,
+    TaskSchedulerModule,
     CaslModule,
     S3Module,
     CloudFrontModule, // <module:cloudfront>
@@ -75,6 +79,8 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     StatisticModule, // <module:statistic>
     ContactUsModule, // <module:contact-us>
     ApiKeyModule, // <module:api-key>
+    PaymentModule, // <module:payment>
+    StripeModule, // <module:payment>
   ],
   providers: [
     // Order matters: throttling runs before authentication.

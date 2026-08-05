@@ -7,7 +7,14 @@ import { StatisticsPage } from '../pages/StatisticsPage';
 vi.mock('../apis/statistics');
 
 const OVERVIEW: Record<string, unknown> = {
-  totals: { users: 42, activeSessions: 7, onlineNow: 3, newToday: 5, revenue: null },
+  totals: {
+    users: 42,
+    activeSessions: 7,
+    onlineNow: 3,
+    newToday: 5,
+    revenue: null,
+    mrrCents: null,
+  },
   usersByStatus: [
     { key: 'ACTIVE', count: 40 },
     { key: 'BLOCKED', count: 2 },
@@ -16,16 +23,27 @@ const OVERVIEW: Record<string, unknown> = {
     { key: 'EMAIL', count: 30 },
     { key: 'GOOGLE', count: 12 },
   ],
+  revenueByPlan: [],
+};
+
+// Payment present — revenue/mrr are real numbers, and RevenueChart's
+// switcher is only rendered in this state (isAvailable derives from
+// totals.revenue !== null, mirroring KpiTiles).
+const OVERVIEW_WITH_REVENUE: Record<string, unknown> = {
+  ...OVERVIEW,
+  totals: { ...(OVERVIEW.totals as Record<string, unknown>), revenue: 12_500, mrrCents: 4_900 },
 };
 
 describe('StatisticsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(statisticsApi.fetchStatisticsSeries).mockResolvedValue({
-      metric: StatisticsMetricEnum.REGISTRATIONS,
-      days: 30,
-      points: [{ date: '2026-08-01', value: 4 }],
-    } as never);
+    vi.mocked(statisticsApi.fetchStatisticsSeries).mockImplementation((metric) =>
+      Promise.resolve({
+        metric,
+        days: 30,
+        points: [{ date: '2026-08-01', value: 4 }],
+      } as never),
+    );
   });
 
   it('renders KPI tile values once the overview loads', async () => {
@@ -37,7 +55,8 @@ describe('StatisticsPage', () => {
     expect(screen.getByText('7')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('5')).toBeInTheDocument();
-    expect(screen.getByText('—')).toBeInTheDocument();
+    // Revenue and MRR tiles both render the null-fallback dash.
+    expect(screen.getAllByText('—')).toHaveLength(2);
   });
 
   it('shows the error state when the overview request fails', async () => {
@@ -52,7 +71,7 @@ describe('StatisticsPage', () => {
     expect(await screen.findAllByText('Something broke')).not.toHaveLength(0);
   });
 
-  it('refetches the series with the new day count when the switcher is clicked', async () => {
+  it('refetches the registrations series with the new day count when its switcher is clicked', async () => {
     vi.mocked(statisticsApi.fetchStatisticsOverview).mockResolvedValue(OVERVIEW as never);
 
     render(<StatisticsPage />);
@@ -64,7 +83,11 @@ describe('StatisticsPage', () => {
       );
     });
 
-    fireEvent.click(await screen.findByText('7d'));
+    // Both the registrations and revenue charts render a "7d"/"30d"/"90d"
+    // switcher — the registrations one renders first.
+    const switchers: HTMLElement[] = await screen.findAllByText('7d');
+
+    fireEvent.click(switchers[0] as HTMLElement);
 
     await waitFor((): void => {
       expect(statisticsApi.fetchStatisticsSeries).toHaveBeenLastCalledWith(
@@ -72,5 +95,47 @@ describe('StatisticsPage', () => {
         7,
       );
     });
+  });
+
+  it('fetches and refetches the revenue series independently of the registrations series', async () => {
+    vi.mocked(statisticsApi.fetchStatisticsOverview).mockResolvedValue(
+      OVERVIEW_WITH_REVENUE as never,
+    );
+
+    render(<StatisticsPage />);
+
+    await waitFor((): void => {
+      expect(statisticsApi.fetchStatisticsSeries).toHaveBeenCalledWith(
+        StatisticsMetricEnum.REVENUE,
+        30,
+      );
+    });
+
+    const switchers: HTMLElement[] = await screen.findAllByText('7d');
+
+    expect(switchers).toHaveLength(2);
+
+    fireEvent.click(switchers[1] as HTMLElement);
+
+    await waitFor((): void => {
+      expect(statisticsApi.fetchStatisticsSeries).toHaveBeenLastCalledWith(
+        StatisticsMetricEnum.REVENUE,
+        7,
+      );
+    });
+  });
+
+  it('shows the unavailable placeholder for the revenue chart instead of a chart when payment is absent', async () => {
+    vi.mocked(statisticsApi.fetchStatisticsOverview).mockResolvedValue(OVERVIEW as never);
+
+    render(<StatisticsPage />);
+
+    expect(await screen.findByText('Revenue requires the payment module')).toBeInTheDocument();
+
+    // Only the registrations chart's switcher renders — RevenueChart hides
+    // its own switcher while unavailable.
+    const switchers: HTMLElement[] = await screen.findAllByText('7d');
+
+    expect(switchers).toHaveLength(1);
   });
 });
