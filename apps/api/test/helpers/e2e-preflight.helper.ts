@@ -29,6 +29,15 @@ import { config as loadEnv } from 'dotenv';
 
 const PREFLIGHT_PREFIX = 'E2E PREFLIGHT:';
 const LOCALSTACK_ACCOUNT_ID = '000000000000';
+// LocalStack's /_localstack/health starts returning 200 before its ready.d
+// init hooks (init-aws.sh) finish provisioning — so a resource can be
+// genuinely "not created yet" for a couple seconds on a slow/freshly-started
+// container even though nothing is actually stale. Retrying here (bounded,
+// and only entered when something is missing — the happy path pays none of
+// this) is what keeps this preflight from producing exactly the kind of
+// misleading diagnostic it exists to eliminate.
+const RETRY_TOTAL_WAIT_MS = 10_000;
+const RETRY_INTERVAL_MS = 2_000;
 
 interface ResourceCheckInterface {
   readonly label: string;
@@ -49,25 +58,70 @@ export default async function setup(): Promise<void> {
 
   await checkReachable(endpoint);
 
-  const missing: string[] = [];
-
-  for (const resource of buildChecks(endpoint)) {
-    try {
-      await resource.run();
-    } catch (caught) {
-      if (!isServiceResponse(caught)) throw caught;
-
-      missing.push(resource.label);
-    }
-  }
+  const missing: string[] = await resolveMissing(buildChecks(endpoint));
 
   if (missing.length > 0) {
     throw new Error(
-      `${PREFLIGHT_PREFIX} LocalStack is up but missing: ${missing.join('; ')}. ` +
+      `${PREFLIGHT_PREFIX} LocalStack is up but still missing after ~${RETRY_TOTAL_WAIT_MS / 1000}s ` +
+        `(not init-script startup lag — already waited that out): ${missing.join('; ')}. ` +
         'The container was started before the init script provisioned it (a stale ' +
         'container). Fix: docker compose up -d --force-recreate localstack',
     );
   }
+}
+
+// Runs every check once; anything that comes back missing (a coded "not
+// found"-shaped service response, not a connectivity error — those still
+// throw straight through) is retried together on a shared clock, up to
+// RETRY_TOTAL_WAIT_MS total, rather than serially per-resource. Returns the
+// labels still missing once the budget is exhausted.
+async function resolveMissing(checks: ResourceCheckInterface[]): Promise<string[]> {
+  let pending: ResourceCheckInterface[] = [];
+
+  for (const check of checks) {
+    try {
+      await check.run();
+    } catch (caught) {
+      if (!isServiceResponse(caught)) throw caught;
+
+      pending.push(check);
+    }
+  }
+
+  const start: number = Date.now();
+
+  while (pending.length > 0 && Date.now() - start < RETRY_TOTAL_WAIT_MS) {
+    await delay(RETRY_INTERVAL_MS);
+
+    const stillPending: ResourceCheckInterface[] = [];
+
+    for (const check of pending) {
+      try {
+        await check.run();
+
+        const elapsedMs: number = Date.now() - start;
+
+        // Not a failure — LocalStack was still initializing, not stale.
+        // Debug-level visibility only; nothing here should look alarming.
+        console.log(
+          `${PREFLIGHT_PREFIX} ${check.label} was missing on the first check but appeared ` +
+            `after ${elapsedMs}ms — LocalStack's init script was still running. Continuing.`,
+        );
+      } catch (caught) {
+        if (!isServiceResponse(caught)) throw caught;
+
+        stillPending.push(check);
+      }
+    }
+
+    pending = stillPending;
+  }
+
+  return pending.map((check: ResourceCheckInterface): string => check.label);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // Mirrors the compose healthcheck itself (`curl -sf localhost:4566/_localstack/health`)
