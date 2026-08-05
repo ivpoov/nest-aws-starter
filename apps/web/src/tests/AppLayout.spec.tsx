@@ -1,8 +1,17 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppLayout } from '../components/Layout/AppLayout';
 import { useAuthStore } from '../stores/auth.store';
+
+// This suite only cares about the impersonation banner — the bell's own
+// behaviour (badge, socket lifecycle) is covered by NotificationBell.spec.tsx
+// and useNotificationSocket.spec.ts, so it is stubbed out here to avoid
+// needing a NotificationSocketProvider (and a mocked socket.io-client) just
+// to render the layout shell.
+vi.mock('../components/Notifications/NotificationBell', () => ({
+  NotificationBell: () => null,
+}));
 
 function base64UrlEncode(value: string): string {
   return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
