@@ -36,7 +36,8 @@ interface TestSetupInterface {
 function createService(
   overrides: { isEnabled?: boolean; isEmailEnabled?: boolean; email?: string | null } = {},
 ): TestSetupInterface {
-  const email: string | null = 'email' in overrides ? (overrides.email ?? null) : 'user@example.com';
+  const email: string | null =
+    'email' in overrides ? (overrides.email ?? null) : 'user@example.com';
   const config = { isEnabled: overrides.isEnabled ?? true } as unknown as MailConfig;
   const send = vi.fn().mockResolvedValue(undefined);
   const mailTransport = { send } as unknown as MailTransportInterface;
