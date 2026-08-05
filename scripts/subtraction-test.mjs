@@ -155,6 +155,17 @@ const MODULES = [
       'PAYMENT_WEBHOOK_CONSUMER_ENABLED',
     ],
   },
+  {
+    // Schema-only for now (v0.5 Task 1): no module folder exists yet — the
+    // dispatcher/gateway/API code lands in Tasks 2-5, which will add their
+    // paths to `paths` below. Until then this entry proves only the schema
+    // fences (models/enums in schema.prisma) and the single `User`
+    // back-relation line strip cleanly.
+    id: 'notification',
+    summary: 'Notification/receipt/preference history, WS gateway, and email digest (schema).',
+    paths: [],
+    envVars: [],
+  },
 ];
 
 // Documented for docs/removal/README.md — investigated during Task 14 and
