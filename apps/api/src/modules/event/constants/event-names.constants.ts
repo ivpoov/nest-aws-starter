@@ -21,3 +21,4 @@ export const SUBSCRIPTION_RENEWED_EVENT = 'subscription.renewed';
 export const SUBSCRIPTION_PAST_DUE_EVENT = 'subscription.past-due';
 export const SUBSCRIPTION_CANCELED_EVENT = 'subscription.canceled';
 export const SUBSCRIPTION_EXPIRED_EVENT = 'subscription.expired';
+export const WEBHOOK_FAILED_EVENT = 'webhook.failed';
