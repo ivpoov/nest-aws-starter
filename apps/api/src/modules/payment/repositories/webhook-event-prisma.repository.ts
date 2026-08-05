@@ -80,6 +80,41 @@ export class WebhookEventPrismaRepository implements WebhookEventRepositoryInter
     return updated.attempts;
   }
 
+  public async findRetryableFailed(
+    cutoff: Date,
+    maxAttempts: number,
+    limit: number,
+  ): Promise<WebhookEventInterface[]> {
+    const events: WebhookEventModel[] = await this.prisma.webhookEvent.findMany({
+      where: {
+        status: WebhookEventStatusEnum.FAILED,
+        createdAt: { lt: cutoff },
+        attempts: { lt: maxAttempts },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+    });
+
+    return events.map((event: WebhookEventModel): WebhookEventInterface => this.toDomain(event));
+  }
+
+  public async findStaleReceived(cutoff: Date, limit: number): Promise<WebhookEventInterface[]> {
+    const events: WebhookEventModel[] = await this.prisma.webhookEvent.findMany({
+      where: { status: WebhookEventStatusEnum.RECEIVED, createdAt: { lt: cutoff } },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+    });
+
+    return events.map((event: WebhookEventModel): WebhookEventInterface => this.toDomain(event));
+  }
+
+  public async markRetryQueued(id: string): Promise<void> {
+    await this.prisma.webhookEvent.update({
+      where: { id },
+      data: { status: WebhookEventStatusEnum.RECEIVED },
+    });
+  }
+
   // Deliberate extension of the "P2025 is the single permitted Prisma-error
   // touchpoint" convention (docs/conventions/backend.md §11): P2002 (unique
   // violation) is this repository's own confined signal for idempotent

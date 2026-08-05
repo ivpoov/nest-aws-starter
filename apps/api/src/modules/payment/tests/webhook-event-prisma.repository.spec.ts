@@ -33,6 +33,7 @@ function createRepository(overrides: Record<string, ReturnType<typeof vi.fn>> = 
     create: vi.fn().mockResolvedValue(row),
     findUniqueOrThrow: vi.fn().mockResolvedValue(row),
     findUnique: vi.fn().mockResolvedValue(row),
+    findMany: vi.fn().mockResolvedValue([row]),
     update: vi.fn().mockResolvedValue(row),
     ...overrides,
   };
@@ -169,5 +170,50 @@ describe('WebhookEventPrismaRepository — status transitions', () => {
       data: { attempts: { increment: 1 }, lastError: 'boom' },
     });
     expect(attempts).toBe(2);
+  });
+});
+
+describe('WebhookEventPrismaRepository — retry sweep queries', () => {
+  const cutoff = new Date('2026-08-04T12:00:00Z');
+
+  it('findRetryableFailed queries FAILED rows older than cutoff under the attempts ceiling', async () => {
+    const { repository, webhookEvent } = createRepository();
+
+    const result = await repository.findRetryableFailed(cutoff, 8, 200);
+
+    expect(webhookEvent.findMany).toHaveBeenCalledWith({
+      where: {
+        status: WebhookEventStatusEnum.FAILED,
+        createdAt: { lt: cutoff },
+        attempts: { lt: 8 },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe(row.id);
+  });
+
+  it('findStaleReceived queries RECEIVED rows older than cutoff', async () => {
+    const { repository, webhookEvent } = createRepository();
+
+    await repository.findStaleReceived(cutoff, 200);
+
+    expect(webhookEvent.findMany).toHaveBeenCalledWith({
+      where: { status: WebhookEventStatusEnum.RECEIVED, createdAt: { lt: cutoff } },
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+    });
+  });
+
+  it('markRetryQueued resets status to RECEIVED without touching attempts', async () => {
+    const { repository, webhookEvent } = createRepository();
+
+    await repository.markRetryQueued(row.id);
+
+    expect(webhookEvent.update).toHaveBeenCalledWith({
+      where: { id: row.id },
+      data: { status: WebhookEventStatusEnum.RECEIVED },
+    });
   });
 });
