@@ -27,15 +27,6 @@ import { buildSuspiciousLoginContent } from '@modules/notification/builders/susp
 import { buildUserBlockedContent } from '@modules/notification/builders/user-blocked.builder.js';
 import { buildWebhookFailedContent } from '@modules/notification/builders/webhook-failed.builder.js';
 import { NOTIFICATION_REPOSITORY } from '@modules/notification/constants/notification.constants.js';
-import {
-  NOTIFICATION_EVENT,
-  UNREAD_COUNT_EVENT,
-} from '@modules/notification/constants/notification-events.constants.js';
-import {
-  ADMIN_ROOM,
-  buildUserRoom,
-} from '@modules/notification/constants/notification-rooms.constants.js';
-import { NotificationGateway } from '@modules/notification/gateways/notification.gateway.js';
 import type { AuthMethodLinkedPayloadInterface } from '@modules/notification/interfaces/auth-method-linked-payload.interface.js';
 import type { AuthMethodUnlinkedPayloadInterface } from '@modules/notification/interfaces/auth-method-unlinked-payload.interface.js';
 import type { AuthNewDevicePayloadInterface } from '@modules/notification/interfaces/auth-new-device-payload.interface.js';
@@ -52,12 +43,8 @@ import type { SubscriptionPastDuePayloadInterface } from '@modules/notification/
 import type { SubscriptionRenewedPayloadInterface } from '@modules/notification/interfaces/subscription-renewed-payload.interface.js';
 import type { UserBlockedPayloadInterface } from '@modules/notification/interfaces/user-blocked-payload.interface.js';
 import type { WebhookFailedPayloadInterface } from '@modules/notification/interfaces/webhook-failed-payload.interface.js';
-import { NotificationEmailService } from '@modules/notification/services/notification-email.service.js';
-import {
-  NotificationAudienceEnum,
-  type NotificationResponseInterface,
-  NotificationTypeEnum,
-} from '@nest-aws-starter/shared';
+import { NotificationFanOutService } from '@modules/notification/services/notification-fan-out.service.js';
+import { NotificationAudienceEnum, NotificationTypeEnum } from '@nest-aws-starter/shared';
 import { Inject, Injectable } from '@nestjs/common';
 
 // The only bus subscriber in the module (task-3-brief.md's event -> type
@@ -65,20 +52,16 @@ import { Inject, Injectable } from '@nestjs/common';
 // persist first, fan out second — a channel/socket failure must never lose
 // or roll back the row (backend.md's "persist-first" rule), and a
 // persistence failure must never break the emitting feature (same
-// containment pattern as ActivityListener.safeRecord).
+// containment pattern as ActivityListener.safeRecord). The fan-out itself
+// (IN_APP socket push, unread-count push, EMAIL channel — each
+// independently contained) lives in NotificationFanOutService (PR 5 code
+// review: extracted so this file stays a thin event -> type mapping layer,
+// and a future channel entangles the orchestrator, not this matrix).
 //
 // webhook.failed's WEBHOOK_FAILED_EVENT is emitted by
 // PaymentWebhookConsumerService at the FAILED ceiling (payment module) —
 // the release plan's matrix line, not this module's brief, governs that
 // emit site; see task-3-report.md for the correction.
-//
-// PR 5 adds a third, independently-contained fan-out step: the EMAIL
-// channel (NotificationEmailService), gated on the recipient's stored
-// preference (or its default) behind mail's own isEnabled — see
-// task-5-report.md. This file is already past backend.md's 300-line split
-// guideline (it was at 316 before this PR); the 11-row event matrix is the
-// bulk of it and splitting the matrix out is left as a follow-up rather
-// than risking PR 3/4's existing dispatcher tests in this PR.
 @Injectable()
 export class NotificationDispatcherService {
   private readonly logger = new CustomLoggerService(NotificationDispatcherService.name);
@@ -86,8 +69,7 @@ export class NotificationDispatcherService {
   constructor(
     @Inject(NOTIFICATION_REPOSITORY)
     private readonly notificationRepository: NotificationRepositoryInterface,
-    private readonly gateway: NotificationGateway,
-    private readonly emailService: NotificationEmailService,
+    private readonly fanOutService: NotificationFanOutService,
   ) {}
 
   @OnDomainEvent(AUTH_NEW_DEVICE_EVENT)
@@ -229,7 +211,7 @@ export class NotificationDispatcherService {
 
     if (!notification) return;
 
-    await this.fanOut(notification);
+    await this.fanOutService.fanOut(notification);
   }
 
   // Persist-first: a write failure here is terminal for this event — there
@@ -253,95 +235,10 @@ export class NotificationDispatcherService {
     }
   }
 
-  // Channel failures log a warning and never roll back the already-persisted
-  // row (backend.md's binding "persist-first" rule). The unread-count push
-  // is a separate, independently-contained step (see emitUnreadCount) so a
-  // count-query failure can never take down the notification emit above it.
-  private async fanOut(notification: NotificationInterface): Promise<void> {
-    try {
-      const room: string =
-        notification.audience === NotificationAudienceEnum.ADMIN
-          ? ADMIN_ROOM
-          : buildUserRoom(notification.userId as string);
-
-      this.gateway.server.to(room).emit(NOTIFICATION_EVENT, this.toResponse(notification));
-    } catch (caught) {
-      this.logger.warn(
-        `Notification channel delivery failed for ${notification.id}: ${this.describe(caught)}`,
-      );
-    }
-
-    if (notification.audience === NotificationAudienceEnum.USER && notification.userId) {
-      await this.emitUnreadCount(notification.userId);
-      await this.sendEmail(notification);
-    }
-  }
-
-  // EMAIL channel, independently contained like the socket pushes above —
-  // a mail failure must never affect the persisted row or the IN_APP push
-  // (backend.md's "preferences gate channels, never persistence").
-  private async sendEmail(notification: NotificationInterface): Promise<void> {
-    if (!notification.userId) return;
-
-    try {
-      await this.emailService.sendIfEnabled(
-        notification.userId,
-        notification.type,
-        notification.title,
-        notification.body,
-      );
-    } catch (caught) {
-      this.logger.warn(
-        `Notification email delivery failed for ${notification.id}: ${this.describe(caught)}`,
-      );
-    }
-  }
-
-  // USER-audience only: PR 3 deferred this push because it needs the
-  // read-side query PR 4 built (NotificationRepositoryInterface.countUnread).
-  // Scoped to the recipient's own USER-audience unread count, even if they
-  // happen to hold the ADMIN role — a merged count would need a User lookup
-  // this hot path doesn't otherwise need; GET /notifications/unread-count
-  // returns the full merged figure for an admin who wants it. No
-  // broadcast-wide equivalent exists for ADMIN-audience rows: unlike a
-  // single user's count, admins have independent per-admin read histories
-  // (lazy receipts), so there is no single number to push to the whole
-  // admins room.
-  private async emitUnreadCount(userId: string): Promise<void> {
-    try {
-      const count: number = await this.notificationRepository.countUnread({
-        userId,
-        includeAdmin: false,
-      });
-
-      this.gateway.server.to(buildUserRoom(userId)).emit(UNREAD_COUNT_EVENT, count);
-    } catch (caught) {
-      this.logger.warn(`Unread-count emission failed for ${userId}: ${this.describe(caught)}`);
-    }
-  }
-
-  private toResponse(notification: NotificationInterface): NotificationResponseInterface {
-    return {
-      id: notification.id,
-      audience: notification.audience,
-      userId: notification.userId,
-      type: notification.type,
-      title: notification.title,
-      body: notification.body,
-      meta: notification.meta,
-      createdAt: notification.createdAt.toISOString(),
-      // Brand-new at the moment of this push — never yet read.
-      readAt: null,
-    };
-  }
-
-  private describe(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-  }
-
   private logError(message: string, caught: unknown): void {
     const stack: string | undefined = caught instanceof Error ? caught.stack : undefined;
+    const description: string = caught instanceof Error ? caught.message : String(caught);
 
-    this.logger.error(`${message}: ${this.describe(caught)}`, stack);
+    this.logger.error(`${message}: ${description}`, stack);
   }
 }

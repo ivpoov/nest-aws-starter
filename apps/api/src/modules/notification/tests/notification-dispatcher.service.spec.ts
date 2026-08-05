@@ -7,6 +7,7 @@ import type { NotificationInterface } from '@modules/notification/interfaces/not
 import type { NotificationRepositoryInterface } from '@modules/notification/interfaces/notification-repository.interface.js';
 import { NotificationDispatcherService } from '@modules/notification/services/notification-dispatcher.service.js';
 import type { NotificationEmailService } from '@modules/notification/services/notification-email.service.js';
+import { NotificationFanOutService } from '@modules/notification/services/notification-fan-out.service.js';
 import {
   AuthMethodTypeEnum,
   LockoutScopeEnum,
@@ -69,11 +70,15 @@ function createDispatcher(callOrder: string[] = []): {
   } as unknown as NotificationRepositoryInterface;
   const gateway = { server: { to } } as unknown as NotificationGateway;
   const emailService = { sendIfEnabled } as unknown as NotificationEmailService;
-  const dispatcher = new NotificationDispatcherService(
+  // The dispatcher delegates fan-out to a real NotificationFanOutService
+  // wired with the same leaf mocks (PR 5 code review's extraction) — the
+  // mocking pattern below is unchanged, only which constructor it feeds.
+  const fanOutService = new NotificationFanOutService(
     notificationRepository,
     gateway,
     emailService,
   );
+  const dispatcher = new NotificationDispatcherService(notificationRepository, fanOutService);
 
   return { dispatcher, create, countUnread, to, emit, sendIfEnabled };
 }
@@ -349,10 +354,14 @@ describe('NotificationDispatcherService', () => {
       const emailService = {
         sendIfEnabled: vi.fn(),
       } as unknown as NotificationEmailService;
-      const failingDispatcher = new NotificationDispatcherService(
+      const fanOutService = new NotificationFanOutService(
         notificationRepository,
         gateway,
         emailService,
+      );
+      const failingDispatcher = new NotificationDispatcherService(
+        notificationRepository,
+        fanOutService,
       );
 
       await expect(
@@ -379,11 +388,12 @@ describe('NotificationDispatcherService', () => {
       const emailService = {
         sendIfEnabled: vi.fn(),
       } as unknown as NotificationEmailService;
-      const dispatcher = new NotificationDispatcherService(
+      const fanOutService = new NotificationFanOutService(
         notificationRepository,
         gateway,
         emailService,
       );
+      const dispatcher = new NotificationDispatcherService(notificationRepository, fanOutService);
 
       await expect(
         dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome' }),
