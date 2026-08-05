@@ -205,7 +205,7 @@ describe('SubscriptionLifecycleService', () => {
       });
     });
 
-    it('does not double-extend or re-emit on a replayed payment (isNew=false)', async () => {
+    it('does not re-emit renewed on a replayed payment (isNew=false)', async () => {
       const subscription = fakeSubscription();
       vi.mocked(subscriptionRepository.findByProviderRef).mockResolvedValue(subscription);
       vi.mocked(transactionRepository.createIdempotent).mockResolvedValue({
@@ -225,7 +225,33 @@ describe('SubscriptionLifecycleService', () => {
 
       await service.recordRenewal(baseData);
 
-      expect(subscriptionRepository.updatePeriodEnd).not.toHaveBeenCalled();
+      expect(eventBus.emit).not.toHaveBeenCalled();
+    });
+
+    it('still extends the period on replay when a prior attempt recorded the transaction but crashed before extending (isNew=false, no event)', async () => {
+      const subscription = fakeSubscription({ currentPeriodEndsAt: new Date('2026-09-01T00:00:00Z') });
+      vi.mocked(subscriptionRepository.findByProviderRef).mockResolvedValue(subscription);
+      vi.mocked(transactionRepository.createIdempotent).mockResolvedValue({
+        transaction: {
+          id: 'txn-1',
+          userId: subscription.userId,
+          subscriptionId: subscription.id,
+          status: TransactionStatusEnum.SUCCEEDED,
+          amountCents: 1900,
+          currency: 'USD',
+          provider: 'STRIPE',
+          providerRef: 'in_1',
+          createdAt: new Date(),
+        },
+        isNew: false,
+      });
+
+      await service.recordRenewal(baseData);
+
+      expect(subscriptionRepository.updatePeriodEnd).toHaveBeenCalledWith(
+        subscription.id,
+        baseData.periodEndsAt,
+      );
       expect(eventBus.emit).not.toHaveBeenCalled();
     });
   });
