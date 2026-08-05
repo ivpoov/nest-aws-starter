@@ -22,7 +22,7 @@ import { Module } from '@nestjs/common';
 // the repository via its injection token. NotificationController (PR 4)
 // serves both roles from one set of endpoints, resolved by
 // NotificationService against the caller's id/role. NotificationGateway
-// stays exported for the dispatcher and any future consumer that needs
+// stays exported for the fan-out service and any future consumer that needs
 // `server`. UserModule is imported for NotificationEmailService's recipient
 // lookup — `user` is a core module (docs/removal/README.md), so this is a
 // core dependency, not a feature-to-feature import. CacheModule/MailModule
