@@ -16,13 +16,19 @@ import {
   FILE_TOO_LARGE,
 } from '@modules/file/constants/file-errors.constants.js';
 import {
+  FILE_SWEEP_BATCH_LIMIT,
+  FILE_SWEEP_STALE_THRESHOLD_MS,
+} from '@modules/file/constants/file-sweep.constants.js';
+import {
   ALLOWED_FILE_CONTENT_TYPES,
   FILE_DOWNLOAD_TTL_SEC,
   FILE_MAX_SIZE_BYTES,
   FILE_UPLOAD_TTL_SEC,
 } from '@modules/file/constants/file-upload.constants.js';
+import { FileSweepOutcomeEnum } from '@modules/file/enums/file-sweep-outcome.enum.js';
 import type { FileInterface } from '@modules/file/interfaces/file.interface.js';
 import type { FileRepositoryInterface } from '@modules/file/interfaces/file-repository.interface.js';
+import type { FileSweepResultInterface } from '@modules/file/interfaces/file-sweep-result.interface.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import {
   type DownloadUrlResponseInterface,
@@ -132,8 +138,90 @@ export class FileService {
     return { downloadUrl };
   }
 
+  // Closes the v0.3 TODO (README's "Known gap: orphan sweep"): PENDING rows
+  // older than the threshold are either a missed confirm (object landed in
+  // S3 but the client never called /confirm) or a genuine abandonment
+  // (nothing ever landed). Batch-limited so a large backlog can't push a
+  // single run past the job's Redis lock TTL — the remainder is picked up
+  // next run.
+  public async sweepOrphans(): Promise<FileSweepResultInterface> {
+    const cutoff: Date = new Date(Date.now() - FILE_SWEEP_STALE_THRESHOLD_MS);
+    const stale: FileInterface[] = await this.fileRepository.findStalePending(
+      cutoff,
+      FILE_SWEEP_BATCH_LIMIT,
+    );
+    const outcomes: FileSweepOutcomeEnum[] = [];
+
+    for (const file of stale) {
+      outcomes.push(await this.sweepOne(file));
+    }
+
+    const result: FileSweepResultInterface = this.tallySweepOutcomes(outcomes);
+
+    this.logger.log(
+      `Orphan file sweep: scanned=${stale.length} ready=${result.markedReadyCount} ` +
+        `deletedAbsent=${result.deletedAbsentCount} deletedInvalid=${result.deletedInvalidCount}`,
+    );
+
+    return result;
+  }
+
+  // Object present but failing the same allowlist/size check confirmUpload
+  // would apply is treated as invalid, not reconciled to READY — a type the
+  // upload flow never allowed for this intent must not become downloadable
+  // just because the client abandoned the confirm step.
+  private async sweepOne(file: FileInterface): Promise<FileSweepOutcomeEnum> {
+    const head: HeadObjectResultInterface | null = await this.s3Provider.headObject(file.key);
+
+    if (!head) {
+      await this.fileRepository.deleteById(file.id);
+
+      return FileSweepOutcomeEnum.DELETED_ABSENT;
+    }
+
+    if (!this.isUploadedObjectValid(file.intent, head)) {
+      await this.s3Provider.delete(file.key);
+      await this.fileRepository.deleteById(file.id);
+
+      return FileSweepOutcomeEnum.DELETED_INVALID;
+    }
+
+    await this.fileRepository.markReady(file.id, {
+      contentType: head.contentType,
+      size: head.contentLength,
+    });
+    this.eventBus.emit(FILE_UPLOADED_EVENT, {
+      fileId: file.id,
+      userId: file.ownerId,
+      intent: file.intent,
+    });
+
+    return FileSweepOutcomeEnum.MARKED_READY;
+  }
+
+  private tallySweepOutcomes(outcomes: FileSweepOutcomeEnum[]): FileSweepResultInterface {
+    return {
+      markedReadyCount: this.countOutcome(outcomes, FileSweepOutcomeEnum.MARKED_READY),
+      deletedAbsentCount: this.countOutcome(outcomes, FileSweepOutcomeEnum.DELETED_ABSENT),
+      deletedInvalidCount: this.countOutcome(outcomes, FileSweepOutcomeEnum.DELETED_INVALID),
+    };
+  }
+
+  private countOutcome(outcomes: FileSweepOutcomeEnum[], outcome: FileSweepOutcomeEnum): number {
+    return outcomes.filter((candidate: FileSweepOutcomeEnum): boolean => candidate === outcome)
+      .length;
+  }
+
+  private isContentTypeAllowed(intent: FileIntentEnum, contentType: string): boolean {
+    return ALLOWED_FILE_CONTENT_TYPES[intent].includes(contentType);
+  }
+
+  private isSizeAllowed(intent: FileIntentEnum, size: number): boolean {
+    return size <= FILE_MAX_SIZE_BYTES[intent];
+  }
+
   private assertContentTypeAllowed(intent: FileIntentEnum, contentType: string): void {
-    if (!ALLOWED_FILE_CONTENT_TYPES[intent].includes(contentType)) {
+    if (!this.isContentTypeAllowed(intent, contentType)) {
       throw new ValidationError(FILE_CONTENT_TYPE_NOT_ALLOWED);
     }
   }
@@ -146,11 +234,20 @@ export class FileService {
   private assertUploadedObjectValid(intent: FileIntentEnum, head: HeadObjectResultInterface): void {
     this.assertContentTypeAllowed(intent, head.contentType);
 
-    if (head.contentLength > FILE_MAX_SIZE_BYTES[intent]) throw new ValidationError(FILE_TOO_LARGE);
+    if (!this.isSizeAllowed(intent, head.contentLength)) throw new ValidationError(FILE_TOO_LARGE);
+  }
+
+  // Non-throwing twin of assertUploadedObjectValid — the sweep needs a
+  // boolean to branch on (reconcile vs. delete), not an exception.
+  private isUploadedObjectValid(intent: FileIntentEnum, head: HeadObjectResultInterface): boolean {
+    return (
+      this.isContentTypeAllowed(intent, head.contentType) &&
+      this.isSizeAllowed(intent, head.contentLength)
+    );
   }
 
   private assertSizeAllowed(intent: FileIntentEnum, size: number): void {
-    if (size > FILE_MAX_SIZE_BYTES[intent]) throw new ValidationError(FILE_TOO_LARGE);
+    if (!this.isSizeAllowed(intent, size)) throw new ValidationError(FILE_TOO_LARGE);
   }
 
   // 404 for a missing file, 403 for someone else's — existence is not leaked
