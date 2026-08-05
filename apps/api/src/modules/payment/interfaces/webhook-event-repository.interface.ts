@@ -21,4 +21,21 @@ export interface WebhookEventRepositoryInterface {
   // threshold is a business rule and stays in the consumer service, not
   // here (conventions §1: repositories hold no business logic).
   recordFailure(id: string, error: string): Promise<number>;
+  // Retry-sweep candidates (WebhookRetryJob): FAILED rows older than cutoff
+  // whose attempts haven't hit the retry ceiling yet, oldest first, capped
+  // at limit.
+  findRetryableFailed(
+    cutoff: Date,
+    maxAttempts: number,
+    limit: number,
+  ): Promise<WebhookEventInterface[]>;
+  // RECEIVED rows older than cutoff — a row whose ingest-time enqueue never
+  // reached SQS (WebhookIngestService.enqueue swallows send failures), oldest
+  // first, capped at limit.
+  findStaleReceived(cutoff: Date, limit: number): Promise<WebhookEventInterface[]>;
+  // Resets a FAILED row back to RECEIVED so the consumer's status
+  // short-circuit (level 2) no longer treats it as terminal. attempts is
+  // left untouched — the consumer's ceiling check reads it on the next
+  // dispatch attempt.
+  markRetryQueued(id: string): Promise<void>;
 }
