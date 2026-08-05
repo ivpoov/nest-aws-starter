@@ -266,6 +266,9 @@ importers:
       react-router:
         specifier: 8.3.0
         version: 8.3.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      socket.io-client:
+        specifier: 4.8.3
+        version: 4.8.3
       zustand:
         specifier: 5.0.14
         version: 5.0.14(@types/react@19.2.5)(immer@11.1.15)(react@19.2.7)(use-sync-external-store@1.6.0(react@19.2.7))
