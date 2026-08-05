@@ -200,6 +200,30 @@ describe('NotificationPreferenceService.updateMany', () => {
     expect(preferenceRepository.upsertMany).not.toHaveBeenCalled();
   });
 
+  // Atomicity: validate() runs synchronously over the whole batch (a plain
+  // Array.map) before upsertMany is ever called — one bad row must abort
+  // the entire batch, never a partial write.
+  it('aborts the whole batch on a single invalid row — the valid row is never persisted', async () => {
+    const { service, preferenceRepository } = createService([]);
+    const updates: UpdateNotificationPreferenceRequestInterface[] = [
+      {
+        type: NotificationTypeEnum.PASSWORD_CHANGED,
+        channel: NotificationChannelEnum.EMAIL,
+        enabled: false,
+      },
+      {
+        type: NotificationTypeEnum.NEW_DEVICE_LOGIN,
+        channel: NotificationChannelEnum.IN_APP,
+        enabled: false,
+      },
+    ];
+
+    const caught = await service.updateMany(userId, updates).catch((error: unknown) => error);
+
+    expect(caught).toMatchObject({ args: { code: 'NOTIFICATION_PREFERENCE_CHANNEL_IMMUTABLE' } });
+    expect(preferenceRepository.upsertMany).not.toHaveBeenCalled();
+  });
+
   it('persists valid EMAIL rows and invalidates the cache', async () => {
     const { service, preferenceRepository, cacheDelete } = createService([]);
     const updates: UpdateNotificationPreferenceRequestInterface[] = [
