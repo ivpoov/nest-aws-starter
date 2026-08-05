@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { Link, NavLink, Outlet } from 'react-router';
 import { useIsImpersonating } from '../../hooks/auth/useIsImpersonating';
 import { useLogout } from '../../hooks/auth/useLogout';
+import { NotificationBell } from '../Notifications/NotificationBell';
 import { Banner } from '../ui/Banner';
 import { ThemeToggle } from '../ui/ThemeToggle';
 
@@ -11,6 +12,7 @@ const NAV_ITEMS: ReadonlyArray<{ readonly to: string; readonly label: string }> 
   { to: '/settings/methods', label: 'Sign-in methods' },
   { to: '/settings/sessions', label: 'Sessions' },
   { to: '/settings/billing', label: 'Billing' },
+  { to: '/settings/notifications', label: 'Notifications' },
 ];
 
 export function AppLayout(): ReactElement {
@@ -35,6 +37,7 @@ export function AppLayout(): ReactElement {
           ))}
         </nav>
         <div className="flex items-center gap-3">
+          <NotificationBell />
           <ThemeToggle />
           <button
             type="button"
