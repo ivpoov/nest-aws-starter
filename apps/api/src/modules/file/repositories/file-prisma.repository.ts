@@ -55,6 +55,24 @@ export class FilePrismaRepository implements FileRepositoryInterface {
     }
   }
 
+  public async findStalePending(cutoff: Date, limit: number): Promise<FileInterface[]> {
+    const files: FileModel[] = await this.prisma.file.findMany({
+      where: { status: FileStatus.PENDING, createdAt: { lt: cutoff } },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+    });
+
+    return files.map((file: FileModel): FileInterface => this.toDomain(file));
+  }
+
+  public async deleteById(id: string): Promise<void> {
+    try {
+      await this.prisma.file.delete({ where: { id } });
+    } catch (caught) {
+      if (!this.isRecordNotFound(caught)) throw caught;
+    }
+  }
+
   // The single permitted Prisma-error touchpoint: P2025 = record not found,
   // mapped to a domain-neutral null so writes stay atomic (no pre-check race).
   private isRecordNotFound(caught: unknown): boolean {
