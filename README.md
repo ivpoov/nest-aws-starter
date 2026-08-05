@@ -86,6 +86,17 @@ pnpm exec biome ci . # lint + format check
 Every module ships unit + e2e tests; CI (GitHub Actions) runs lint, build,
 both test suites and a dependency audit on every PR.
 
+`test:e2e` runs a one-time preflight before any spec that checks LocalStack
+is reachable and that the SQS queues / SNS topic the init script provisions
+actually exist. If you see `E2E PREFLIGHT: LocalStack is up but missing:
+...`, LocalStack was started before `docker/localstack/init-aws.sh` ran
+against it (a stale container — this happens after a `docker compose up -d`
+that reuses an existing container instead of recreating it). Fix:
+
+```bash
+docker compose up -d --force-recreate localstack
+```
+
 ## Repository layout
 
 ```
