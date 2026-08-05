@@ -59,10 +59,9 @@ export class WebhookIngestService {
   }
 
   // Never fails the request — the event row is already durably persisted as
-  // RECEIVED, so acking is safe.
-  // TODO(PR 12 retry job): a RECEIVED row with no queue message is otherwise
-  // invisible to reprocessing — the plan's retry job only covers FAILED
-  // rows; it should also sweep stale RECEIVED rows (>1h) and re-enqueue them.
+  // RECEIVED, so acking is safe. A RECEIVED row with no queue message would
+  // otherwise be invisible to reprocessing forever — WebhookRetryService
+  // (Task 12) sweeps rows still RECEIVED after an hour and re-enqueues them.
   private async enqueue(webhookEventId: string): Promise<void> {
     try {
       await this.sqsProvider.sendMessage(this.payment.webhookQueueUrl, { webhookEventId });
