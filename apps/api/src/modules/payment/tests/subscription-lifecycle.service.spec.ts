@@ -229,7 +229,9 @@ describe('SubscriptionLifecycleService', () => {
     });
 
     it('still extends the period on replay when a prior attempt recorded the transaction but crashed before extending (isNew=false, no event)', async () => {
-      const subscription = fakeSubscription({ currentPeriodEndsAt: new Date('2026-09-01T00:00:00Z') });
+      const subscription = fakeSubscription({
+        currentPeriodEndsAt: new Date('2026-09-01T00:00:00Z'),
+      });
       vi.mocked(subscriptionRepository.findByProviderRef).mockResolvedValue(subscription);
       vi.mocked(transactionRepository.createIdempotent).mockResolvedValue({
         transaction: {
