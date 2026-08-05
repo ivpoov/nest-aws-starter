@@ -18,6 +18,7 @@ describe('OrphanFileSweepJob', () => {
         markedReadyCount: 0,
         deletedAbsentCount: 0,
         deletedInvalidCount: 0,
+        failedCount: 0,
       }),
     } as unknown as FileService;
     const job = new OrphanFileSweepJob(fileService);
