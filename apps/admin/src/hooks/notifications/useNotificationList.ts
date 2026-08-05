@@ -1,0 +1,161 @@
+import type {
+  ApiErrorInterface,
+  NotificationListResponseInterface,
+  NotificationResponseInterface,
+} from '@nest-aws-starter/shared';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  fetchNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from '../../apis/notifications';
+import { NOTIFICATION_HISTORY_PAGE_SIZE } from '../../constants/notification-history.constants';
+import { useNotificationSocketContext } from '../../contexts/NotificationSocketContext';
+import type { NotificationHistoryFiltersInterface } from '../../interfaces/notification-history-filters.interface';
+import type { UseNotificationListResultInterface } from '../../interfaces/use-notification-list-result.interface';
+import { toApiError } from '../../utils/toApiError';
+
+// REST-backed cursor pagination shared by two consumers: the bell dropdown
+// (call with no filters) and the history page (type/audience filters,
+// applied client-side per page — see notification-history-filters.interface.ts
+// for why). Read-state changes report up to the socket context so the bell
+// badge stays in sync; a successful mutation also triggers an authoritative
+// refetch of the merged count rather than trusting the optimistic delta
+// alone (see useNotificationSocket for why).
+export function useNotificationList(
+  filters?: NotificationHistoryFiltersInterface,
+): UseNotificationListResultInterface {
+  const { unreadCount, adjustUnreadCount, refreshUnreadCount } = useNotificationSocketContext();
+  const [items, setItems] = useState<NotificationResponseInterface[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [error, setError] = useState<ApiErrorInterface | null>(null);
+
+  const load = useCallback(async (): Promise<void> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result: NotificationListResponseInterface = await fetchNotifications({
+        limit: NOTIFICATION_HISTORY_PAGE_SIZE,
+      });
+
+      setItems(applyFilters(result.items, filters));
+      setCursor(result.nextCursor);
+    } catch (caught) {
+      setError(toApiError(caught));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filters]);
+
+  const loadMore = useCallback(async (): Promise<void> => {
+    if (!cursor || isLoadingMore) return;
+
+    setIsLoadingMore(true);
+    setError(null);
+
+    try {
+      const result: NotificationListResponseInterface = await fetchNotifications({
+        cursor,
+        limit: NOTIFICATION_HISTORY_PAGE_SIZE,
+      });
+
+      setItems((previous: NotificationResponseInterface[]) => [
+        ...previous,
+        ...applyFilters(result.items, filters),
+      ]);
+      setCursor(result.nextCursor);
+    } catch (caught) {
+      setError(toApiError(caught));
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [cursor, isLoadingMore, filters]);
+
+  const markRead = useCallback(
+    async (id: string): Promise<void> => {
+      const target: NotificationResponseInterface | undefined = items.find(
+        (item: NotificationResponseInterface): boolean => item.id === id,
+      );
+
+      if (!target || target.readAt) return;
+
+      setItems((previous: NotificationResponseInterface[]) =>
+        setReadAt(previous, id, new Date().toISOString()),
+      );
+      adjustUnreadCount(-1);
+
+      try {
+        await markNotificationRead(id);
+        void refreshUnreadCount();
+      } catch (caught) {
+        setItems((previous: NotificationResponseInterface[]) => setReadAt(previous, id, null));
+        adjustUnreadCount(1);
+        setError(toApiError(caught));
+      }
+    },
+    [items, adjustUnreadCount, refreshUnreadCount],
+  );
+
+  const markAllRead = useCallback(async (): Promise<void> => {
+    const previousItems: NotificationResponseInterface[] = items;
+    const previousUnreadCount: number = unreadCount;
+    const now: string = new Date().toISOString();
+
+    setItems((current: NotificationResponseInterface[]) =>
+      current.map((item: NotificationResponseInterface) =>
+        item.readAt ? item : { ...item, readAt: now },
+      ),
+    );
+    adjustUnreadCount(-previousUnreadCount);
+
+    try {
+      await markAllNotificationsRead();
+      void refreshUnreadCount();
+    } catch (caught) {
+      setItems(previousItems);
+      adjustUnreadCount(previousUnreadCount);
+      setError(toApiError(caught));
+    }
+  }, [items, unreadCount, adjustUnreadCount, refreshUnreadCount]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return {
+    items,
+    isLoading,
+    isLoadingMore,
+    hasMore: cursor !== null,
+    error,
+    loadMore,
+    markRead,
+    markAllRead,
+  };
+}
+
+function setReadAt(
+  items: NotificationResponseInterface[],
+  id: string,
+  readAt: string | null,
+): NotificationResponseInterface[] {
+  return items.map((item: NotificationResponseInterface) =>
+    item.id === id ? { ...item, readAt } : item,
+  );
+}
+
+function applyFilters(
+  items: NotificationResponseInterface[],
+  filters: NotificationHistoryFiltersInterface | undefined,
+): NotificationResponseInterface[] {
+  if (!filters) return items;
+
+  return items.filter(
+    (item: NotificationResponseInterface): boolean =>
+      (filters.type === null || item.type === filters.type) &&
+      (filters.audience === null || item.audience === filters.audience),
+  );
+}
