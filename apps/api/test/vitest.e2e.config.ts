@@ -9,6 +9,11 @@ export default defineConfig({
     fileParallelism: false,
     hookTimeout: 30000,
     testTimeout: 30000,
+    // Runs once before any spec (not per-spec, unlike app.factory.ts) and
+    // fails the whole run with an actionable message if LocalStack is down
+    // or stale — see the file's own header for the incident history this
+    // closes.
+    globalSetup: ['./test/helpers/e2e-preflight.helper.ts'],
     // Pinned here (not just in CI) so a clean clone running
     // `cp .env.example .env && pnpm test:e2e` never runs cron jobs or the
     // webhook consumer's long-poll loop mid-suite — both would otherwise
