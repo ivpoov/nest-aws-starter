@@ -13,6 +13,7 @@ import { WebhookController } from '@modules/payment/controllers/webhook.controll
 import { RequiresSubscriptionGuard } from '@modules/payment/guards/requires-subscription.guard.js';
 import type { SubscriptionLifecycleInterface } from '@modules/payment/interfaces/subscription-lifecycle.interface.js';
 import { SubscriptionExpiryJob } from '@modules/payment/jobs/subscription-expiry.job.js';
+import { WebhookRetryJob } from '@modules/payment/jobs/webhook-retry.job.js';
 import { planPermissions } from '@modules/payment/permissions/plan.permissions.js';
 import { transactionPermissions } from '@modules/payment/permissions/transaction.permissions.js';
 import { PaymentTransactionPrismaRepository } from '@modules/payment/repositories/payment-transaction-prisma.repository.js';
@@ -28,6 +29,7 @@ import { SubscriptionLifecycleService } from '@modules/payment/services/subscrip
 import { TransactionService } from '@modules/payment/services/transaction.service.js';
 import { WebhookEventDispatcherService } from '@modules/payment/services/webhook-event-dispatcher.service.js';
 import { WebhookIngestService } from '@modules/payment/services/webhook-ingest.service.js';
+import { WebhookRetryService } from '@modules/payment/services/webhook-retry.service.js';
 import { ScheduledJobRegistryService } from '@modules/task-scheduler/services/scheduled-job-registry.service.js';
 import { Global, Module, type Provider } from '@nestjs/common';
 
@@ -42,6 +44,19 @@ const scheduledJobRegistrationProvider: Provider = {
     lifecycle: SubscriptionLifecycleInterface,
   ): boolean => {
     registry.register(new SubscriptionExpiryJob(lifecycle));
+
+    return true;
+  },
+};
+
+const webhookRetryJobRegistrationProvider: Provider = {
+  provide: Symbol('WEBHOOK_RETRY_JOB_REGISTRATION'),
+  inject: [ScheduledJobRegistryService, WebhookRetryService],
+  useFactory: (
+    registry: ScheduledJobRegistryService,
+    webhookRetryService: WebhookRetryService,
+  ): boolean => {
+    registry.register(new WebhookRetryJob(webhookRetryService));
 
     return true;
   },
@@ -69,6 +84,7 @@ const scheduledJobRegistrationProvider: Provider = {
     WebhookIngestService,
     WebhookEventDispatcherService,
     PaymentWebhookConsumerService,
+    WebhookRetryService,
     RequiresSubscriptionGuard,
     PlanAdminService,
     TransactionService,
@@ -78,6 +94,7 @@ const scheduledJobRegistrationProvider: Provider = {
     { provide: PAYMENT_TRANSACTION_REPOSITORY, useClass: PaymentTransactionPrismaRepository },
     { provide: SUBSCRIPTION_LIFECYCLE, useClass: SubscriptionLifecycleService },
     scheduledJobRegistrationProvider,
+    webhookRetryJobRegistrationProvider,
   ],
   exports: [
     PaymentProviderRegistryService,
