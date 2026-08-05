@@ -76,6 +76,8 @@ jobs:
           PAYMENT_WEBHOOK_CONSUMER_ENABLED: "false"
           AUTH_JWT_SECRET: ci-only-secret-with-at-least-32-characters
           TRUST_PROXY: "true"
+          WEBSOCKET_ENABLED: "true"
+          WEBSOCKET_HEARTBEAT_INTERVAL_MS: "200"
 
   audit:
     runs-on: ubuntu-latest

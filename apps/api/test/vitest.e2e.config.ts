@@ -19,6 +19,14 @@ export default defineConfig({
     env: {
       SCHEDULER_ENABLED: 'false',
       PAYMENT_WEBHOOK_CONSUMER_ENABLED: 'false',
+      // The notification gateway must stay enabled here — it's what
+      // websocket.e2e-spec.ts exercises. Its heartbeat sweep is dropped to
+      // 200ms (vs. the 60s default) purely so the revocation case doesn't
+      // wait a full minute; every other e2e suite that never opens a
+      // socket pays nothing extra (the sweep iterates zero tracked
+      // sockets and no-ops).
+      WEBSOCKET_ENABLED: 'true',
+      WEBSOCKET_HEARTBEAT_INTERVAL_MS: '200',
     },
   },
   plugins: [
