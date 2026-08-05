@@ -6,6 +6,7 @@ import type { CreateNotificationDataInterface } from '@modules/notification/inte
 import type { NotificationInterface } from '@modules/notification/interfaces/notification.interface.js';
 import type { NotificationRepositoryInterface } from '@modules/notification/interfaces/notification-repository.interface.js';
 import { NotificationDispatcherService } from '@modules/notification/services/notification-dispatcher.service.js';
+import type { NotificationEmailService } from '@modules/notification/services/notification-email.service.js';
 import {
   AuthMethodTypeEnum,
   LockoutScopeEnum,
@@ -39,6 +40,7 @@ function createDispatcher(callOrder: string[] = []): {
   countUnread: ReturnType<typeof vi.fn>;
   to: ReturnType<typeof vi.fn>;
   emit: ReturnType<typeof vi.fn>;
+  sendIfEnabled: ReturnType<typeof vi.fn>;
 } {
   const create = vi.fn(async (data: CreateNotificationDataInterface) => {
     callOrder.push('persist');
@@ -57,15 +59,23 @@ function createDispatcher(callOrder: string[] = []): {
     callOrder.push('emit');
   });
   const to = vi.fn().mockReturnValue({ emit });
+  const sendIfEnabled = vi.fn(async () => {
+    callOrder.push('email');
+  });
 
   const notificationRepository = {
     create,
     countUnread,
   } as unknown as NotificationRepositoryInterface;
   const gateway = { server: { to } } as unknown as NotificationGateway;
-  const dispatcher = new NotificationDispatcherService(notificationRepository, gateway);
+  const emailService = { sendIfEnabled } as unknown as NotificationEmailService;
+  const dispatcher = new NotificationDispatcherService(
+    notificationRepository,
+    gateway,
+    emailService,
+  );
 
-  return { dispatcher, create, countUnread, to, emit };
+  return { dispatcher, create, countUnread, to, emit, sendIfEnabled };
 }
 
 describe('NotificationDispatcherService', () => {
@@ -307,8 +317,9 @@ describe('NotificationDispatcherService', () => {
       await dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });
 
       // Two emits for a USER-audience row: the notification push, then the
-      // unread-count push — both strictly after the persist.
-      expect(callOrder).toEqual(['persist', 'emit', 'emit']);
+      // unread-count push — then the EMAIL channel, all strictly after the
+      // persist.
+      expect(callOrder).toEqual(['persist', 'emit', 'emit', 'email']);
     });
 
     it('emits the denormalized response shape into the room', async () => {
@@ -335,13 +346,21 @@ describe('NotificationDispatcherService', () => {
         countUnread: vi.fn().mockResolvedValue(0),
       } as unknown as NotificationRepositoryInterface;
       const gateway = { server: { to } } as unknown as NotificationGateway;
-      const failingDispatcher = new NotificationDispatcherService(notificationRepository, gateway);
+      const emailService = {
+        sendIfEnabled: vi.fn(),
+      } as unknown as NotificationEmailService;
+      const failingDispatcher = new NotificationDispatcherService(
+        notificationRepository,
+        gateway,
+        emailService,
+      );
 
       await expect(
         failingDispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome' }),
       ).resolves.toBeUndefined();
 
       expect(to).not.toHaveBeenCalled();
+      expect(emailService.sendIfEnabled).not.toHaveBeenCalled();
       expect(errorSpy).toHaveBeenCalledTimes(1);
       expect(warnSpy).not.toHaveBeenCalled();
     });
@@ -357,7 +376,14 @@ describe('NotificationDispatcherService', () => {
         countUnread: vi.fn().mockResolvedValue(0),
       } as unknown as NotificationRepositoryInterface;
       const gateway = { server: { to } } as unknown as NotificationGateway;
-      const dispatcher = new NotificationDispatcherService(notificationRepository, gateway);
+      const emailService = {
+        sendIfEnabled: vi.fn(),
+      } as unknown as NotificationEmailService;
+      const dispatcher = new NotificationDispatcherService(
+        notificationRepository,
+        gateway,
+        emailService,
+      );
 
       await expect(
         dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome' }),
@@ -365,9 +391,53 @@ describe('NotificationDispatcherService', () => {
 
       // Both the notification emit and the unread-count emit go through the
       // same (failing) channel, each independently caught and logged —
-      // two warns, never an error, and the row still persisted once.
+      // two warns, never an error, and the row still persisted once. The
+      // EMAIL channel is independently contained: a socket failure never
+      // stops it from being attempted.
       expect(create).toHaveBeenCalledTimes(1);
       expect(warnSpy).toHaveBeenCalledTimes(2);
+      expect(errorSpy).not.toHaveBeenCalled();
+      expect(emailService.sendIfEnabled).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('EMAIL channel (independently contained)', () => {
+    it('sends the EMAIL channel for a USER-audience notification with the persisted content', async () => {
+      const { dispatcher, sendIfEnabled } = createDispatcher();
+
+      await dispatcher.onAuthPasswordChanged({ userId, sessionId: 'session-1' });
+
+      expect(sendIfEnabled).toHaveBeenCalledWith(
+        userId,
+        NotificationTypeEnum.PASSWORD_CHANGED,
+        'Password changed',
+        'Your password was changed. If this was not you, secure your account immediately.',
+      );
+    });
+
+    it('never attempts EMAIL for an ADMIN-audience notification (no per-user recipient)', async () => {
+      const { dispatcher, sendIfEnabled } = createDispatcher();
+
+      await dispatcher.onUserBlocked({ userId, actorId: 'admin-1', reason: 'ToS violation' });
+
+      expect(sendIfEnabled).not.toHaveBeenCalled();
+    });
+
+    it('an EMAIL failure is swallowed and logged at warn — the row and socket push are unaffected', async () => {
+      const { dispatcher, create, emit, sendIfEnabled } = createDispatcher();
+
+      sendIfEnabled.mockRejectedValueOnce(new Error('mail transport unavailable'));
+
+      await expect(
+        dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' }),
+      ).resolves.toBeUndefined();
+
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(emit).toHaveBeenCalledWith(
+        NOTIFICATION_EVENT,
+        expect.objectContaining({ userId, type: NotificationTypeEnum.NEW_DEVICE_LOGIN }),
+      );
+      expect(warnSpy).toHaveBeenCalledTimes(1);
       expect(errorSpy).not.toHaveBeenCalled();
     });
   });
