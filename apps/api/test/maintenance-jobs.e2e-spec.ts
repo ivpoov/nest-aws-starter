@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { NormalizedEventTypeEnum } from '@modules/payment/enums/normalized-event-type.enum.js';
-import { WebhookEventStatusEnum } from '@modules/payment/enums/webhook-event-status.enum.js';
+import { NormalizedEventTypeEnum } from '@modules/payment/enums/normalized-event-type.enum.js'; // <module:payment>
+import { WebhookEventStatusEnum } from '@modules/payment/enums/webhook-event-status.enum.js'; // <module:payment>
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import type { ScheduledJobInterface } from '@modules/task-scheduler/interfaces/scheduled-job.interface.js';
 import { ScheduledJobRegistryService } from '@modules/task-scheduler/services/scheduled-job-registry.service.js';
@@ -8,20 +8,26 @@ import { FileIntentEnum, FileStatusEnum } from '@nest-aws-starter/shared';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { S3_PROVIDER } from '@providers/s3/constants/s3.constants.js';
 import type { S3ProviderInterface } from '@providers/s3/interfaces/s3-provider.interface.js';
+// <module:payment>
 import { SQS_PROVIDER } from '@providers/sqs/constants/sqs.constants.js';
 import type { SqsMessageInterface } from '@providers/sqs/interfaces/sqs-message.interface.js';
 import type { SqsProviderInterface } from '@providers/sqs/interfaces/sqs-provider.interface.js';
+// </module:payment>
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createTestApp } from './app.factory.js';
 import { ensureBucket } from './helpers/ensure-bucket.helper.js';
 
+// <module:payment>
 const queueUrl: string =
   process.env.SQS_PAYMENT_WEBHOOK_QUEUE_URL ??
   'http://localhost:4567/000000000000/starter-payment-webhook-queue';
+// </module:payment>
 
 const ONE_DAY_MS = 25 * 60 * 60 * 1000; // 25h — clears the 24h staleness threshold
+// <module:payment>
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000; // clears the 1h webhook-retry threshold
+// </module:payment>
 
 // Drives OrphanFileSweepJob and WebhookRetryJob directly via the registry
 // they self-register with at boot (proves the wiring in file.module.ts /
@@ -32,7 +38,7 @@ describe('maintenance jobs (real postgres/redis/localstack)', () => {
   let app: NestFastifyApplication;
   let prisma: PrismaService;
   let s3: S3ProviderInterface;
-  let sqs: SqsProviderInterface;
+  let sqs: SqsProviderInterface; // <module:payment>
   let registry: ScheduledJobRegistryService;
   let ownerId: string;
 
@@ -41,10 +47,10 @@ describe('maintenance jobs (real postgres/redis/localstack)', () => {
     app = await createTestApp();
     prisma = app.get(PrismaService);
     s3 = app.get<S3ProviderInterface>(S3_PROVIDER);
-    sqs = app.get<SqsProviderInterface>(SQS_PROVIDER);
+    sqs = app.get<SqsProviderInterface>(SQS_PROVIDER); // <module:payment>
     registry = app.get(ScheduledJobRegistryService);
-    await neutralizeStaleWebhookEventBacklog();
-    await drainQueue();
+    await neutralizeStaleWebhookEventBacklog(); // <module:payment>
+    await drainQueue(); // <module:payment>
     ownerId = await registerUserId();
   });
 
@@ -52,6 +58,7 @@ describe('maintenance jobs (real postgres/redis/localstack)', () => {
     await app.close();
   });
 
+  // <module:payment>
   // Both jobs' retry sweeps are global by design (every stale row, that's
   // the point of a sweep) against the SAME payment webhook queue that
   // webhook-consumer.e2e-spec / subscription-lifecycle.e2e-spec poll for
@@ -107,6 +114,7 @@ describe('maintenance jobs (real postgres/redis/localstack)', () => {
       }
     }
   }
+  // </module:payment>
 
   async function registerUserId(): Promise<string> {
     const email: string = `maintenance-jobs-e2e-${randomUUID()}@example.com`;
@@ -234,6 +242,7 @@ describe('maintenance jobs (real postgres/redis/localstack)', () => {
     });
   });
 
+  // <module:payment>
   // Asserts re-enqueue via a pass-through spy on the real SqsProviderInterface
   // rather than polling receiveMessages(): this dev database has accumulated
   // a large, legitimate backlog of stale RECEIVED rows from earlier sessions
@@ -341,4 +350,5 @@ describe('maintenance jobs (real postgres/redis/localstack)', () => {
       expect(enqueuedIds(sendSpy)).toContain(staleReceived.id);
     });
   });
+  // </module:payment>
 });

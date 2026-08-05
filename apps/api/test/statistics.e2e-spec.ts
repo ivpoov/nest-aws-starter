@@ -37,6 +37,7 @@ describe('admin statistics', () => {
     return { email, accessToken: response.body.accessToken, id: me.body.id };
   }
 
+  // <module:payment>
   // Direct Prisma writes (plan/subscription/transaction) mirror the pattern
   // in test/transactions.e2e-spec.ts — there is no checkout flow to hit in
   // this suite (that lives in payment's own e2e specs), and the statistics
@@ -76,6 +77,7 @@ describe('admin statistics', () => {
 
     return { planId: plan.id, amountCents };
   }
+  // </module:payment>
 
   beforeAll(async () => {
     app = await createTestApp();
@@ -141,6 +143,7 @@ describe('admin statistics', () => {
     expect(response.body.totals.activeSessions).toBeGreaterThanOrEqual(2);
     expect(response.body.totals.onlineNow).toBeGreaterThanOrEqual(1);
     expect(response.body.totals.newToday).toBeGreaterThanOrEqual(2);
+    // <module:payment>
     // The payment module is present in this suite, so revenue/mrr are real
     // numbers (>= 0) rather than the v0.3 null stub — see the dedicated
     // revenue-fixture test below for the exact-delta proof.
@@ -149,12 +152,14 @@ describe('admin statistics', () => {
     expect(typeof response.body.totals.mrrCents).toBe('number');
     expect(response.body.totals.mrrCents).toBeGreaterThanOrEqual(0);
     expect(Array.isArray(response.body.revenueByPlan)).toBe(true);
+    // </module:payment>
     expect(Array.isArray(response.body.usersByStatus)).toBe(true);
     expect(response.body.usersByStatus.length).toBeGreaterThan(0);
     expect(Array.isArray(response.body.authMethodDistribution)).toBe(true);
     expect(response.body.authMethodDistribution.length).toBeGreaterThan(0);
   });
 
+  // <module:payment>
   it('reflects a new plan/subscription/transaction in revenue, mrr, and the by-plan breakdown', async () => {
     await redis.del('statistic:overview');
 
@@ -204,6 +209,7 @@ describe('admin statistics', () => {
       expect(typeof point.value).toBe('number');
     }
   });
+  // </module:payment>
 
   it('rejects an unknown metric with 400', async () => {
     const response = await request(app.getHttpServer())
