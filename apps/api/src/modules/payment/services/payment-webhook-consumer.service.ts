@@ -262,17 +262,43 @@ export class PaymentWebhookConsumerService
 
     await this.webhookEventRepository.markFailed(event.id);
     this.logger.error(`Webhook event exhausted retries, marked FAILED: ${event.id}`);
+    this.emitWebhookFailedOnTransition(event, attempts, message);
+
+    return true;
+  }
+
+  // isTerminal() deliberately does not treat FAILED as terminal (see its own
+  // comment) — a stale in-flight redelivery of a message whose row is
+  // already FAILED can still reach here and hit this same ceiling branch
+  // again. `event` is the row as fetched before this attempt, so
+  // event.status already reads FAILED on such a redelivery: only emit when
+  // this call is the actual transition INTO FAILED, never on a repeat pass
+  // over an already-FAILED row — otherwise every redelivery mints another
+  // admin notification for the same underlying failure.
+  private emitWebhookFailedOnTransition(
+    event: WebhookEventInterface,
+    attempts: number,
+    lastError: string,
+  ): void {
+    if (event.status === WebhookEventStatusEnum.FAILED) return;
+
     this.eventBus.emit(WEBHOOK_FAILED_EVENT, {
       webhookEventId: event.id,
       provider: event.provider,
       type: event.type,
       attempts,
-      lastError: message,
+      lastError,
     });
-
-    return true;
   }
 
+  // FAILED is deliberately NOT terminal here: WebhookRetryService (the
+  // retry job) resets FAILED rows to RECEIVED before re-enqueueing them, so
+  // a legitimately retried event always arrives back at this check as
+  // RECEIVED, never FAILED — treating FAILED as terminal would only ever
+  // matter for a stale/duplicate SQS redelivery of an already-FAILED row,
+  // and that narrower case is handled at the notification layer instead
+  // (see emitWebhookFailedOnTransition) rather than by short-circuiting the
+  // whole consumer flow here.
   private isTerminal(status: WebhookEventStatusEnum): boolean {
     return status === WebhookEventStatusEnum.PROCESSED || status === WebhookEventStatusEnum.SKIPPED;
   }

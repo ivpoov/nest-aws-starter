@@ -197,6 +197,27 @@ describe('PaymentWebhookConsumerService.processMessage', () => {
     });
   });
 
+  it('does not re-emit WEBHOOK_FAILED_EVENT for a redelivered message whose row is already FAILED', async () => {
+    const { service, webhookEventRepository, sqsProvider, dispatcher, eventBus } = createService({
+      event: baseEvent({ status: WebhookEventStatusEnum.FAILED, attempts: MAX_WEBHOOK_ATTEMPTS }),
+    });
+
+    dispatcher.dispatch.mockRejectedValue(new Error('still unreachable'));
+    (webhookEventRepository.recordFailure as ReturnType<typeof vi.fn>).mockResolvedValue(
+      MAX_WEBHOOK_ATTEMPTS + 1,
+    );
+
+    await service.processMessage(message());
+
+    // isTerminal() intentionally does not short-circuit FAILED (see its own
+    // comment) — the redelivery still reaches the ceiling branch and
+    // idempotently marks FAILED again, but must not mint a second
+    // WEBHOOK_FAILED_EVENT / admin notification for the same failure.
+    expect(webhookEventRepository.markFailed).toHaveBeenCalledWith(baseEvent().id);
+    expect(sqsProvider.deleteMessage).toHaveBeenCalled();
+    expect(eventBus.emit).not.toHaveBeenCalled();
+  });
+
   it('drops the message when the event row cannot be found', async () => {
     const { service, sqsProvider, dispatcher } = createService({ event: null });
 
