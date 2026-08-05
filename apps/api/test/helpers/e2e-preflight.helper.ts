@@ -137,7 +137,10 @@ async function checkQueue(region: string, endpoint: string, queueUrl: string): P
 
 async function checkTopic(region: string, endpoint: string): Promise<void> {
   const client: SNSClient = new SNSClient({ region, endpoint });
-  const topicArn = `arn:aws:sns:us-east-1:${LOCALSTACK_ACCOUNT_ID}:starter-topic`;
+  // Region-matched to the client above (was hardcoded to us-east-1 before —
+  // dormant only because .env.example happens to use us-east-1 too; would
+  // have disagreed with the client the moment AWS_REGION changed).
+  const topicArn: string = `arn:aws:sns:${region}:${LOCALSTACK_ACCOUNT_ID}:starter-topic`;
 
   try {
     await client.send(new GetTopicAttributesCommand({ TopicArn: topicArn }));
@@ -155,7 +158,9 @@ async function checkTopic(region: string, endpoint: string): Promise<void> {
 function isServiceResponse(error: unknown): boolean {
   if (typeof error !== 'object' || error === null || !('$metadata' in error)) return false;
 
-  const metadata = (error as { $metadata?: { httpStatusCode?: number } }).$metadata;
+  const metadata: { httpStatusCode?: number } | undefined = (
+    error as { $metadata?: { httpStatusCode?: number } }
+  ).$metadata;
 
   return typeof metadata?.httpStatusCode === 'number';
 }
