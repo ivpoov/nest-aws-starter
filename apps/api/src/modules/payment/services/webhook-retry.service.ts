@@ -30,11 +30,15 @@ export class WebhookRetryService {
   // the retry ceiling (the brief's core ask), and stale RECEIVED events
   // whose ingest-time enqueue never reached SQS (the PR 5 TODO in
   // WebhookIngestService.enqueue — a swallowed send failure otherwise leaves
-  // the row invisible to reprocessing forever).
+  // the row invisible to reprocessing forever). Order matters: the stale
+  // RECEIVED sweep must run BEFORE the FAILED retry, because retryFailed
+  // resets rows to RECEIVED without touching createdAt — running it first
+  // would make retryStaleReceived re-select and re-enqueue those same rows
+  // a second time within the same sweep.
   public async sweep(): Promise<WebhookRetrySweepResultInterface> {
     const cutoff: Date = new Date(Date.now() - WEBHOOK_RETRY_STALE_MS);
-    const failedRetriedCount: number = await this.retryFailed(cutoff);
     const staleReceivedRetriedCount: number = await this.retryStaleReceived(cutoff);
+    const failedRetriedCount: number = await this.retryFailed(cutoff);
 
     this.logger.log(
       `Webhook retry sweep: failedRetried=${failedRetriedCount} ` +
