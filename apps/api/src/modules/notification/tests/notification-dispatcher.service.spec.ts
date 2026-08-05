@@ -36,6 +36,7 @@ function createFakeNotification(
 function createDispatcher(callOrder: string[] = []): {
   dispatcher: NotificationDispatcherService;
   create: ReturnType<typeof vi.fn>;
+  countUnread: ReturnType<typeof vi.fn>;
   to: ReturnType<typeof vi.fn>;
   emit: ReturnType<typeof vi.fn>;
 } {
@@ -51,16 +52,20 @@ function createDispatcher(callOrder: string[] = []): {
       meta: data.meta,
     });
   });
+  const countUnread = vi.fn().mockResolvedValue(0);
   const emit = vi.fn(() => {
     callOrder.push('emit');
   });
   const to = vi.fn().mockReturnValue({ emit });
 
-  const notificationRepository = { create } as unknown as NotificationRepositoryInterface;
+  const notificationRepository = {
+    create,
+    countUnread,
+  } as unknown as NotificationRepositoryInterface;
   const gateway = { server: { to } } as unknown as NotificationGateway;
   const dispatcher = new NotificationDispatcherService(notificationRepository, gateway);
 
-  return { dispatcher, create, to, emit };
+  return { dispatcher, create, countUnread, to, emit };
 }
 
 describe('NotificationDispatcherService', () => {
@@ -301,7 +306,9 @@ describe('NotificationDispatcherService', () => {
 
       await dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });
 
-      expect(callOrder).toEqual(['persist', 'emit']);
+      // Two emits for a USER-audience row: the notification push, then the
+      // unread-count push — both strictly after the persist.
+      expect(callOrder).toEqual(['persist', 'emit', 'emit']);
     });
 
     it('emits the denormalized response shape into the room', async () => {
@@ -325,6 +332,7 @@ describe('NotificationDispatcherService', () => {
       const { to } = createDispatcher();
       const notificationRepository = {
         create: vi.fn().mockRejectedValue(new Error('db unavailable')),
+        countUnread: vi.fn().mockResolvedValue(0),
       } as unknown as NotificationRepositoryInterface;
       const gateway = { server: { to } } as unknown as NotificationGateway;
       const failingDispatcher = new NotificationDispatcherService(notificationRepository, gateway);
@@ -344,7 +352,10 @@ describe('NotificationDispatcherService', () => {
         throw new Error('socket server unavailable');
       });
       const to = vi.fn().mockReturnValue({ emit });
-      const notificationRepository = { create } as unknown as NotificationRepositoryInterface;
+      const notificationRepository = {
+        create,
+        countUnread: vi.fn().mockResolvedValue(0),
+      } as unknown as NotificationRepositoryInterface;
       const gateway = { server: { to } } as unknown as NotificationGateway;
       const dispatcher = new NotificationDispatcherService(notificationRepository, gateway);
 
@@ -352,7 +363,50 @@ describe('NotificationDispatcherService', () => {
         dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome' }),
       ).resolves.toBeUndefined();
 
+      // Both the notification emit and the unread-count emit go through the
+      // same (failing) channel, each independently caught and logged —
+      // two warns, never an error, and the row still persisted once.
       expect(create).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledTimes(2);
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('unread-count emission (USER-audience only)', () => {
+    it('emits an updated unread count to the recipient after a USER-audience notification', async () => {
+      const { dispatcher, countUnread, to, emit } = createDispatcher();
+
+      countUnread.mockResolvedValue(4);
+
+      await dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });
+
+      expect(countUnread).toHaveBeenCalledWith({ userId, includeAdmin: false });
+      expect(to).toHaveBeenCalledWith(`user:${userId}`);
+      expect(emit).toHaveBeenCalledWith('unread-count', 4);
+    });
+
+    it('does not emit an unread count for an ADMIN-audience notification', async () => {
+      const { dispatcher, countUnread, emit } = createDispatcher();
+
+      await dispatcher.onUserBlocked({ userId, actorId: 'admin-1', reason: 'ToS violation' });
+
+      expect(countUnread).not.toHaveBeenCalled();
+      expect(emit).not.toHaveBeenCalledWith('unread-count', expect.anything());
+    });
+
+    it('a count-query failure is swallowed and logged at warn without affecting the notification emit', async () => {
+      const { dispatcher, countUnread, emit } = createDispatcher();
+
+      countUnread.mockRejectedValue(new Error('db unavailable'));
+
+      await expect(
+        dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' }),
+      ).resolves.toBeUndefined();
+
+      expect(emit).toHaveBeenCalledWith(
+        'notification',
+        expect.objectContaining({ userId, type: NotificationTypeEnum.NEW_DEVICE_LOGIN }),
+      );
       expect(warnSpy).toHaveBeenCalledTimes(1);
       expect(errorSpy).not.toHaveBeenCalled();
     });
