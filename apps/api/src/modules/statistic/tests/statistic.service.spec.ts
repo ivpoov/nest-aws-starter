@@ -41,9 +41,9 @@ function createService(overrides: Partial<StatisticRepositoryInterface> = {}): T
     countActiveSessions: vi.fn().mockResolvedValue(4),
     findRegistrationsByDay: vi.fn().mockResolvedValue(registrationPoints),
     findNewDevicesByDay: vi.fn().mockResolvedValue(newDevicePoints),
-    findRevenueByDay: vi.fn().mockResolvedValue(revenuePoints),
-    findMrrCents: vi.fn().mockResolvedValue(4_900),
-    findRevenueByPlan: vi.fn().mockResolvedValue(revenueByPlanRows),
+    findRevenueByDay: vi.fn().mockResolvedValue(revenuePoints), // <module:payment>
+    findMrrCents: vi.fn().mockResolvedValue(4_900), // <module:payment>
+    findRevenueByPlan: vi.fn().mockResolvedValue(revenueByPlanRows), // <module:payment>
     ...overrides,
   };
   // The cache is a pass-through: unit tests assert the key/ttl passed in and
@@ -185,7 +185,7 @@ describe('StatisticService', () => {
       args: { code: 'STATISTIC_REVENUE_UNAVAILABLE' },
     });
     expect(repository.findRegistrationsByDay).not.toHaveBeenCalled();
-    expect(repository.findRevenueByDay).not.toHaveBeenCalled();
+    expect(repository.findRevenueByDay).not.toHaveBeenCalled(); // <module:payment>
   });
 
   it('still serves REGISTRATIONS and NEW_DEVICES when the revenue capability is unavailable', async () => {
