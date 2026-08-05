@@ -17,11 +17,11 @@ Every line/block below carries a `// <module:cloudfront>` (or
 the marked lines/blocks and the markers themselves.
 
 - `apps/api/src/app.module.ts`
-  - line 32: `import { CloudFrontModule } from '@providers/cloudfront/cloudfront.module.js'; // <module:cloudfront>`
-  - line 60: `CloudFrontModule, // <module:cloudfront>`
+  - line 33: `import { CloudFrontModule } from '@providers/cloudfront/cloudfront.module.js'; // <module:cloudfront>`
+  - line 61: `CloudFrontModule, // <module:cloudfront>`
 - `apps/api/src/configs/index.ts`
   - line 3: `import { cloudfrontConfig } from '@configs/cloudfront.config.js'; // <module:cloudfront>`
-  - line 23: `cloudfrontConfig, // <module:cloudfront>`
+  - line 24: `cloudfrontConfig, // <module:cloudfront>`
 - `apps/api/src/modules/file/services/file.service.ts`
   - line 2: `import { type CloudFrontConfig, cloudfrontConfig } from '@configs/cloudfront.config.js'; // <module:cloudfront>`
   - line 40: `import { CLOUDFRONT_SIGNER } from '@providers/cloudfront/constants/cloudfront.constants.js'; // <module:cloudfront>`

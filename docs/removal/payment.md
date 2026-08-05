@@ -29,15 +29,15 @@ Every line/block below carries a `// <module:payment>` (or
 the marked lines/blocks and the markers themselves.
 
 - `apps/api/src/app.module.ts`
-  - line 18: `import { PaymentModule } from '@modules/payment/payment.module.js'; // <module:payment>`
-  - line 22: `import { StripeModule } from '@modules/stripe/stripe.module.js'; // <module:payment>`
-  - line 82: `PaymentModule, // <module:payment>`
-  - line 83: `StripeModule, // <module:payment>`
+  - line 19: `import { PaymentModule } from '@modules/payment/payment.module.js'; // <module:payment>`
+  - line 23: `import { StripeModule } from '@modules/stripe/stripe.module.js'; // <module:payment>`
+  - line 84: `PaymentModule, // <module:payment>`
+  - line 85: `StripeModule, // <module:payment>`
 - `apps/api/src/configs/index.ts`
   - line 10: `import { paymentConfig } from '@configs/payment.config.js'; // <module:payment>`
   - line 16: `import { stripeConfig } from '@configs/stripe.config.js'; // <module:payment>`
-  - line 30: `paymentConfig, // <module:payment>`
-  - line 36: `stripeConfig, // <module:payment>`
+  - line 31: `paymentConfig, // <module:payment>`
+  - line 37: `stripeConfig, // <module:payment>`
 - `apps/api/src/modules/statistic/interfaces/statistic-repository.interface.ts`
   - lines 3-5 (block)
   - lines 13-17 (block)
@@ -81,9 +81,9 @@ the marked lines/blocks and the markers themselves.
   - lines 146-155 (block)
   - lines 162-212 (block)
 - `apps/api/prisma/schema.prisma`
-  - line 44: `subscriptions       Subscription[] // <module:payment>`
-  - line 45: `paymentTransactions PaymentTransaction[] // <module:payment>`
-  - lines 248-344 (block)
+  - line 44: `subscriptions           Subscription[] // <module:payment>`
+  - line 45: `paymentTransactions     PaymentTransaction[] // <module:payment>`
+  - lines 249-345 (block)
 - `apps/api/prisma/seed.ts`
   - lines 15-40 (block)
   - lines 48-64 (block)
