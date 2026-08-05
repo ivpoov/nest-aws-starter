@@ -24,21 +24,21 @@ the marked lines/blocks and the markers themselves.
   - line 23: `cloudfrontConfig, // <module:cloudfront>`
 - `apps/api/src/modules/file/services/file.service.ts`
   - line 2: `import { type CloudFrontConfig, cloudfrontConfig } from '@configs/cloudfront.config.js'; // <module:cloudfront>`
-  - line 34: `import { CLOUDFRONT_SIGNER } from '@providers/cloudfront/constants/cloudfront.constants.js'; // <module:cloudfront>`
-  - line 35: `import type { CloudFrontSignerInterface } from '@providers/cloudfront/interfaces/cloudfront-signer.interface.js'; // <module:cloudfront>`
-  - lines 49-54 (block)
-  - lines 121-125 (block)
+  - line 40: `import { CLOUDFRONT_SIGNER } from '@providers/cloudfront/constants/cloudfront.constants.js'; // <module:cloudfront>`
+  - line 41: `import type { CloudFrontSignerInterface } from '@providers/cloudfront/interfaces/cloudfront-signer.interface.js'; // <module:cloudfront>`
+  - lines 55-60 (block)
+  - lines 127-131 (block)
 - `apps/api/src/modules/file/tests/file.service.spec.ts`
   - line 1: `import type { CloudFrontConfig } from '@configs/cloudfront.config.js'; // <module:cloudfront>`
   - line 10: `import type { CloudFrontSignerInterface } from '@providers/cloudfront/interfaces/cloudfront-signer.interface.js'; // <module:cloudfront>`
   - line 36: `readonly cloudFrontSigner: CloudFrontSignerInterface; // <module:cloudfront>`
   - line 43: `cloudFrontConfig: CloudFrontConfig = { isEnabled: false }, // <module:cloudfront>`
-  - lines 59-63 (block)
-  - lines 69-72 (block)
-  - line 80: `cloudFrontSigner, // <module:cloudfront>`
-  - line 211: `cloudFrontSigner, // <module:cloudfront>`
-  - line 220: `expect(cloudFrontSigner.getSignedUrl).not.toHaveBeenCalled(); // <module:cloudfront>`
-  - lines 223-243 (block)
+  - lines 61-65 (block)
+  - lines 71-74 (block)
+  - line 82: `cloudFrontSigner, // <module:cloudfront>`
+  - line 213: `cloudFrontSigner, // <module:cloudfront>`
+  - line 222: `expect(cloudFrontSigner.getSignedUrl).not.toHaveBeenCalled(); // <module:cloudfront>`
+  - lines 225-245 (block)
 
 ## 3. Drop `.env` variables
 

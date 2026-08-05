@@ -20,7 +20,7 @@ the marked lines/blocks and the markers themselves.
   - line 81: `ApiKeyModule, // <module:api-key>`
 - `apps/api/prisma/schema.prisma`
   - line 43: `apiKeys             ApiKey[] // <module:api-key>`
-  - lines 219-243 (block)
+  - lines 222-246 (block)
 
 ## 3. Drop `.env` variables
 
