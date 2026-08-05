@@ -164,14 +164,16 @@ const MODULES = [
     // as the dispatcher/history API/email digest land in the same folder.
     id: 'notification',
     summary:
-      'Notification/receipt/preference schema, WS gateway, the persist-first dispatcher, and the ' +
-      'history API (list/unread-count/mark-read/read-all) — IN_APP only, email digest is PR 5.',
+      'Notification/receipt/preference schema, WS gateway, the persist-first dispatcher (IN_APP + ' +
+      'the per-type/per-channel EMAIL gate, PR 5), the history API ' +
+      '(list/unread-count/mark-read/read-all), and the preferences API (GET/PUT matrix).',
     paths: [
       'apps/api/src/modules/notification',
       'apps/api/src/configs/websocket.config.ts',
       'apps/api/test/websocket.e2e-spec.ts',
       'apps/api/test/notification-dispatcher.e2e-spec.ts',
       'apps/api/test/notification-api.e2e-spec.ts',
+      'apps/api/test/notification-preferences.e2e-spec.ts',
     ],
     envVars: ['WEBSOCKET_ENABLED', 'WEBSOCKET_HEARTBEAT_INTERVAL_MS'],
   },
@@ -259,7 +261,10 @@ const DEFERRED_PROVIDERS = [
       'Coupled into core auth: `EmailFlowService` (verify/reset emails, `auth` module) calls ' +
       '`MAIL_TRANSPORT` unconditionally; `NewDeviceService` (`suspicious-activity`) also ' +
       "injects it directly, gated only by its own `newDeviceEmailEnabled` flag, not by mail's " +
-      'own `isEnabled`. Removing mail outright breaks core auth email flows.',
+      "own `isEnabled`. `NotificationEmailService` (`notification`, PR 5) checks mail's own " +
+      '`isEnabled` before every send, so it degrades cleanly — but it is still a removable ' +
+      "module's unconditional dependency on this deferred provider. Removing mail outright " +
+      'breaks core auth email flows.',
   },
   {
     id: 'lambda',

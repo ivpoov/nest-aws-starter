@@ -20,7 +20,7 @@ of the app still type-checks and passes its unit tests — see
 - [`oauth-discord`](./oauth-discord.md) — Discord OAuth login/link provider.
 - [`cloudfront`](./cloudfront.md) — CloudFront signed download URLs (optional common provider).
 - [`payment`](./payment.md) — Plans, subscriptions, payment transactions, webhook events, and the Stripe provider (schema + core module + Stripe implementation).
-- [`notification`](./notification.md) — Notification/receipt/preference schema, WS gateway, the persist-first dispatcher, and the history API (list/unread-count/mark-read/read-all) — IN_APP only, email digest is PR 5.
+- [`notification`](./notification.md) — Notification/receipt/preference schema, WS gateway, the persist-first dispatcher (IN_APP + the per-type/per-channel EMAIL gate, PR 5), the history API (list/unread-count/mark-read/read-all), and the preferences API (GET/PUT matrix).
 
 ## Scope note: v0.1 providers
 
@@ -36,7 +36,7 @@ provider — investigated individually rather than deferred on a blanket excuse:
 
 - **sns** — Same shape as sqs: no domain-layer consumers, only its own module and `test/sns.e2e-spec.ts` reference `SNS_PROVIDER` directly. Mechanical to fence; not yet ported this round.
 
-- **mail** — Coupled into core auth: `EmailFlowService` (verify/reset emails, `auth` module) calls `MAIL_TRANSPORT` unconditionally; `NewDeviceService` (`suspicious-activity`) also injects it directly, gated only by its own `newDeviceEmailEnabled` flag, not by mail's own `isEnabled`. Removing mail outright breaks core auth email flows.
+- **mail** — Coupled into core auth: `EmailFlowService` (verify/reset emails, `auth` module) calls `MAIL_TRANSPORT` unconditionally; `NewDeviceService` (`suspicious-activity`) also injects it directly, gated only by its own `newDeviceEmailEnabled` flag, not by mail's own `isEnabled`. `NotificationEmailService` (`notification`, PR 5) checks mail's own `isEnabled` before every send, so it degrades cleanly — but it is still a removable module's unconditional dependency on this deferred provider. Removing mail outright breaks core auth email flows.
 
 - **lambda** — Same shape as sqs/sns: no domain-layer consumers — `test/lambda.e2e-spec.ts` pulls `LAMBDA_PROVIDER` straight out of the DI container to invoke the example function. Mechanical to fence; not yet ported this round.
 
