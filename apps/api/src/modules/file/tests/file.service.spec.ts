@@ -46,6 +46,8 @@ function createService(
     create: vi.fn().mockResolvedValue(pendingFile),
     findById: vi.fn().mockResolvedValue(pendingFile),
     markReady: vi.fn().mockResolvedValue(readyFile),
+    findStalePending: vi.fn().mockResolvedValue([]),
+    deleteById: vi.fn(),
     ...overrides,
   };
   const s3Provider: S3ProviderInterface = {
@@ -260,5 +262,132 @@ describe('FileService.getDownloadUrl', () => {
     await expect(service.getDownloadUrl(strangerId, readyFile.id)).rejects.toBeInstanceOf(
       ForbiddenError,
     );
+  });
+});
+
+describe('FileService.sweepOrphans', () => {
+  it('queries stale PENDING rows via the repository and reports zero counts when none are found', async () => {
+    const { service, fileRepository } = createService({
+      findStalePending: vi.fn().mockResolvedValue([]),
+    });
+
+    const result = await service.sweepOrphans();
+
+    expect(result).toEqual({
+      markedReadyCount: 0,
+      deletedAbsentCount: 0,
+      deletedInvalidCount: 0,
+    });
+    expect(fileRepository.findStalePending).toHaveBeenCalledWith(expect.any(Date), 200);
+  });
+
+  it('marks a row READY and emits file.uploaded when the object exists and passes the allowlist', async () => {
+    const { service, fileRepository, s3Provider, emit } = createService(
+      { findStalePending: vi.fn().mockResolvedValue([pendingFile]) },
+      {
+        headObject: vi
+          .fn()
+          .mockResolvedValue({ contentLength: 1024, contentType: 'application/pdf' }),
+      },
+    );
+
+    const result = await service.sweepOrphans();
+
+    expect(result).toEqual({ markedReadyCount: 1, deletedAbsentCount: 0, deletedInvalidCount: 0 });
+    expect(fileRepository.markReady).toHaveBeenCalledWith(pendingFile.id, {
+      contentType: 'application/pdf',
+      size: 1024,
+    });
+    expect(fileRepository.deleteById).not.toHaveBeenCalled();
+    expect(s3Provider.delete).not.toHaveBeenCalled();
+    expect(emit).toHaveBeenCalledWith('file.uploaded', {
+      fileId: pendingFile.id,
+      userId: pendingFile.ownerId,
+      intent: pendingFile.intent,
+    });
+  });
+
+  it('deletes the row when no object exists at the key', async () => {
+    const { service, fileRepository, s3Provider } = createService(
+      { findStalePending: vi.fn().mockResolvedValue([pendingFile]) },
+      { headObject: vi.fn().mockResolvedValue(null) },
+    );
+
+    const result = await service.sweepOrphans();
+
+    expect(result).toEqual({ markedReadyCount: 0, deletedAbsentCount: 1, deletedInvalidCount: 0 });
+    expect(fileRepository.deleteById).toHaveBeenCalledWith(pendingFile.id);
+    expect(s3Provider.delete).not.toHaveBeenCalled();
+    expect(fileRepository.markReady).not.toHaveBeenCalled();
+  });
+
+  // Object present but failing the same allowlist confirmUpload would apply
+  // must be deleted, never reconciled to READY — see file.service.ts's
+  // isUploadedObjectValid doc comment.
+  it('deletes both the S3 object and the row when the object fails the content-type allowlist', async () => {
+    const { service, fileRepository, s3Provider } = createService(
+      { findStalePending: vi.fn().mockResolvedValue([pendingFile]) },
+      {
+        headObject: vi
+          .fn()
+          .mockResolvedValue({ contentLength: 1024, contentType: 'application/x-msdownload' }),
+      },
+    );
+
+    const result = await service.sweepOrphans();
+
+    expect(result).toEqual({ markedReadyCount: 0, deletedAbsentCount: 0, deletedInvalidCount: 1 });
+    expect(s3Provider.delete).toHaveBeenCalledWith(pendingFile.key);
+    expect(fileRepository.deleteById).toHaveBeenCalledWith(pendingFile.id);
+    expect(fileRepository.markReady).not.toHaveBeenCalled();
+  });
+
+  it('deletes both the S3 object and the row when the object exceeds the intent size cap', async () => {
+    const { service, fileRepository, s3Provider } = createService(
+      { findStalePending: vi.fn().mockResolvedValue([pendingFile]) },
+      {
+        headObject: vi
+          .fn()
+          .mockResolvedValue({ contentLength: 20 * 1024 * 1024, contentType: 'application/pdf' }),
+      },
+    );
+
+    const result = await service.sweepOrphans();
+
+    expect(result).toEqual({ markedReadyCount: 0, deletedAbsentCount: 0, deletedInvalidCount: 1 });
+    expect(s3Provider.delete).toHaveBeenCalledWith(pendingFile.key);
+    expect(fileRepository.deleteById).toHaveBeenCalledWith(pendingFile.id);
+  });
+
+  it('passes the batch limit constant through to the repository query', async () => {
+    const { service, fileRepository } = createService();
+
+    await service.sweepOrphans();
+
+    const [, limitArg] = (fileRepository.findStalePending as ReturnType<typeof vi.fn>).mock
+      .calls[0] as [Date, number];
+
+    expect(limitArg).toBe(200);
+  });
+
+  it('tallies mixed outcomes across a multi-row batch', async () => {
+    const absentFile: FileInterface = { ...pendingFile, id: 'file-absent', key: 'files/absent' };
+    const invalidFile: FileInterface = { ...pendingFile, id: 'file-invalid', key: 'files/invalid' };
+    const headObject = vi.fn().mockImplementation((key: string) => {
+      if (key === absentFile.key) return Promise.resolve(null);
+      if (key === invalidFile.key) {
+        return Promise.resolve({ contentLength: 1, contentType: 'application/x-msdownload' });
+      }
+
+      return Promise.resolve({ contentLength: 1024, contentType: 'application/pdf' });
+    });
+    const { service } = createService(
+      { findStalePending: vi.fn().mockResolvedValue([pendingFile, absentFile, invalidFile]) },
+      { headObject },
+    );
+
+    const result = await service.sweepOrphans();
+
+    expect(result).toEqual({ markedReadyCount: 1, deletedAbsentCount: 1, deletedInvalidCount: 1 });
   });
 });
