@@ -29,10 +29,15 @@ Each recipe has two kinds of cross-reference. **Fence-marked** ones carry a
 *proven*: the subtracted tree is type-checked and unit-tested. **Not-yet-fence-marked**
 ones are listed in each recipe for a human to apply, and are *not* proven.
 
-Today every module's `apps/api` half is fully fenced, and no module's
-`apps/web` / `apps/admin` / `packages/shared` half is. The script deletes those
-frontend files (so the recipes are complete) but cannot verify the result, and prints a
-`COVERAGE GAP` line for each affected module. Modules in that state:
+Every module's `apps/api` half is fully fenced and therefore fully proven. The modules
+with no frontend or `packages/shared` surface at all (`cloudfront` and the three
+`oauth-*` providers) additionally get `apps/web` and `apps/admin` type-checked and
+unit-tested after the subtraction, so they are proven end to end.
+
+The remaining modules do own frontend and shared files. Those files are listed in the
+recipes and the script deletes the ones it safely can, but their cross-references are not
+fenced, so the frontend result is **not** verified — the runner prints a `COVERAGE GAP`
+line for each. Modules in that state:
 
 - `contact-us`
 - `statistic`
