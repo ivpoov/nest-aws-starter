@@ -262,6 +262,69 @@ describe('notification dispatcher (persist-first, e2e)', () => {
     expect(payload).toMatchObject({ audience: 'ADMIN', userId: null, type: 'CONTACT_MESSAGE' });
   });
 
+  // backend.md §11a's persist-first rule, proven against the real database
+  // rather than call counts on a mock: the delivery path is what gets broken
+  // (the repository stays real), so a surviving row is the durable row the
+  // dispatcher actually wrote.
+  it('keeps the persisted row when the whole socket fan-out path throws', async () => {
+    const user = await registerUser();
+    const gateway: NotificationGateway = app.get(NotificationGateway);
+    // Breaks both socket channels at once (the notification push and the
+    // unread-count push both go through server.to).
+    const to = vi.spyOn(gateway.server, 'to').mockImplementation((): never => {
+      throw new Error('socket transport unavailable');
+    });
+    const send = vi.spyOn(app.get<MailTransportInterface>(MAIL_TRANSPORT), 'send');
+
+    try {
+      eventBus.emit(AUTH_NEW_DEVICE_EVENT, {
+        userId: user.id,
+        ip: '198.51.100.42',
+        device: 'Chrome on Fedora',
+      });
+
+      const notification = await waitForActivity(() =>
+        prisma.notification.findFirst({ where: { userId: user.id, type: 'NEW_DEVICE_LOGIN' } }),
+      );
+
+      expect(notification).toMatchObject({
+        audience: 'USER',
+        userId: user.id,
+        type: 'NEW_DEVICE_LOGIN',
+        title: 'New device sign-in',
+        body: 'A new sign-in to your account was detected from Chrome on Fedora.',
+      });
+      expect(to).toHaveBeenCalled();
+
+      // Nothing retries or rolls back after the channel failure is logged.
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      expect(await prisma.notification.count({ where: { id: notification?.id } })).toBe(1);
+
+      const receipt = await prisma.notificationReceipt.findFirst({
+        where: { notificationId: notification?.id, userId: user.id },
+      });
+
+      expect(receipt).toBeTruthy();
+      expect(receipt?.readAt).toBeNull();
+
+      // Each channel is contained on its own: the dead socket transport must
+      // not stop the EMAIL channel that runs after it. ('New sign-in to your
+      // account' is the unrelated suspicious-activity alert for the same
+      // event — the notification channel's own subject is its row title.)
+      const notificationMails: number = send.mock.calls.filter(
+        (call: unknown[]): boolean =>
+          (call[0] as { to: string; subject: string }).to === user.email &&
+          (call[0] as { to: string; subject: string }).subject === 'New device sign-in',
+      ).length;
+
+      expect(notificationMails).toBe(1);
+    } finally {
+      to.mockRestore();
+      send.mockRestore();
+    }
+  });
+
   // The EMAIL channel's storm guard against real Redis: a Stripe retry storm
   // that flips a subscription past-due N times in an hour must persist N
   // in-app rows and send exactly one mail.
