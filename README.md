@@ -298,3 +298,9 @@ scripts/          # subtraction test + removal-recipe generator
 **Read `docs/conventions/backend.md` before writing any backend code** — it is
 the law of this repository, and the `note` module is its living reference
 implementation.
+
+## License
+
+MIT — see [`LICENSE`](./LICENSE). Clone it, change it, ship it; keep the
+copyright notice. To report a security issue, follow
+[`SECURITY.md`](./SECURITY.md).
