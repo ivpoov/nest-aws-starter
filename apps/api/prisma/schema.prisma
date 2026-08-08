@@ -44,6 +44,8 @@ model User {
   subscriptions           Subscription[] // <module:payment>
   paymentTransactions     PaymentTransaction[] // <module:payment>
   notificationPreferences NotificationPreference[] // <module:notification>
+  notifications           Notification[] // <module:notification>
+  notificationReceipts    NotificationReceipt[] // <module:notification>
 
   @@index([role, status])
   @@index([createdAt])
@@ -359,6 +361,7 @@ model Notification {
   body      String                @db.VarChar(1000)
   meta      Json                  @default("{}") // deep-link data, denormalized
   createdAt DateTime              @default(now())
+  user      User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   receipts  NotificationReceipt[]
 
   @@index([userId, id])
@@ -372,6 +375,7 @@ model NotificationReceipt {
   userId         String // reader (admin id for ADMIN audience)
   readAt         DateTime?
   notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([notificationId, userId])
   @@index([userId, readAt])

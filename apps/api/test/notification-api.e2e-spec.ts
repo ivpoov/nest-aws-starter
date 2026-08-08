@@ -295,6 +295,23 @@ describe('notification history API (e2e)', () => {
     expect(forbidden.body.code).toBe('NOTIFICATION_ACCESS_DENIED');
   });
 
+  // The FK/cascade added in 20260808175249_notification_user_fk_cascade: the
+  // starter had three userId columns in one migration and only the
+  // preference one was constrained, so whoever adds account deletion first
+  // would inherit orphaned notification and receipt rows while the
+  // preference rows cascaded away.
+  it('cascades a user’s notifications and receipts away when the user row is deleted', async () => {
+    const owner = await registerUser();
+    const row = await seedUserNotification(owner.id);
+
+    expect(await prisma.notificationReceipt.count({ where: { notificationId: row.id } })).toBe(1);
+
+    await prisma.user.delete({ where: { id: owner.id } });
+
+    expect(await prisma.notification.count({ where: { id: row.id } })).toBe(0);
+    expect(await prisma.notificationReceipt.count({ where: { notificationId: row.id } })).toBe(0);
+  });
+
   it('lazily creates the admin’s own reader receipt on first mark-read of an ADMIN-audience row', async () => {
     const admin = await registerAdmin();
     const adminRow = await seedAdminNotification();
