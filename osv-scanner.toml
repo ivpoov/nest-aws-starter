@@ -1,0 +1,84 @@
+# OSV-Scanner configuration, consumed by the `dependency-scan` job in
+# .github/workflows/security.yml.
+#
+# osv-scanner reads the whole pnpm lockfile and cannot tell a runtime
+# dependency from a build-time one, so it also reports advisories in packages
+# that only ever exist on a developer's laptop or on the CI runner. The other
+# dependency gate, `pnpm audit --prod --audit-level high` in ci.yml, filters to
+# production dependencies instead — between them the production tree is
+# covered twice, from two different advisory databases.
+#
+# POLICY for entries below:
+#   * Only transitive, build-or-development-time packages that are never
+#     installed into a deployed artifact are eligible.
+#   * Every entry records why the package is not reachable in production and
+#     which direct dependency pulls it in.
+#   * Every entry carries `ignoreUntil`. These are NOT permanent exceptions —
+#     the fix is an upstream release plus a lockfile bump, and the date is
+#     there so the gate re-reports anything still unfixed instead of quietly
+#     staying green forever.
+#   * Anything reachable from production code is not eligible for this file.
+#     Bump it, or do not ship.
+#
+# Reviewed 2026-08-09 against pnpm-lock.yaml; re-check on expiry.
+
+# --- hono, @hono/node-server, valibot: pulled in by @prisma/dev -------------
+# @prisma/dev is a devDependency of apps/api (the Prisma CLI's local dev
+# server). It runs `prisma` commands on a workstation and in the migrate step
+# in CI; none of it is bundled into or installed alongside the API runtime.
+# Resolution: a @prisma/dev release that bumps its hono/valibot pins.
+
+[[IgnoredVulns]]
+id = "GHSA-92pp-h63x-v22m"
+ignoreUntil = 2026-11-09
+reason = "@hono/node-server 1.19.11, transitive via @prisma/dev (devDependency). No production code path imports hono."
+
+[[IgnoredVulns]]
+id = "GHSA-frvp-7c67-39w9"
+ignoreUntil = 2026-11-09
+reason = "@hono/node-server 1.19.11, transitive via @prisma/dev (devDependency). No production code path imports hono."
+
+[[IgnoredVulns]]
+id = "GHSA-54fx-42gc-7vw4"
+ignoreUntil = 2026-11-09
+reason = "hono 4.12.33, transitive via @prisma/dev (devDependency). The API is served by Fastify; hono is never loaded at runtime."
+
+[[IgnoredVulns]]
+id = "GHSA-79qm-7rj5-m7r9"
+ignoreUntil = 2026-11-09
+reason = "hono 4.12.33, transitive via @prisma/dev (devDependency). The API is served by Fastify; hono is never loaded at runtime."
+
+[[IgnoredVulns]]
+id = "GHSA-8j4g-w8fx-2239"
+ignoreUntil = 2026-11-09
+reason = "hono 4.12.33, transitive via @prisma/dev (devDependency). The API is served by Fastify; hono is never loaded at runtime."
+
+[[IgnoredVulns]]
+id = "GHSA-f23p-vx2j-j53r"
+ignoreUntil = 2026-11-09
+reason = "hono 4.12.33, transitive via @prisma/dev (devDependency). The API is served by Fastify; hono is never loaded at runtime."
+
+[[IgnoredVulns]]
+id = "GHSA-5qjj-4xww-7phc"
+ignoreUntil = 2026-11-09
+reason = "valibot 1.2.0, transitive via @prisma/dev (devDependency). Not imported by any application or shared package."
+
+# --- nanoid: pulled in by postcss ------------------------------------------
+# postcss is the build-time CSS pipeline behind the web and admin Vite builds.
+# It runs during `pnpm run build` and is absent from the built bundles.
+# Resolution: a postcss release pinning nanoid >= 3.3.17.
+
+[[IgnoredVulns]]
+id = "GHSA-2v37-7h3g-55p8"
+ignoreUntil = 2026-11-09
+reason = "nanoid 3.3.16, transitive via postcss (build-time only). Not present in any shipped bundle; the runtime never generates ids with it."
+
+# --- shell-quote: pulled in by concurrently --------------------------------
+# concurrently is the devDependency that runs the local `dev` script side by
+# side. It is never installed in a deployed image.
+# Resolution: a concurrently release pinning shell-quote >= 1.9.0.
+
+[[IgnoredVulns]]
+id = "GHSA-395f-4hp3-45gv"
+ignoreUntil = 2026-11-09
+reason = "shell-quote 1.8.4, transitive via concurrently (devDependency used only by the local dev script)."

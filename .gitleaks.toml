@@ -1,0 +1,47 @@
+title = "nest-aws-starter"
+
+# Secret-scanning configuration, consumed by the `secret-scan` job in
+# .github/workflows/security.yml and by anyone running `gitleaks` locally.
+#
+# The gate scans the FULL commit history, not the working tree: this repository
+# is published with its history intact, so a credential deleted at HEAD is
+# still readable in the commit that introduced it. `fetch-depth: 0` in the
+# workflow is load-bearing for the same reason — a shallow clone would scan
+# only the tip and report a clean bill of health for a repo full of leaks.
+#
+# ALLOWLIST POLICY: every entry below is a verified false positive with its
+# reasoning written out. An allowlist is never the remedy for a real
+# credential — that requires rotating the secret and rewriting history. If you
+# add an entry, say what the matched string actually is and why it is inert.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = """
+CloudFront signer unit test. The matched text is a PEM header/footer wrapped
+around the literal three-character string 'abc'; the test asserts only that the
+config loader passes the value through verbatim and that the signer rejects it,
+so there is no key material here. Scoped to the one spec file and to the exact
+'abc' body, so a genuine key pasted into the same file would still be caught.
+"""
+targetRules = ["private-key"]
+condition = "AND"
+paths = [
+  '''apps/api/src/modules/common/providers/cloudfront/tests/cloudfront-signer\.service\.spec\.ts''',
+]
+regexes = [
+  '''-----BEGIN PRIVATE KEY-----\\{1,2}nabc\\{1,2}n-----END PRIVATE KEY-----''',
+]
+
+[[allowlists]]
+description = """
+User e2e fixture. 'argon2-placeholder' is a human-readable stand-in written
+into the `passwordHash` column of a seeded test user. It is not an Argon2 hash,
+it is not derived from any password, and no code path ever verifies against it.
+Scoped to the one spec file and to that exact literal.
+"""
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''apps/api/test/user\.e2e-spec\.ts''']
+regexes = ['''^argon2-placeholder$''']
