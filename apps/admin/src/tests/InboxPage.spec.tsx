@@ -76,6 +76,9 @@ const TWO_MESSAGE_PAGE: ContactMessageListResponseInterface = {
 
 describe('InboxPage', () => {
   beforeEach(() => {
+    // mockReset first: a `mockResolvedValueOnce` a test queues but never
+    // consumes would otherwise leak into the next one.
+    vi.mocked(contactApi.fetchContactMessages).mockReset();
     vi.mocked(contactApi.fetchContactMessages).mockResolvedValue(OPEN_PAGE);
   });
 
@@ -121,12 +124,57 @@ describe('InboxPage', () => {
     expect(await screen.findByText('Message detail')).toBeInTheDocument();
   });
 
-  it('does not open a drawer when the deep-linked id is not in the loaded page', async () => {
+  // This used to assert a silent no-op: the page navigated, no drawer opened,
+  // and nothing explained why. There is no fetch-by-id endpoint to fall back
+  // on, so the deep link has to say so rather than dead-end.
+  it('explains the dead end when the deep-linked id is not in the loaded page', async () => {
     renderInboxPage('/inbox?messageId=does-not-exist');
 
     await screen.findByText('Pricing question');
 
     expect(screen.queryByText('Message detail')).not.toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      /isn’t in the messages loaded here/,
+    );
+  });
+
+  it('offers to clear the status filter when one is hiding the deep-linked message', async () => {
+    renderInboxPage('/inbox?messageId=does-not-exist');
+
+    await screen.findByText('Pricing question');
+
+    // No filter active yet, so no "show all" escape hatch is needed.
+    expect(screen.queryByRole('button', { name: 'Show all statuses' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('RESOLVED'));
+
+    expect(await screen.findByRole('button', { name: 'Show all statuses' })).toBeInTheDocument();
+  });
+
+  it('dismisses the notice and does not bring it back', async () => {
+    renderInboxPage('/inbox?messageId=does-not-exist');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Dismiss' }));
+
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
+
+  it('opens the drawer without any notice once a later page contains the message', async () => {
+    vi.mocked(contactApi.fetchContactMessages).mockResolvedValueOnce({
+      items: OPEN_PAGE.items,
+      nextCursor: 'm-1',
+    });
+    vi.mocked(contactApi.fetchContactMessages).mockResolvedValueOnce({
+      items: TWO_MESSAGE_PAGE.items.slice(1),
+      nextCursor: null,
+    });
+
+    renderInboxPage('/inbox?messageId=m-2');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Load older messages' }));
+
+    expect(await screen.findByText('I would like a refund.')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('swaps to the second message when ?messageId= changes without remounting', async () => {
