@@ -6,11 +6,14 @@
 // the removal recipes in docs/removal/ from the same fence markers, so the
 // docs can never drift from what the script actually strips.
 //
-// Coverage: a module's `paths` cover apps/api, both frontends and
-// packages/shared, so the recipes list every file a removal touches. The
+// Coverage: a module's `paths` cover apps/api (src and test), both frontends
+// and packages/shared, so the recipes list every file a removal touches. The
 // *verification* extends to the frontends for modules flagged
 // `frontendFenced` — every module carries that flag today, so each removal is
-// type-checked and unit-tested across apps/api, apps/web and apps/admin. A
+// type-checked and unit-tested across apps/api, apps/web and apps/admin. The
+// apps/api type-check covers the e2e suite too (tsconfig.e2e.json), but the
+// e2e suite is never run: it needs a live Postgres/Redis/LocalStack that a
+// throwaway worktree has no access to. A
 // module that still needs its apps/web / apps/admin / packages/shared
 // cross-references converted from `manualSteps` into real fence markers
 // prints a COVERAGE GAP line when it runs.
@@ -91,6 +94,7 @@ const MODULES = [
     summary: 'Public contact form + admin inbox.',
     paths: [
       'apps/api/src/modules/contact-us',
+      'apps/api/test/contact-us.e2e-spec.ts',
       'apps/web/src/apis/contact',
       'apps/web/src/interfaces/submit-contact-request.interface.ts',
       'apps/web/src/pages/ContactPage.tsx',
@@ -121,6 +125,7 @@ const MODULES = [
     summary: 'Admin dashboard statistics (cached TypedSQL aggregates).',
     paths: [
       'apps/api/src/modules/statistic',
+      'apps/api/test/statistics.e2e-spec.ts',
       'apps/api/prisma/sql',
       'apps/admin/src/apis/statistics',
       'apps/admin/src/components/Statistics',
@@ -157,7 +162,11 @@ const MODULES = [
   {
     id: 'api-key',
     summary: 'Long-lived API key issuance, guard, and admin management.',
-    paths: ['apps/api/src/modules/api-key', 'packages/shared/src/api-keys'],
+    paths: [
+      'apps/api/src/modules/api-key',
+      'apps/api/test/api-keys.e2e-spec.ts',
+      'packages/shared/src/api-keys',
+    ],
     envVars: [],
     frontendFenced: true,
     manualSteps: [],
@@ -170,6 +179,7 @@ const MODULES = [
     summary: 'S3-backed presigned upload/download flow.',
     paths: [
       'apps/api/src/modules/file',
+      'apps/api/test/files.e2e-spec.ts',
       'apps/web/src/apis/files',
       'apps/web/src/components/Attachments',
       'apps/web/src/hooks/files',
@@ -825,6 +835,19 @@ function subtractionSteps(worktreeDir, module) {
           cwd: worktreeDir,
         }),
     ],
+    // tsconfig.build.json excludes apps/api/test, so the e2e suite used to sit
+    // outside the proof entirely: a spec importing a symbol the removal
+    // deleted still "passed". tsconfig.e2e.json adds test/**/*.e2e-spec.ts (and
+    // the shared factory/helpers) to the same type-check, so an unfenced
+    // cross-reference from an e2e spec fails the run instead of the reader's
+    // first `pnpm run test:e2e` after following the recipe.
+    [
+      'tsc --noEmit (e2e suite)',
+      () =>
+        run('pnpm', ['--dir', 'apps/api', 'exec', 'tsc', '--noEmit', '-p', 'tsconfig.e2e.json'], {
+          cwd: worktreeDir,
+        }),
+    ],
     ['unit tests', () => run('pnpm', ['--dir', 'apps/api', 'run', 'test'], { cwd: worktreeDir })],
     ...(module.frontendFenced ? frontendSteps(worktreeDir, 'apps/web') : []),
     ...(module.frontendFenced ? frontendSteps(worktreeDir, 'apps/admin') : []),
@@ -993,8 +1016,13 @@ function renderModuleDoc(module) {
     ),
   ].join('\n');
   const proof = module.frontendFenced
-    ? `\`scripts/subtraction-test.mjs --module ${module.id}\` proves this whole recipe nightly, in
-an isolated worktree — API, both frontends and \`packages/shared\`.`
+    ? `\`scripts/subtraction-test.mjs --module ${module.id}\` runs this whole recipe nightly, in an
+isolated worktree — API, both frontends and \`packages/shared\`. It proves everything the
+first six commands above cover: the subtracted tree type-checks (\`apps/api/src\` *and* the
+e2e suite) and its unit tests pass in all three packages. The last command is the one gap —
+the e2e suite needs a live Postgres/Redis/LocalStack, which a throwaway worktree has no
+access to, so the specs are type-checked but not executed. Run it yourself once, after
+following section 2.`
     : `\`scripts/subtraction-test.mjs --module ${module.id}\` proves the \`apps/api\` half of this
 recipe nightly, in an isolated worktree. It deletes the frontend and
 \`packages/shared\` paths in section 1 too, but it cannot yet *verify* them, because
@@ -1056,9 +1084,11 @@ ${renderDatabaseSection(module.id)}
 \`\`\`
 pnpm --dir packages/shared run build
 pnpm --dir apps/api exec tsc --noEmit -p tsconfig.build.json
+pnpm --dir apps/api exec tsc --noEmit -p tsconfig.e2e.json
 pnpm --dir apps/api run test
 pnpm --dir apps/web run build && pnpm --dir apps/web run test
 pnpm --dir apps/admin run build && pnpm --dir apps/admin run test
+pnpm --dir apps/api run test:e2e   # needs docker compose up -d
 \`\`\`
 
 ${proof}
@@ -1104,10 +1134,19 @@ apply and are *not* proven — every one of them is a hole in the proof. **Optio
 tidy-up** entries are proven harmless: the subtracted tree passes with them left in
 place, so they are only listed so a reader can clean up.
 
-Every module is fully fenced across \`apps/api\`, \`apps/web\`, \`apps/admin\` and
-\`packages/shared\`, so every recipe is proven end to end: the runner deletes the module,
-strips its fences, and then type-checks and unit-tests all three packages. Modules still
-missing frontend fences — the runner prints a \`COVERAGE GAP\` line for each:
+Every module is fully fenced across \`apps/api\` (\`src\` *and* \`test\`), \`apps/web\`,
+\`apps/admin\` and \`packages/shared\`, so every recipe is proven across the whole monorepo:
+the runner deletes the module, strips its fences, then type-checks all three packages —
+including \`apps/api\`'s e2e suite, via \`tsconfig.e2e.json\` — and runs their unit tests.
+
+What "proven" does **not** cover: the e2e suite is type-checked, never executed. It needs a
+live Postgres/Redis/LocalStack and a throwaway worktree has none, so
+\`pnpm --dir apps/api run test:e2e\` is the one step of each recipe's section 5 that stays a
+human's job. E2E specs that exist solely to exercise a removable module's endpoints are
+deleted with it (section 1); specs that merely touch one carry fence markers (section 2) —
+so an e2e spec can no longer quietly outlive the module it tests.
+
+Modules still missing frontend fences — the runner prints a \`COVERAGE GAP\` line for each:
 
 ${gapList}
 
