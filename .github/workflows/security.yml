@@ -1,8 +1,10 @@
 name: security
 
-# Supply-chain gates that need no build and no pnpm install. They run on every
-# pull request and again weekly — a repository that was clean the day it was
-# merged does not stay clean on its own, and only a schedule catches that.
+# Supply-chain gates that need no build and no pnpm install: secret scanning
+# over the full commit history, and an OSV lookup over the dependency tree.
+# Both run on every pull request and again weekly — a dependency that was
+# clean the day it was merged goes vulnerable without a single line of this
+# repository changing, and only a schedule catches that.
 #
 # No `push` trigger: the pull_request run already covers everything that
 # reaches a protected branch, and re-running on push would double the minutes
@@ -68,3 +70,24 @@ jobs:
               --redact \
               --no-banner \
               --verbose
+
+  dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # Complements the `audit` job in ci.yml, it does not replace it.
+      # `pnpm audit` queries the npm advisory database and is scoped to
+      # production dependencies at high severity; OSV aggregates GHSA, the
+      # language-ecosystem feeds and the distro trackers, and reports every
+      # severity across the whole lockfile. Each routinely carries advisories
+      # the other has not picked up yet, so the production tree gets two
+      # independent opinions.
+      #
+      # Findings that only affect build-time or development-time packages are
+      # listed, with reasons and expiry dates, in osv-scanner.toml.
+      - uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --config=osv-scanner.toml
+            --lockfile=pnpm-lock.yaml
