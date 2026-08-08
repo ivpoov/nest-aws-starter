@@ -60,18 +60,26 @@ const SKIP_DIR_NAMES = new Set(['node_modules', 'dist', 'generated', '.git']);
 //
 // `manualSteps` are cross-references that are NOT fence-marked yet — they are
 // documented for the reader but cannot be stripped mechanically.
-// `frontendFenced: true` asserts a module has no `manualSteps` left under
-// apps/web, apps/admin or packages/shared, which is what lets the runner
-// type-check and test both frontends after the subtraction. Until a module
-// earns that flag its frontend half is deleted but unverified, and the runner
-// prints a COVERAGE GAP line for it.
+//
+// `manualPaths` are folders a removal must delete that the script deliberately
+// does NOT, because doing so breaks a build step it cannot then repair. The
+// `packages/shared/src/<module>` folders are all in this bucket:
+// `packages/shared/src/index.ts` re-exports them and those export lines are
+// not fenced, so deleting the folder alone makes `build shared` fail on a
+// barrel pointing at nothing. They are still listed in the recipe — the reader
+// deletes them together with the matching `index.ts` lines from `manualSteps`.
+//
+// `frontendFenced: true` asserts a module has nothing left in `manualPaths`
+// and no `manualSteps` under apps/web, apps/admin or packages/shared, which is
+// what lets the runner type-check and unit-test both frontends after the
+// subtraction. Until a module earns that flag its frontend half is deleted but
+// unverified, and the runner prints a COVERAGE GAP line for it.
 const MODULES = [
   {
     id: 'contact-us',
     summary: 'Public contact form + admin inbox.',
     paths: [
       'apps/api/src/modules/contact-us',
-      'packages/shared/src/contact',
       'apps/web/src/apis/contact',
       'apps/web/src/interfaces/submit-contact-request.interface.ts',
       'apps/web/src/pages/ContactPage.tsx',
@@ -87,6 +95,7 @@ const MODULES = [
       'apps/admin/src/tests/useContactMessages.spec.tsx',
     ],
     envVars: [],
+    manualPaths: ['packages/shared/src/contact'],
     manualSteps: [
       ['apps/web/src/App.tsx', 'the ContactPage import and the /contact route'],
       [
@@ -113,7 +122,6 @@ const MODULES = [
     paths: [
       'apps/api/src/modules/statistic',
       'apps/api/prisma/sql',
-      'packages/shared/src/statistics',
       'apps/admin/src/apis/statistics',
       'apps/admin/src/components/Statistics',
       'apps/admin/src/hooks/statistics',
@@ -136,6 +144,7 @@ const MODULES = [
       'apps/admin/src/tests/useStatisticsSeries.spec.tsx',
     ],
     envVars: [],
+    manualPaths: ['packages/shared/src/statistics'],
     manualSteps: [
       [
         'apps/admin/src/App.tsx',
@@ -152,7 +161,8 @@ const MODULES = [
   {
     id: 'api-key',
     summary: 'Long-lived API key issuance, guard, and admin management.',
-    paths: ['apps/api/src/modules/api-key', 'packages/shared/src/api-keys'],
+    paths: ['apps/api/src/modules/api-key'],
+    manualPaths: ['packages/shared/src/api-keys'],
     envVars: [],
     manualSteps: [
       ['packages/shared/src/index.ts', "the `export * from './api-keys/...'` lines"],
@@ -198,6 +208,9 @@ const MODULES = [
     id: 'oauth-google',
     summary: 'Google OAuth login/link provider.',
     paths: ['apps/api/src/modules/oauth-google', 'apps/api/src/configs/google-oauth.config.ts'],
+    // No frontend or packages/shared surface at all, so both frontends are
+    // fully verified after this subtraction.
+    frontendFenced: true,
     envVars: [
       'GOOGLE_OAUTH_ENABLED',
       'GOOGLE_OAUTH_CLIENT_ID',
@@ -209,6 +222,9 @@ const MODULES = [
     id: 'oauth-facebook',
     summary: 'Facebook OAuth login/link provider.',
     paths: ['apps/api/src/modules/oauth-facebook', 'apps/api/src/configs/facebook-oauth.config.ts'],
+    // No frontend or packages/shared surface at all, so both frontends are
+    // fully verified after this subtraction.
+    frontendFenced: true,
     envVars: [
       'FACEBOOK_OAUTH_ENABLED',
       'FACEBOOK_OAUTH_CLIENT_ID',
@@ -220,6 +236,9 @@ const MODULES = [
     id: 'oauth-discord',
     summary: 'Discord OAuth login/link provider.',
     paths: ['apps/api/src/modules/oauth-discord', 'apps/api/src/configs/discord-oauth.config.ts'],
+    // No frontend or packages/shared surface at all, so both frontends are
+    // fully verified after this subtraction.
+    frontendFenced: true,
     envVars: [
       'DISCORD_OAUTH_ENABLED',
       'DISCORD_OAUTH_CLIENT_ID',
@@ -234,6 +253,9 @@ const MODULES = [
       'apps/api/src/modules/common/providers/cloudfront',
       'apps/api/src/configs/cloudfront.config.ts',
     ],
+    // No frontend or packages/shared surface at all, so both frontends are
+    // fully verified after this subtraction.
+    frontendFenced: true,
     envVars: [
       'CLOUDFRONT_ENABLED',
       'CLOUDFRONT_DOMAIN',
@@ -272,7 +294,6 @@ const MODULES = [
       'apps/api/test/webhook-consumer.e2e-spec.ts',
       'apps/api/test/subscription-access.e2e-spec.ts',
       'apps/api/test/subscription-lifecycle.e2e-spec.ts',
-      'packages/shared/src/payments',
       'apps/web/src/apis/billing',
       'apps/web/src/components/Billing',
       'apps/web/src/hooks/billing',
@@ -324,6 +345,7 @@ const MODULES = [
       'SQS_PAYMENT_WEBHOOK_QUEUE_URL',
       'PAYMENT_WEBHOOK_CONSUMER_ENABLED',
     ],
+    manualPaths: ['packages/shared/src/payments'],
     manualSteps: [
       [
         'apps/web/src/App.tsx',
@@ -374,7 +396,6 @@ const MODULES = [
       'apps/api/test/notification-dispatcher.e2e-spec.ts',
       'apps/api/test/notification-api.e2e-spec.ts',
       'apps/api/test/notification-preferences.e2e-spec.ts',
-      'packages/shared/src/notifications',
       'apps/web/src/apis/notifications',
       'apps/web/src/components/Notifications',
       'apps/web/src/hooks/notifications',
@@ -426,6 +447,7 @@ const MODULES = [
       'apps/admin/src/tests/useNotificationSocket.spec.tsx',
     ],
     envVars: ['WEBSOCKET_ENABLED', 'WEBSOCKET_HEARTBEAT_INTERVAL_MS'],
+    manualPaths: ['packages/shared/src/notifications'],
     manualSteps: [
       [
         'apps/web/src/App.tsx',
@@ -562,7 +584,9 @@ function log(message) {
 const FRONTEND_PATH_PREFIXES = ['apps/web/', 'apps/admin/', 'packages/shared/'];
 
 function hasFrontendPaths(module) {
-  return module.paths.some((p) => FRONTEND_PATH_PREFIXES.some((prefix) => p.startsWith(prefix)));
+  return [...module.paths, ...(module.manualPaths ?? [])].some((p) =>
+    FRONTEND_PATH_PREFIXES.some((prefix) => p.startsWith(prefix)),
+  );
 }
 
 // A recipe that names a file which no longer exists is worse than no recipe:
@@ -572,7 +596,7 @@ function assertModulePathsExist(modules) {
   const stale = [];
 
   for (const module of modules) {
-    for (const relPath of module.paths) {
+    for (const relPath of [...module.paths, ...(module.manualPaths ?? [])]) {
       if (!statSync(path.join(REPO_ROOT, relPath), { throwIfNoEntry: false })) {
         stale.push(`${module.id}: ${relPath}`);
       }
@@ -950,7 +974,12 @@ should happen to the existing tables. Pick one:
 
 function renderModuleDoc(module) {
   const fenceResults = scanFences(REPO_ROOT, module.id, false);
-  const pathsSection = module.paths.map((p) => `- \`${p}\` (delete)`).join('\n');
+  const pathsSection = [
+    ...module.paths.map((p) => `- \`${p}\` (delete)`),
+    ...(module.manualPaths ?? []).map(
+      (p) => `- \`${p}\` (delete **by hand** — see the note under section 2)`,
+    ),
+  ].join('\n');
   const proof = module.frontendFenced
     ? `\`scripts/subtraction-test.mjs --module ${module.id}\` proves this whole recipe nightly, in
 an isolated worktree — API, both frontends and \`packages/shared\`.`
@@ -987,7 +1016,11 @@ ${renderFenceSection(fenceResults)}
 ### Not yet fence-marked (edit by hand)
 
 These references are **not** fenced, so \`scripts/subtraction-test.mjs\` neither strips
-them nor proves they were handled. Work through them by hand:
+them nor proves they were handled. Any \`packages/shared/src/*\` folder marked "delete by
+hand" in section 1 belongs here too: the script leaves it in place because
+\`packages/shared/src/index.ts\` re-exports it through unfenced \`export *\` lines, so
+deleting the folder on its own would break \`build shared\`. Delete the folder and those
+export lines together. Work through the list by hand:
 
 ${renderManualStepsSection(module.manualSteps)}
 

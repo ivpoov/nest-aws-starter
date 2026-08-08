@@ -31,7 +31,11 @@ and the markers themselves.
 ### Not yet fence-marked (edit by hand)
 
 These references are **not** fenced, so `scripts/subtraction-test.mjs` neither strips
-them nor proves they were handled. Work through them by hand:
+them nor proves they were handled. Any `packages/shared/src/*` folder marked "delete by
+hand" in section 1 belongs here too: the script leaves it in place because
+`packages/shared/src/index.ts` re-exports it through unfenced `export *` lines, so
+deleting the folder on its own would break `build shared`. Delete the folder and those
+export lines together. Work through the list by hand:
 
 _None — every cross-module reference for this module is fence-marked._
 
@@ -56,8 +60,5 @@ pnpm --dir apps/web run build && pnpm --dir apps/web run test
 pnpm --dir apps/admin run build && pnpm --dir apps/admin run test
 ```
 
-`scripts/subtraction-test.mjs --module oauth-discord` proves the `apps/api` half of this
-recipe nightly, in an isolated worktree. It deletes the frontend and
-`packages/shared` paths in section 1 too, but it cannot yet *verify* them, because
-the cross-references under "not yet fence-marked" above have no fence markers to
-strip — so run the last two commands yourself after following section 2.
+`scripts/subtraction-test.mjs --module oauth-discord` proves this whole recipe nightly, in
+an isolated worktree — API, both frontends and `packages/shared`.

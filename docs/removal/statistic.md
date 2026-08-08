@@ -11,7 +11,6 @@ codebase.
 
 - `apps/api/src/modules/statistic` (delete)
 - `apps/api/prisma/sql` (delete)
-- `packages/shared/src/statistics` (delete)
 - `apps/admin/src/apis/statistics` (delete)
 - `apps/admin/src/components/Statistics` (delete)
 - `apps/admin/src/hooks/statistics` (delete)
@@ -32,6 +31,7 @@ codebase.
 - `apps/admin/src/tests/useChartColors.spec.tsx` (delete)
 - `apps/admin/src/tests/useStatisticsOverview.spec.tsx` (delete)
 - `apps/admin/src/tests/useStatisticsSeries.spec.tsx` (delete)
+- `packages/shared/src/statistics` (delete **by hand** — see the note under section 2)
 
 ## 2. Strip cross-module references
 
@@ -49,7 +49,11 @@ and the markers themselves.
 ### Not yet fence-marked (edit by hand)
 
 These references are **not** fenced, so `scripts/subtraction-test.mjs` neither strips
-them nor proves they were handled. Work through them by hand:
+them nor proves they were handled. Any `packages/shared/src/*` folder marked "delete by
+hand" in section 1 belongs here too: the script leaves it in place because
+`packages/shared/src/index.ts` re-exports it through unfenced `export *` lines, so
+deleting the folder on its own would break `build shared`. Delete the folder and those
+export lines together. Work through the list by hand:
 
 - `apps/admin/src/App.tsx` — the StatisticsPage import and the /dashboard route — AND repoint the catch-all <Navigate to="/dashboard">, which is a RUNTIME break, not a type error
 - `apps/admin/src/pages/LoginPage.tsx` — repoint the post-login navigate away from /dashboard — also runtime-only

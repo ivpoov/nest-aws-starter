@@ -23,7 +23,6 @@ codebase.
 - `apps/api/test/webhook-consumer.e2e-spec.ts` (delete)
 - `apps/api/test/subscription-access.e2e-spec.ts` (delete)
 - `apps/api/test/subscription-lifecycle.e2e-spec.ts` (delete)
-- `packages/shared/src/payments` (delete)
 - `apps/web/src/apis/billing` (delete)
 - `apps/web/src/components/Billing` (delete)
 - `apps/web/src/hooks/billing` (delete)
@@ -64,6 +63,7 @@ codebase.
 - `apps/admin/src/components/Statistics/RevenueByPlanBreakdown.tsx` (delete)
 - `apps/admin/src/tests/RevenueChart.spec.tsx` (delete)
 - `apps/admin/src/tests/RevenueByPlanBreakdown.spec.tsx` (delete)
+- `packages/shared/src/payments` (delete **by hand** — see the note under section 2)
 
 ## 2. Strip cross-module references
 
@@ -138,7 +138,11 @@ and the markers themselves.
 ### Not yet fence-marked (edit by hand)
 
 These references are **not** fenced, so `scripts/subtraction-test.mjs` neither strips
-them nor proves they were handled. Work through them by hand:
+them nor proves they were handled. Any `packages/shared/src/*` folder marked "delete by
+hand" in section 1 belongs here too: the script leaves it in place because
+`packages/shared/src/index.ts` re-exports it through unfenced `export *` lines, so
+deleting the folder on its own would break `build shared`. Delete the folder and those
+export lines together. Work through the list by hand:
 
 - `apps/web/src/App.tsx` — the billing/pricing page imports and the /pricing, /billing/success, /billing/canceled and /settings/billing routes
 - `apps/web/src/components/Layout/AppLayout.tsx` — the Billing nav entry

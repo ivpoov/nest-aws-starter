@@ -10,7 +10,7 @@ codebase.
 ## 1. Delete
 
 - `apps/api/src/modules/api-key` (delete)
-- `packages/shared/src/api-keys` (delete)
+- `packages/shared/src/api-keys` (delete **by hand** — see the note under section 2)
 
 ## 2. Strip cross-module references
 
@@ -31,7 +31,11 @@ and the markers themselves.
 ### Not yet fence-marked (edit by hand)
 
 These references are **not** fenced, so `scripts/subtraction-test.mjs` neither strips
-them nor proves they were handled. Work through them by hand:
+them nor proves they were handled. Any `packages/shared/src/*` folder marked "delete by
+hand" in section 1 belongs here too: the script leaves it in place because
+`packages/shared/src/index.ts` re-exports it through unfenced `export *` lines, so
+deleting the folder on its own would break `build shared`. Delete the folder and those
+export lines together. Work through the list by hand:
 
 - `packages/shared/src/index.ts` — the `export * from './api-keys/...'` lines
 - `apps/web, apps/admin` — nothing — this module has no frontend surface

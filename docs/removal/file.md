@@ -38,7 +38,11 @@ and the markers themselves.
 ### Not yet fence-marked (edit by hand)
 
 These references are **not** fenced, so `scripts/subtraction-test.mjs` neither strips
-them nor proves they were handled. Work through them by hand:
+them nor proves they were handled. Any `packages/shared/src/*` folder marked "delete by
+hand" in section 1 belongs here too: the script leaves it in place because
+`packages/shared/src/index.ts` re-exports it through unfenced `export *` lines, so
+deleting the folder on its own would break `build shared`. Delete the folder and those
+export lines together. Work through the list by hand:
 
 - `apps/web/src/pages/NotesPage.tsx` — the useFileUpload / AttachmentsCard imports, the hook call and the <AttachmentsCard> render
 - `packages/shared/src/files` — delete everything EXCEPT enums/file-intent.enum.ts, and reduce that enum to AVATAR — the avatar flow (ProfilePage, useProfile) needs FileIntentEnum and survives this module
