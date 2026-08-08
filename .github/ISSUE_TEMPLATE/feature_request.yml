@@ -1,0 +1,61 @@
+name: Feature request
+description: Suggest a capability or improvement for the starter.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is a starter template, so the bar for new features is whether most
+        projects built on it would want the code. Something only your project
+        needs is usually better as a fork.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: >-
+        Describe the situation you ran into, not the solution yet. What did you
+        have to build or work around yourself?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you would like the starter to do, and roughly how.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Other approaches you tried or rejected, and why.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the stack?
+      multiple: true
+      options:
+        - API (apps/api)
+        - Web app (apps/web)
+        - Admin panel (apps/admin)
+        - Shared contracts (packages/shared)
+        - Local infrastructure (docker compose, LocalStack, MinIO)
+        - Build, CI or tooling
+        - Documentation
+        - Not sure
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I would be willing to open a pull request for this.
+          required: false
