@@ -4,7 +4,8 @@ AWS-native, production-grade NestJS + React full-stack starter.
 
 > **Current release line: v0.5 "Notifications".** The API, both React
 > frontends, auth & identity, admin operations, payments and real-time
-> notifications are all in the tree, each with unit and e2e tests. Shipped so
+> notifications are all in the tree — the API with unit *and* e2e tests, the
+> frontends with unit tests. Shipped so
 > far: v0.1 foundation, v0.2 auth & identity, v0.3 admin & user ops, v0.4
 > payments, v0.5 notifications. Full prose documentation is still a v1.0
 > task — until then `docs/conventions/backend.md` and the generated recipes
@@ -31,8 +32,8 @@ AWS-native, production-grade NestJS + React full-stack starter.
   ([see below](#real-time-notifications)).
 - **Two React frontends** — a user app and an admin panel, sharing wire
   contracts from `packages/shared`.
-- **Modular by subtraction** — every optional module above can be deleted
-  using a generated recipe, and CI proves the rest of the app still builds
+- **Modular by subtraction** — every optional module above ships a generated
+  removal recipe, and CI proves the API still builds without it
   ([see below](#modular-by-subtraction)).
 
 ## Stack
@@ -226,20 +227,29 @@ docker compose up -d --force-recreate localstack
 
 ## Modular by subtraction
 
-This is a starter, so the parts you don't want should come out cleanly.
-Optional modules leave `// <module:x>` fence markers at every cross-module
-reference, and `scripts/subtraction-test.mjs` uses them two ways: it generates
-the per-module removal recipes in [`docs/removal/`](./docs/removal), and it
-proves them by deleting each module in an isolated worktree and rebuilding
-what's left. CI runs both nightly and on pushes to release branches, failing if
-a recipe has drifted from the code.
+This is a starter, so the parts you don't want should come out cleanly. Optional
+modules leave `// <module:x>` fence markers at their cross-module references,
+and `scripts/subtraction-test.mjs` uses them two ways: it generates the
+per-module removal recipes in [`docs/removal/`](./docs/removal), and it proves
+them by deleting each module in an isolated worktree and rebuilding what's left.
+CI runs both nightly and on pushes to release branches, failing if a recipe has
+drifted from the code.
 
 ```bash
 node scripts/subtraction-test.mjs                   # prove every module
 node scripts/subtraction-test.mjs --module payment  # just one
 ```
 
-To drop a module, follow its recipe — e.g. [`docs/removal/notification.md`](./docs/removal/notification.md).
+To drop a module, follow its recipe — e.g.
+[`docs/removal/notification.md`](./docs/removal/notification.md).
+
+One honest caveat, spelled out per module in
+[`docs/removal/README.md`](./docs/removal/README.md): the fence markers cover
+`apps/api` completely, but the frontend and `packages/shared` halves of the
+bigger modules are still documented as by-hand steps rather than fenced. Those
+recipes list every file involved, and the script deletes what it safely can, but
+it can only *prove* the API half — so run each recipe's own verify block after
+following it.
 
 ## Repository layout
 
