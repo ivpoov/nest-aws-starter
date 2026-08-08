@@ -207,6 +207,17 @@ src/modules/note/
     └── note.e2e-spec.ts
 ```
 
+Modules that own other artifact kinds add sibling folders under the same rule —
+one kind per folder, even for a single file:
+
+| Folder | Owns | Reference module |
+|---|---|---|
+| `gateways/` | WebSocket gateways — transport concerns only (handshake auth, room joins, revalidation), no domain logic, no repository access (§11b) | `notification` |
+| `adapters/` | Transport adapters installed at bootstrap (e.g. the Redis-backed Socket.IO adapter and its disabled twin) (§11b) | `notification` |
+| `builders/` | Pure event-payload → persisted-content mappers — no I/O, no DI (§11a) | `notification` |
+| `templates/` | Mail/render templates — pure functions returning content shapes | `auth`, `suspicious-activity`, `notification` |
+| `helpers/` | Module-owned free functions needed outside DI (e.g. bootstrap wiring) | `notification` |
+
 Registered by exactly one line in `AppModule`. Feature modules never import other
 feature modules — cross-feature communication goes through the event bus or core
 modules (`user`, `auth`) and providers only; a dependency rule in CI enforces it.
@@ -709,6 +720,82 @@ its own filter with its own map — services never change. Nest's own
 `HttpException`s remain legal only in genuinely HTTP-layer code (pipes, guards,
 router) and get generic status-derived codes; anything needing a specific code is
 a domain error.
+
+## 11a. Domain-event subscribers and side-channel fan-out
+
+Cross-feature reactions (audit rows, notifications, digests) subscribe to the
+event bus with `@OnDomainEvent(EVENT_NAME)` — never by importing the emitting
+feature module. Event names are constants in the core `event` module; payloads
+are interfaces in the subscribing module. The reference implementation is
+`notification`'s `NotificationDispatcherService` (one subscriber per module: a
+thin event → content mapping that funnels every handler into one dispatch path);
+`ActivityListener.safeRecord` is the same pattern one size smaller.
+
+Binding rules for every subscriber that persists and then delivers:
+
+- **Persist-first.** The durable row is written before any delivery channel
+  (socket push, unread-count push, email) is attempted. A channel failure logs
+  at `warn` and never rolls back or retries the row; a persistence failure
+  skips fan-out entirely. There is no path where a channel touches the network
+  before the repository write returns.
+- **Subscribers never break the emitter.** Handler failures are contained
+  (logged, swallowed) — the business transaction that emitted the event must
+  succeed or fail on its own merits, never on a listener's.
+- **Preferences gate channels, never persistence.** Per-user preferences (and
+  provider flags like `MAIL_ENABLED`/`WEBSOCKET_ENABLED`) decide whether a
+  *delivery channel* fires. They are consulted after the row is persisted; a
+  user with every channel off still gets the in-app row.
+- **Each channel is independently contained** — its own try/catch, its own
+  `warn`; one channel's failure never prevents the next.
+- **Outbound side-channels that can storm are throttled server-side** with an
+  atomic Redis claim (`SET key NX EX window`, keyed per recipient and type,
+  behind a repository contract). Availability gates fail open and log loudly
+  (`LoginLockoutService.isLockedSafely`, the notification email throttle);
+  security gates fail closed (the gateway's heartbeat revalidation).
+- Event → content mapping lives in pure `builders/` functions (no I/O, no DI),
+  so content is unit-testable and the subscriber stays a routing table.
+- **Persisted content is denormalized (subtraction-safe).** The row stores
+  title/body/meta as-is at dispatch time — never a join back to the emitting
+  feature's tables, so removing either module leaves no dangling reference.
+
+## 11b. WebSocket gateways and transport adapters
+
+A gateway is a transport edge, exactly like a controller: handshake auth, room
+membership, lifecycle — zero domain logic, zero repository access. Emission
+into sockets is a service concern (`NotificationFanOutService`), not the
+gateway's. Reference: `notification`'s `NotificationGateway` + adapters.
+
+- **Handshake auth = HTTP auth.** The client sends the access token in the
+  Socket.IO handshake `auth.token` payload (travels in the CONNECT packet over
+  the established transport — never in a URL or query string, no cookies). The
+  gateway verifies it with the exact same `TokenService.verifyAccessToken`
+  (signature + Redis allowlist) the HTTP guard uses. Any failure disconnects
+  with a coded, server-side-logged reason; nothing about the failure is emitted
+  to the client.
+- **Revocation liveness.** Long-lived connections re-verify on a heartbeat: one
+  shared interval sweeps the tracked socket set and re-runs the full token
+  verification per socket; failures (including Redis errors) disconnect —
+  fail-closed. The interval is a config knob (`WEBSOCKET_HEARTBEAT_INTERVAL_MS`)
+  and is cleared in `onModuleDestroy`.
+- **Rooms are joined server-side only** from verified claims. No
+  `@SubscribeMessage` handler exists unless the feature genuinely needs
+  client → server messages.
+- **No config reads in decorator options.** `@WebSocketGateway({ ... })`
+  options evaluate at module-import time — before `.env` is loaded and before
+  DI exists. Anything configuration-dependent (CORS origins above all) is
+  injected at bootstrap by the adapter, which resolves it from the same
+  `ConfigService` object the HTTP layer uses. One parse, one source: socket
+  CORS comes from `AppConfig.corsOrigins`, the same field
+  `configure-app.helper.ts` feeds to `enableCors`.
+- **The adapter is the off-switch.** `<X>_ENABLED=false` for a socket transport
+  means the server never attaches a socket endpoint and opens no adapter Redis
+  connections (§12: no third state). Bootstrap installs the real Redis-backed
+  adapter when enabled and a `Disabled*` adapter (detached server, nothing
+  bound to HTTP) when not — rejecting handshakes after accepting them is not
+  "off", it is a reconnect loop generator. Fan-out services check the same
+  config flag and skip socket channels outright.
+- Bootstrap wiring lives in one module-owned helper used by both `main.ts` and
+  the e2e app factory, inside the module's removal fences.
 
 ## 12. DTOs, entities, permissions, configs
 
