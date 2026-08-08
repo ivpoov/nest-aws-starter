@@ -1,4 +1,6 @@
 import type { PaymentConfig } from '@configs/payment.config.js';
+import { WEBHOOK_FAILED_EVENT } from '@modules/event/constants/event-names.constants.js';
+import type { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { MAX_WEBHOOK_ATTEMPTS } from '@modules/payment/constants/webhook-consumer.constants.js';
 import { NormalizedEventTypeEnum } from '@modules/payment/enums/normalized-event-type.enum.js';
@@ -48,6 +50,7 @@ interface TestSetupInterface {
   readonly sqsProvider: SqsProviderInterface;
   readonly redisLock: { withLock: ReturnType<typeof vi.fn> };
   readonly dispatcher: { dispatch: ReturnType<typeof vi.fn> };
+  readonly eventBus: { emit: ReturnType<typeof vi.fn> };
 }
 
 function createService(
@@ -77,16 +80,18 @@ function createService(
     ),
   };
   const dispatcher = { dispatch: vi.fn().mockResolvedValue(undefined) };
+  const eventBus = { emit: vi.fn() };
 
   const service: PaymentWebhookConsumerService = new PaymentWebhookConsumerService(
     webhookEventRepository,
     sqsProvider,
     redisLock as unknown as RedisLockService,
     dispatcher as unknown as WebhookEventDispatcherService,
+    eventBus as unknown as EventBusService,
     payment,
   );
 
-  return { service, webhookEventRepository, sqsProvider, redisLock, dispatcher };
+  return { service, webhookEventRepository, sqsProvider, redisLock, dispatcher, eventBus };
 }
 
 describe('PaymentWebhookConsumerService.processMessage', () => {
@@ -155,7 +160,7 @@ describe('PaymentWebhookConsumerService.processMessage', () => {
   });
 
   it('records a failure and leaves the message for redelivery below the attempt ceiling', async () => {
-    const { service, webhookEventRepository, sqsProvider, dispatcher } = createService();
+    const { service, webhookEventRepository, sqsProvider, dispatcher, eventBus } = createService();
 
     dispatcher.dispatch.mockRejectedValue(new Error('provider unreachable'));
     (webhookEventRepository.recordFailure as ReturnType<typeof vi.fn>).mockResolvedValue(1);
@@ -168,10 +173,11 @@ describe('PaymentWebhookConsumerService.processMessage', () => {
     );
     expect(webhookEventRepository.markFailed).not.toHaveBeenCalled();
     expect(sqsProvider.deleteMessage).not.toHaveBeenCalled();
+    expect(eventBus.emit).not.toHaveBeenCalled();
   });
 
-  it('marks FAILED and deletes the message once attempts reach the ceiling', async () => {
-    const { service, webhookEventRepository, sqsProvider, dispatcher } = createService();
+  it('marks FAILED, emits WEBHOOK_FAILED_EVENT, and deletes the message once attempts reach the ceiling', async () => {
+    const { service, webhookEventRepository, sqsProvider, dispatcher, eventBus } = createService();
 
     dispatcher.dispatch.mockRejectedValue(new Error('provider unreachable'));
     (webhookEventRepository.recordFailure as ReturnType<typeof vi.fn>).mockResolvedValue(
@@ -182,6 +188,34 @@ describe('PaymentWebhookConsumerService.processMessage', () => {
 
     expect(webhookEventRepository.markFailed).toHaveBeenCalledWith(baseEvent().id);
     expect(sqsProvider.deleteMessage).toHaveBeenCalled();
+    expect(eventBus.emit).toHaveBeenCalledWith(WEBHOOK_FAILED_EVENT, {
+      webhookEventId: baseEvent().id,
+      provider: baseEvent().provider,
+      type: baseEvent().type,
+      attempts: MAX_WEBHOOK_ATTEMPTS,
+      lastError: 'provider unreachable',
+    });
+  });
+
+  it('does not re-emit WEBHOOK_FAILED_EVENT for a redelivered message whose row is already FAILED', async () => {
+    const { service, webhookEventRepository, sqsProvider, dispatcher, eventBus } = createService({
+      event: baseEvent({ status: WebhookEventStatusEnum.FAILED, attempts: MAX_WEBHOOK_ATTEMPTS }),
+    });
+
+    dispatcher.dispatch.mockRejectedValue(new Error('still unreachable'));
+    (webhookEventRepository.recordFailure as ReturnType<typeof vi.fn>).mockResolvedValue(
+      MAX_WEBHOOK_ATTEMPTS + 1,
+    );
+
+    await service.processMessage(message());
+
+    // isTerminal() intentionally does not short-circuit FAILED (see its own
+    // comment) — the redelivery still reaches the ceiling branch and
+    // idempotently marks FAILED again, but must not mint a second
+    // WEBHOOK_FAILED_EVENT / admin notification for the same failure.
+    expect(webhookEventRepository.markFailed).toHaveBeenCalledWith(baseEvent().id);
+    expect(sqsProvider.deleteMessage).toHaveBeenCalled();
+    expect(eventBus.emit).not.toHaveBeenCalled();
   });
 
   it('drops the message when the event row cannot be found', async () => {
@@ -229,11 +263,13 @@ describe('PaymentWebhookConsumerService.processMessages (loop containment)', () 
       };
       const redisLock = { withLock: vi.fn() };
       const dispatcher = { dispatch: vi.fn() };
+      const eventBus = { emit: vi.fn() };
       const service: PaymentWebhookConsumerService = new PaymentWebhookConsumerService(
         webhookEventRepository,
         sqsProvider,
         redisLock as unknown as RedisLockService,
         dispatcher as unknown as WebhookEventDispatcherService,
+        eventBus as unknown as EventBusService,
         payment,
       );
       const messageA = message({

@@ -6,6 +6,7 @@ import { login } from '../apis/auth';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
+import { ADMIN_HOME_ROUTE } from '../constants/admin-home-route.constants';
 import { useAuthStore } from '../stores/auth.store';
 import { toApiError } from '../utils/toApiError';
 
@@ -25,7 +26,7 @@ export function LoginPage(): ReactElement {
       const tokens: AuthTokensResponseInterface = await login({ email, password });
 
       setTokens(tokens.accessToken, tokens.refreshToken);
-      await navigate('/dashboard');
+      await navigate(ADMIN_HOME_ROUTE);
     } catch (caught) {
       setError(toApiError(caught));
     } finally {

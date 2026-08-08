@@ -16,6 +16,7 @@ import { sqsConfig } from '@configs/sqs.config.js';
 import { stripeConfig } from '@configs/stripe.config.js'; // <module:payment>
 import { suspiciousActivityConfig } from '@configs/suspicious-activity.config.js';
 import { webAppConfig } from '@configs/web-app.config.js';
+import { websocketConfig } from '@configs/websocket.config.js'; // <module:notification>
 
 export const configs = [
   appConfig,
@@ -36,4 +37,5 @@ export const configs = [
   stripeConfig, // <module:payment>
   suspiciousActivityConfig,
   webAppConfig,
+  websocketConfig, // <module:notification>
 ];

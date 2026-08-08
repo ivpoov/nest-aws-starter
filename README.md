@@ -2,15 +2,46 @@
 
 AWS-native, production-grade NestJS + React full-stack starter.
 
-> **WIP — v0.1 "Foundation".** The API core is complete; auth, frontends and
-> payments arrive in later releases. Full documentation is a v1.0 task.
+> **Current release line: v0.5 "Notifications".** The API, both React
+> frontends, auth & identity, admin operations, payments and real-time
+> notifications are all in the tree — the API with unit *and* e2e tests, the
+> frontends with unit tests. Shipped so
+> far: v0.1 foundation, v0.2 auth & identity, v0.3 admin & user ops, v0.4
+> payments, v0.5 notifications. Full prose documentation is still a v1.0
+> task — until then `docs/conventions/backend.md` and the generated recipes
+> in `docs/removal/` are the authoritative references.
+
+## What's inside
+
+- **API core** — controller → service → repository layering, coded
+  transport-agnostic errors, health probes, Swagger, request throttling,
+  structured logging, and scheduled maintenance tasks.
+- **Auth & identity** — email/password with verification and reset, OAuth
+  login *and* account linking (Google, Facebook, Discord), refresh-token
+  sessions with revocation, long-lived API keys, CASL permissions,
+  login lockout and new-device alerts.
+- **Admin & user ops** — role-gated admin console, user management with
+  block/unblock and `login-as` impersonation, an activity audit trail, a
+  contact-form inbox, and S3 presigned uploads with optional CloudFront
+  signed URLs.
+- **Payments** — Stripe-backed plans, checkout, subscriptions, billing
+  portal, transaction history, webhook processing drained through SQS, and
+  revenue statistics.
+- **Notifications** — persist-first domain-event notifications delivered over
+  a Socket.IO gateway and by email, with a per-user preference matrix
+  ([see below](#real-time-notifications)).
+- **Two React frontends** — a user app and an admin panel, sharing wire
+  contracts from `packages/shared`.
+- **Modular by subtraction** — every optional module above ships a generated
+  removal recipe, and CI proves the API still builds without it
+  ([see below](#modular-by-subtraction)).
 
 ## Stack
 
 NestJS 11 on **Fastify** (ESM-only, SWC) · Prisma 7 + PostgreSQL · Redis
-(single & cluster) · AWS SDK v3 (S3, SQS, SNS, SES, Lambda — all runnable
-offline via LocalStack + MinIO) · pnpm workspaces + Turborepo · Biome ·
-Vitest + supertest.
+(single & cluster) · Socket.IO 4 with the Redis adapter · AWS SDK v3 (S3, SQS,
+SNS, SES, Lambda — all runnable offline via LocalStack + MinIO) · pnpm
+workspaces + Turborepo · Biome · Vitest + supertest.
 
 ## Prerequisites
 
@@ -75,6 +106,133 @@ docker compose --profile init up minio-init    # create the S3 bucket once
 docker compose --profile cluster up -d         # 4-node Redis cluster on 7000-7003
 ```
 
+## Real-time notifications
+
+Domain events — a new-device login, a password change, a subscription
+activated or ended, a failed payment, a new contact message, a failed
+webhook — are turned into notifications by a dispatcher. Each notification is
+**persisted first**, then fanned out: live to connected clients over a
+Socket.IO gateway, and by email where the user has that channel enabled. A
+delivery failure never rolls back the stored row, so the bell and the history
+page stay correct even if a channel is down.
+
+Notifications are addressed to one of two audiences: `USER` (the recipient's
+own feed) or `ADMIN` (every admin, e.g. `WEBHOOK_FAILED`, `CONTACT_MESSAGE`).
+
+### The socket
+
+The API mounts a Socket.IO gateway on the same HTTP server as the REST API, at
+the default `/socket.io` path — at the **root**, outside the `/api/v1` prefix.
+Both frontends derive the socket URL from `VITE_API_BASE_URL`'s origin
+(`src/utils/getSocketBaseUrl.ts`) instead of taking a second env var, so an API
+base of `http://localhost:3000/api/v1` implies a socket at
+`http://localhost:3000`. That derivation is the supported topology out of the
+box; a deployment that serves the REST prefix and the WebSocket upgrade from
+*different* origins needs its own socket URL instead.
+
+### Authenticating a client
+
+This project uses **no cookies anywhere**. A socket client presents the very
+same access token it would send in an HTTP `Authorization: Bearer` header, in
+the Socket.IO handshake's `auth.token`:
+
+```ts
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:3000', {
+  auth: (cb) => cb({ token: accessToken }),
+});
+```
+
+Prefer that **callback** form over a static `auth: { token }` object — Socket.IO
+re-evaluates it on every reconnect, so a token refreshed in the meantime is
+picked up automatically.
+
+The handshake token is validated exactly like an HTTP request: JWT signature
+plus the Redis allowlist lookup. A socket with a missing, invalid or revoked
+token is disconnected rather than sent an error event. Connected sockets are
+also re-validated by a background sweep every
+`WEBSOCKET_HEARTBEAT_INTERVAL_MS` (default `60000`), so revoking a session
+severs live sockets too — not just future HTTP calls.
+
+### Rooms and events
+
+Every authenticated socket joins `user:<userId>`; admins additionally join
+`admins`. The server emits two events, and accepts none from the client:
+
+| Event | Payload | Sent to |
+|---|---|---|
+| `notification` | the new notification | the recipient's user room, or `admins` for admin-audience rows |
+| `unread-count` | a number | the recipient's user room |
+
+### Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `WEBSOCKET_ENABLED` | `true` | Toggles the live socket transport. `false` installs **no** socket transport at all: no `/socket.io` endpoint exists, handshakes get a hard connection error rather than an accept-then-drop loop, and the adapter's two Redis pub/sub connections are never opened. Persistence, the REST endpoints below and the email channel are unaffected — only live delivery stops. |
+| `WEBSOCKET_HEARTBEAT_INTERVAL_MS` | `60000` | How often connected sockets are re-validated. |
+| `CORS_ORIGINS` | `http://localhost:5173,http://localhost:5174` | Comma-separated browser origins allowed by **both** HTTP CORS and the socket handshake. Add your deployed frontend origins here or the socket will not connect. |
+
+**Redis is what makes this multi-instance safe.** With `WEBSOCKET_ENABLED=true`
+the gateway runs behind `@socket.io/redis-adapter`, so a notification created on API instance A still
+reaches a socket held by instance B. Redis is already required for the API to
+boot at all (token allowlist, throttler storage, OAuth state), so this adds no
+new infrastructure — but without the adapter a horizontally scaled deployment
+would deliver to only the instance that happened to handle the event.
+
+### Preferences and the email channel
+
+Users get a per-type, per-channel preference matrix:
+
+- **`IN_APP`** is always on and not editable — it is what the bell reads.
+- **`EMAIL`** is opt-out per notification type, and passes four gates: the
+  global `MAIL_ENABLED` provider flag, the user's preference for that type,
+  the user having an email address on file (OAuth-only accounts may not), and
+  the throttle below. Any gate off means no mail is sent and no error is
+  raised.
+
+#### The email throttle
+
+The EMAIL channel is rate-limited to **at most one email per user, per
+notification type, per hour**. A webhook or login storm still persists every
+row and still pushes every socket event — the throttle gates the email channel
+only, never persistence and never live delivery.
+
+It is Redis-backed: a single `SET <key> NX EX 3600` both claims the slot and
+starts the window, so concurrent dispatches on different API instances cannot
+both win, and later attempts inside the window never push the TTL out. The
+claim is the *last* gate before the transport, so a recipient with no email
+address on file never burns their window.
+
+**It fails open.** If Redis is unreachable the claim is treated as granted and
+a warning is logged — the same availability-over-strictness rule the login
+lockout follows. The worst case during a Redis outage is duplicate mail, never
+lost mail.
+
+```
+GET    /api/v1/notifications                 # cursor-paginated feed
+GET    /api/v1/notifications/unread-count
+PATCH  /api/v1/notifications/:id/read
+POST   /api/v1/notifications/read-all
+GET    /api/v1/notifications/preferences     # the matrix
+PUT    /api/v1/notifications/preferences
+```
+
+The feed takes all-optional query params, and they compose with each other and
+with the cursor: `cursor` (the last id of the previous page), `limit`
+(`1`–`100`, default `20`), `unreadOnly` (only the literal string `true` is
+true), `type` (a `NotificationTypeEnum` member) and `audience` (`USER` |
+`ADMIN`). Anything outside those ranges is a `400`. `audience` only ever
+narrows: a non-admin asking for `ADMIN` gets an empty page, not a `403`.
+`nextCursor` is non-null only on a full page, and it describes the *filtered*
+result set — so a filter never leaves a "Load more" button pointing at rows the
+user is not looking at.
+
+In the frontends this is the bell in both layouts, plus
+`/settings/notifications` in the user app and `/notifications` (full history,
+filterable by type, audience and read state — all server-side) in the admin
+panel.
+
 ## Testing
 
 ```bash
@@ -86,6 +244,43 @@ pnpm exec biome ci . # lint + format check
 Every module ships unit + e2e tests; CI (GitHub Actions) runs lint, build,
 both test suites and a dependency audit on every PR.
 
+`test:e2e` runs a one-time preflight before any spec that checks LocalStack
+is reachable and that the SQS queues / SNS topic the init script provisions
+actually exist. If you see `E2E PREFLIGHT: LocalStack is up but missing:
+...`, LocalStack was started before `docker/localstack/init-aws.sh` ran
+against it (a stale container — this happens after a `docker compose up -d`
+that reuses an existing container instead of recreating it). Fix:
+
+```bash
+docker compose up -d --force-recreate localstack
+```
+
+## Modular by subtraction
+
+This is a starter, so the parts you don't want should come out cleanly. Optional
+modules leave `// <module:x>` fence markers at their cross-module references,
+and `scripts/subtraction-test.mjs` uses them two ways: it generates the
+per-module removal recipes in [`docs/removal/`](./docs/removal), and it proves
+them by deleting each module in an isolated worktree and rebuilding what's left.
+CI runs both nightly and on pushes to release branches, failing if a recipe has
+drifted from the code.
+
+```bash
+node scripts/subtraction-test.mjs                   # prove every module
+node scripts/subtraction-test.mjs --module payment  # just one
+```
+
+To drop a module, follow its recipe — e.g.
+[`docs/removal/notification.md`](./docs/removal/notification.md).
+
+One honest caveat, spelled out per module in
+[`docs/removal/README.md`](./docs/removal/README.md): the fence markers cover
+`apps/api` completely, but the frontend and `packages/shared` halves of the
+bigger modules are still documented as by-hand steps rather than fenced. Those
+recipes list every file involved, and the script deletes what it safely can, but
+it can only *prove* the API half — so run each recipe's own verify block after
+following it.
+
 ## Repository layout
 
 ```
@@ -96,6 +291,8 @@ packages/shared/  # wire contracts shared by API and frontends
 lambdas/example/  # echo Lambda demonstrating the invoker pattern
 docker/           # compose init scripts
 docs/conventions/ # binding code conventions — read before contributing
+docs/removal/     # generated per-module removal recipes
+scripts/          # subtraction test + removal-recipe generator
 ```
 
 **Read `docs/conventions/backend.md` before writing any backend code** — it is

@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { Link, NavLink, Outlet } from 'react-router';
 import { useIsImpersonating } from '../../hooks/auth/useIsImpersonating';
 import { useLogout } from '../../hooks/auth/useLogout';
+import { NotificationBell } from '../Notifications/NotificationBell'; // <module:notification>
 import { Banner } from '../ui/Banner';
 import { ThemeToggle } from '../ui/ThemeToggle';
 
@@ -10,7 +11,8 @@ const NAV_ITEMS: ReadonlyArray<{ readonly to: string; readonly label: string }> 
   { to: '/profile', label: 'Profile' },
   { to: '/settings/methods', label: 'Sign-in methods' },
   { to: '/settings/sessions', label: 'Sessions' },
-  { to: '/settings/billing', label: 'Billing' },
+  { to: '/settings/billing', label: 'Billing' }, // <module:payment>
+  { to: '/settings/notifications', label: 'Notifications' }, // <module:notification>
 ];
 
 export function AppLayout(): ReactElement {
@@ -35,6 +37,9 @@ export function AppLayout(): ReactElement {
           ))}
         </nav>
         <div className="flex items-center gap-3">
+          {/* <module:notification> */}
+          <NotificationBell />
+          {/* </module:notification> */}
           <ThemeToggle />
           <button
             type="button"
@@ -48,11 +53,13 @@ export function AppLayout(): ReactElement {
       <main className="mx-auto max-w-3xl px-6 py-8">
         <Outlet />
       </main>
+      {/* <module:contact-us> */}
       <footer className="border-t border-edge px-6 py-4 text-center text-sm text-content-muted">
         <Link to="/contact" className="hover:text-content">
           Contact us
         </Link>
       </footer>
+      {/* </module:contact-us> */}
     </div>
   );
 }

@@ -20,6 +20,54 @@ of the app still type-checks and passes its unit tests — see
 - [`oauth-discord`](./oauth-discord.md) — Discord OAuth login/link provider.
 - [`cloudfront`](./cloudfront.md) — CloudFront signed download URLs (optional common provider).
 - [`payment`](./payment.md) — Plans, subscriptions, payment transactions, webhook events, and the Stripe provider (schema + core module + Stripe implementation).
+- [`notification`](./notification.md) — Notification/receipt/preference schema, WS gateway, the persist-first dispatcher (IN_APP + the per-type/per-channel EMAIL gate, PR 5), the history API (list/unread-count/mark-read/read-all), and the preferences API (GET/PUT matrix).
+
+## Coverage: what is proven vs. documented
+
+Each recipe splits its cross-references three ways. **Fence-marked** ones carry a
+`// <module:x>` comment (or `{/* <module:x> */}` inside JSX), are stripped
+mechanically by the script, and are therefore *proven*: the subtracted tree is
+type-checked and unit-tested. **Not-yet-fence-marked** ones are listed for a human to
+apply and are *not* proven — every one of them is a hole in the proof. **Optional
+tidy-up** entries are proven harmless: the subtracted tree passes with them left in
+place, so they are only listed so a reader can clean up.
+
+Every module is fully fenced across `apps/api` (`src` *and* `test`), `apps/web`,
+`apps/admin` and `packages/shared`, so every recipe is proven across the whole monorepo:
+the runner deletes the module, strips its fences, then type-checks all three packages —
+including `apps/api`'s e2e suite, via `tsconfig.e2e.json` — and runs their unit tests.
+
+What "proven" does **not** cover: the e2e suite is type-checked, never executed. It needs a
+live Postgres/Redis/LocalStack and a throwaway worktree has none, so
+`pnpm --dir apps/api run test:e2e` is the one step of each recipe's section 5 that stays a
+human's job. E2E specs that exist solely to exercise a removable module's endpoints are
+deleted with it (section 1); specs that merely touch one carry fence markers (section 2) —
+so an e2e spec can no longer quietly outlive the module it tests.
+
+Modules still missing frontend fences — the runner prints a `COVERAGE GAP` line for each:
+
+_None — every module is fully fence-marked and fully proven._
+
+Closing a gap means moving a module's frontend entries out of `manualSteps` and into
+real fence markers, then setting `frontendFenced: true`, which switches on
+`tsc --noEmit` + `vitest` for both frontends in the subtracted worktree.
+`assertFrontendFencedClaims()` refuses to run a module that claims the flag while still
+listing a hand-edit under `apps/web`, `apps/admin` or `packages/shared`, so the flag
+cannot outrun the fences.
+
+Two couplings were not mechanical and are worth knowing before adding a module:
+
+- `apps/web`'s `NOTIFICATION_TYPE_LABELS` is a total `Record` over
+  `NotificationTypeEnum`, so a payment- or contact-us-shaped enum member cannot be
+  fenced out on its own. Those members stay by design: `apps/api`'s notification
+  dispatcher keeps the matching builders and handlers, which compile against the core
+  event bus and simply never fire. What is fenced instead is the *link target* — a
+  notification pointing at `/settings/billing` after that route is gone would be a real
+  dead end.
+- Removing `statistic` used to break `apps/admin`'s post-login and catch-all redirects
+  at runtime with no type error to catch it. `ADMIN_HOME_ROUTE` now derives from the
+  first surviving `ADMIN_NAV_ITEMS` entry, so fencing the Dashboard nav entry out moves
+  both redirects onto `/users` on its own.
 
 ## Scope note: v0.1 providers
 
@@ -35,7 +83,7 @@ provider — investigated individually rather than deferred on a blanket excuse:
 
 - **sns** — Same shape as sqs: no domain-layer consumers, only its own module and `test/sns.e2e-spec.ts` reference `SNS_PROVIDER` directly. Mechanical to fence; not yet ported this round.
 
-- **mail** — Coupled into core auth: `EmailFlowService` (verify/reset emails, `auth` module) calls `MAIL_TRANSPORT` unconditionally; `NewDeviceService` (`suspicious-activity`) also injects it directly, gated only by its own `newDeviceEmailEnabled` flag, not by mail's own `isEnabled`. Removing mail outright breaks core auth email flows.
+- **mail** — Coupled into core auth: `EmailFlowService` (verify/reset emails, `auth` module) calls `MAIL_TRANSPORT` unconditionally; `NewDeviceService` (`suspicious-activity`) also injects it directly, gated only by its own `newDeviceEmailEnabled` flag, not by mail's own `isEnabled`. `NotificationEmailService` (`notification`, PR 5) checks mail's own `isEnabled` before every send, so it degrades cleanly — but it is still a removable module's unconditional dependency on this deferred provider. Removing mail outright breaks core auth email flows.
 
 - **lambda** — Same shape as sqs/sns: no domain-layer consumers — `test/lambda.e2e-spec.ts` pulls `LAMBDA_PROVIDER` straight out of the DI container to invoke the example function. Mechanical to fence; not yet ported this round.
 

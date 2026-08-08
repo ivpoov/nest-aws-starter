@@ -7,6 +7,7 @@ import type { DrawerTabType } from '../../types/drawer-tab.type';
 import { ActivityList } from '../Activities/ActivityList';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { ErrorMessage } from '../ui/ErrorMessage';
 import { Loader } from '../ui/Loader';
 import { UserActions } from './UserActions';
 
@@ -97,6 +98,12 @@ export function UserDetailDrawer({
           onLoadMore={activity.loadMore}
           emptyMessage="No activity for this user"
         />
+      ) : error && !user ? (
+        // Without this branch a drawer opened for an id that no longer
+        // resolves (a deleted user, a stale `/users?userId=` deep link)
+        // spins forever: the details view below only renders `error`
+        // *inside* the loaded-user branch, which such a fetch never reaches.
+        <ErrorMessage error={error} />
       ) : isLoading || !user ? (
         <Loader />
       ) : (

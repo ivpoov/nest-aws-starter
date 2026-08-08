@@ -59,14 +59,18 @@ export function RegisterPage(): ReactElement {
             <Link to="/login" className="hover:text-content">
               Already have an account?
             </Link>
+            {/* <module:payment> */}
             {' · '}
             <Link to="/pricing" className="hover:text-content">
               Pricing
             </Link>
+            {/* </module:payment> */}
+            {/* <module:contact-us> */}
             {' · '}
             <Link to="/contact" className="hover:text-content">
               Contact us
             </Link>
+            {/* </module:contact-us> */}
           </p>
         </div>
       </Card>
