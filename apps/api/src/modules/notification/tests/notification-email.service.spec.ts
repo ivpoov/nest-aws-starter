@@ -1,5 +1,6 @@
 import type { MailConfig } from '@configs/mail.config.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
+import type { NotificationEmailThrottleRepositoryInterface } from '@modules/notification/interfaces/notification-email-throttle-repository.interface.js';
 import { NotificationEmailService } from '@modules/notification/services/notification-email.service.js';
 import type { NotificationPreferenceService } from '@modules/notification/services/notification-preference.service.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
@@ -26,11 +27,38 @@ function createEmailMethod(email: string | null): AuthMethodInterface | null {
   };
 }
 
+// In-memory stand-in for the Redis SET NX EX window: first claim per
+// (user, type) wins, repeats lose until the window is cleared.
+function createFakeThrottle(): {
+  repository: NotificationEmailThrottleRepositoryInterface;
+  claim: ReturnType<typeof vi.fn>;
+  expireAll: () => void;
+} {
+  const claimed = new Set<string>();
+  const claim = vi.fn(async (claimUserId: string, type: NotificationTypeEnum) => {
+    const key: string = `${claimUserId}:${type}`;
+
+    if (claimed.has(key)) return false;
+
+    claimed.add(key);
+
+    return true;
+  });
+
+  return {
+    repository: { claim } as NotificationEmailThrottleRepositoryInterface,
+    claim,
+    expireAll: (): void => claimed.clear(),
+  };
+}
+
 interface TestSetupInterface {
   readonly service: NotificationEmailService;
   readonly send: ReturnType<typeof vi.fn>;
   readonly isEmailEnabled: ReturnType<typeof vi.fn>;
   readonly findEmailMethodByUserId: ReturnType<typeof vi.fn>;
+  readonly claim: ReturnType<typeof vi.fn>;
+  readonly expireThrottleWindow: () => void;
 }
 
 function createService(
@@ -41,6 +69,7 @@ function createService(
   const config = { isEnabled: overrides.isEnabled ?? true } as unknown as MailConfig;
   const send = vi.fn().mockResolvedValue(undefined);
   const mailTransport = { send } as unknown as MailTransportInterface;
+  const throttle = createFakeThrottle();
   const isEmailEnabled = vi.fn().mockResolvedValue(overrides.isEmailEnabled ?? true);
   const preferenceService = { isEmailEnabled } as unknown as NotificationPreferenceService;
   const findEmailMethodByUserId = vi.fn().mockResolvedValue(createEmailMethod(email));
@@ -48,18 +77,28 @@ function createService(
   const service = new NotificationEmailService(
     config,
     mailTransport,
+    throttle.repository,
     preferenceService,
     userService,
   );
 
-  return { service, send, isEmailEnabled, findEmailMethodByUserId };
+  return {
+    service,
+    send,
+    isEmailEnabled,
+    findEmailMethodByUserId,
+    claim: throttle.claim,
+    expireThrottleWindow: throttle.expireAll,
+  };
 }
 
 describe('NotificationEmailService.sendIfEnabled', () => {
   let debugSpy: ReturnType<typeof vi.spyOn>;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     debugSpy = vi.spyOn(CustomLoggerService.prototype, 'debug').mockImplementation(() => undefined);
+    warnSpy = vi.spyOn(CustomLoggerService.prototype, 'warn').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
@@ -97,10 +136,61 @@ describe('NotificationEmailService.sendIfEnabled', () => {
   });
 
   it('skips when the recipient has no email method', async () => {
-    const { service, send } = createService({ email: null });
+    const { service, send, claim } = createService({ email: null });
 
     await service.sendIfEnabled(userId, NotificationTypeEnum.PASSWORD_CHANGED, 'title', 'body');
 
     expect(send).not.toHaveBeenCalled();
+    // A recipient without an email never burns the (user, type) window.
+    expect(claim).not.toHaveBeenCalled();
+  });
+
+  describe('throttle — max 1 email per (user, type) per hour', () => {
+    it('a storm of 5 identical events sends exactly 1 email', async () => {
+      const { service, send } = createService();
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await service.sendIfEnabled(userId, NotificationTypeEnum.NEW_DEVICE_LOGIN, 't', 'b');
+      }
+
+      expect(send).toHaveBeenCalledTimes(1);
+    });
+
+    it('a different type for the same user is unaffected by an exhausted window', async () => {
+      const { service, send } = createService();
+
+      await service.sendIfEnabled(userId, NotificationTypeEnum.NEW_DEVICE_LOGIN, 't', 'b');
+      await service.sendIfEnabled(userId, NotificationTypeEnum.NEW_DEVICE_LOGIN, 't', 'b');
+      await service.sendIfEnabled(userId, NotificationTypeEnum.PAYMENT_FAILED, 't', 'b');
+
+      expect(send).toHaveBeenCalledTimes(2);
+    });
+
+    it('window expiry re-opens the (user, type) slot for the next send', async () => {
+      const { service, send, expireThrottleWindow } = createService();
+
+      await service.sendIfEnabled(userId, NotificationTypeEnum.NEW_DEVICE_LOGIN, 't', 'b');
+      await service.sendIfEnabled(userId, NotificationTypeEnum.NEW_DEVICE_LOGIN, 't', 'b');
+
+      expect(send).toHaveBeenCalledTimes(1);
+
+      expireThrottleWindow();
+      await service.sendIfEnabled(userId, NotificationTypeEnum.NEW_DEVICE_LOGIN, 't', 'b');
+
+      expect(send).toHaveBeenCalledTimes(2);
+    });
+
+    it('a Redis outage fails open: the mail still goes out, loudly logged at warn', async () => {
+      const { service, send, claim } = createService();
+
+      claim.mockRejectedValue(new Error('redis unavailable'));
+
+      await expect(
+        service.sendIfEnabled(userId, NotificationTypeEnum.NEW_DEVICE_LOGIN, 't', 'b'),
+      ).resolves.toBeUndefined();
+
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    });
   });
 });

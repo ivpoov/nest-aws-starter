@@ -1,10 +1,12 @@
 import { CaslModule } from '@modules/casl/casl.module.js';
 import { NOTIFICATION_REPOSITORY } from '@modules/notification/constants/notification.constants.js';
+import { NOTIFICATION_EMAIL_THROTTLE_REPOSITORY } from '@modules/notification/constants/notification-email-throttle.constants.js';
 import { NOTIFICATION_PREFERENCE_REPOSITORY } from '@modules/notification/constants/notification-preference.constants.js';
 import { NotificationController } from '@modules/notification/controllers/notification.controller.js';
 import { NotificationPreferenceController } from '@modules/notification/controllers/notification-preference.controller.js';
 import { NotificationGateway } from '@modules/notification/gateways/notification.gateway.js';
 import { notificationPermissions } from '@modules/notification/permissions/notification.permissions.js';
+import { NotificationEmailThrottleRedisRepository } from '@modules/notification/repositories/notification-email-throttle-redis.repository.js';
 import { NotificationPreferencePrismaRepository } from '@modules/notification/repositories/notification-preference-prisma.repository.js';
 import { NotificationPrismaRepository } from '@modules/notification/repositories/notification-prisma.repository.js';
 import { NotificationService } from '@modules/notification/services/notification.service.js';
@@ -44,6 +46,10 @@ import { Module } from '@nestjs/common';
     {
       provide: NOTIFICATION_PREFERENCE_REPOSITORY,
       useClass: NotificationPreferencePrismaRepository,
+    },
+    {
+      provide: NOTIFICATION_EMAIL_THROTTLE_REPOSITORY,
+      useClass: NotificationEmailThrottleRedisRepository,
     },
   ],
   exports: [NotificationGateway],

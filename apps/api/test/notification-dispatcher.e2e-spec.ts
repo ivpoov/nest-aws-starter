@@ -4,21 +4,32 @@ import {
   AUTH_LOGIN_EVENT,
   AUTH_NEW_DEVICE_EVENT,
   CONTACT_RECEIVED_EVENT,
+  SUBSCRIPTION_PAST_DUE_EVENT,
   USER_BLOCKED_EVENT,
 } from '@modules/event/constants/event-names.constants.js';
 import { EventBusService } from '@modules/event/services/event-bus.service.js';
+import {
+  NOTIFICATION_EMAIL_THROTTLE_KEY_PREFIX,
+  NOTIFICATION_EMAIL_THROTTLE_REPOSITORY,
+  NOTIFICATION_EMAIL_THROTTLE_WINDOW_SEC,
+} from '@modules/notification/constants/notification-email-throttle.constants.js';
 import { NOTIFICATION_EVENT } from '@modules/notification/constants/notification-events.constants.js';
 import {
   ADMIN_ROOM,
   buildUserRoom,
 } from '@modules/notification/constants/notification-rooms.constants.js';
 import { NotificationGateway } from '@modules/notification/gateways/notification.gateway.js';
+import type { NotificationEmailThrottleRepositoryInterface } from '@modules/notification/interfaces/notification-email-throttle-repository.interface.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
-import type { NotificationResponseInterface } from '@nest-aws-starter/shared';
+import { type NotificationResponseInterface, NotificationTypeEnum } from '@nest-aws-starter/shared';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { MAIL_TRANSPORT } from '@providers/mail/constants/mail.constants.js';
+import type { MailTransportInterface } from '@providers/mail/interfaces/mail-transport.interface.js';
+import { REDIS_CLIENT } from '@providers/redis/constants/redis.constants.js';
+import type { RedisClientType } from '@providers/redis/types/redis-client.type.js';
 import { io, type Socket } from 'socket.io-client';
 import request from 'supertest';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createTestApp } from './app.factory.js';
 import { waitForActivity } from './helpers/wait-for-activity.helper.js';
 
@@ -41,7 +52,7 @@ describe('notification dispatcher (persist-first, e2e)', () => {
     return `10.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
   }
 
-  async function registerUser(): Promise<{ id: string; accessToken: string }> {
+  async function registerUser(): Promise<{ id: string; email: string; accessToken: string }> {
     const email: string = `notif-e2e-${randomUUID()}@example.com`;
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/register')
@@ -50,12 +61,12 @@ describe('notification dispatcher (persist-first, e2e)', () => {
       .expect(201);
     const authMethod = await prisma.authMethod.findFirst({ where: { email } });
 
-    return { id: authMethod?.userId ?? '', accessToken: response.body.accessToken };
+    return { id: authMethod?.userId ?? '', email, accessToken: response.body.accessToken };
   }
 
   // Same direct-promote-then-relogin pattern as websocket.e2e-spec.ts — no
   // promote-to-ADMIN endpoint exists.
-  async function registerAdmin(): Promise<{ id: string; accessToken: string }> {
+  async function registerAdmin(): Promise<{ id: string; email: string; accessToken: string }> {
     const user = await registerUser();
 
     await prisma.user.update({ where: { id: user.id }, data: { role: 'ADMIN' } });
@@ -67,7 +78,7 @@ describe('notification dispatcher (persist-first, e2e)', () => {
       .send({ email: authMethod?.email, password: 'correct-horse-battery' })
       .expect(200);
 
-    return { id: user.id, accessToken: login.body.accessToken };
+    return { id: user.id, email: user.email, accessToken: login.body.accessToken };
   }
 
   function connect(token: string): Socket {
@@ -249,5 +260,97 @@ describe('notification dispatcher (persist-first, e2e)', () => {
     const payload: NotificationResponseInterface = await received;
 
     expect(payload).toMatchObject({ audience: 'ADMIN', userId: null, type: 'CONTACT_MESSAGE' });
+  });
+
+  // The EMAIL channel's storm guard against real Redis: a Stripe retry storm
+  // that flips a subscription past-due N times in an hour must persist N
+  // in-app rows and send exactly one mail.
+  describe('EMAIL channel throttle', () => {
+    const stormSize: number = 5;
+
+    function countMailsTo(
+      send: ReturnType<typeof vi.spyOn>,
+      recipient: string,
+      subject: string,
+    ): number {
+      return send.mock.calls.filter(
+        (call: unknown[]): boolean =>
+          (call[0] as { to: string; subject: string }).to === recipient &&
+          (call[0] as { to: string; subject: string }).subject === subject,
+      ).length;
+    }
+
+    it('persists every row of a storm but sends exactly one mail per (user, type) window', async () => {
+      const user = await registerUser();
+      const transport: MailTransportInterface = app.get(MAIL_TRANSPORT);
+      const send = vi.spyOn(transport, 'send');
+
+      try {
+        for (let attempt = 0; attempt < stormSize; attempt += 1) {
+          eventBus.emit(SUBSCRIPTION_PAST_DUE_EVENT, {
+            userId: user.id,
+            subscriptionId: randomUUID(),
+          });
+        }
+
+        const rows = await waitForActivity(async () => {
+          const count: number = await prisma.notification.count({
+            where: { userId: user.id, type: NotificationTypeEnum.PAYMENT_FAILED },
+          });
+
+          return count === stormSize ? count : null;
+        });
+
+        expect(rows).toBe(stormSize);
+        // Settle window for the last handler's EMAIL branch, which runs
+        // after its row is already committed.
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        expect(countMailsTo(send, user.email, 'Payment failed')).toBe(1);
+
+        // A different type for the same user has its own window.
+        eventBus.emit(AUTH_NEW_DEVICE_EVENT, {
+          userId: user.id,
+          ip: '198.51.100.31',
+          device: 'Firefox on Fedora',
+        });
+
+        await waitForActivity(() =>
+          prisma.notification.findFirst({
+            where: { userId: user.id, type: NotificationTypeEnum.NEW_DEVICE_LOGIN },
+          }),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        expect(countMailsTo(send, user.email, 'New device sign-in')).toBe(1);
+      } finally {
+        send.mockRestore();
+      }
+    });
+
+    it('lets exactly one of many concurrent claims win, with an hour-long window', async () => {
+      const throttle: NotificationEmailThrottleRepositoryInterface = app.get(
+        NOTIFICATION_EMAIL_THROTTLE_REPOSITORY,
+      );
+      const userId: string = randomUUID();
+
+      const claims: boolean[] = await Promise.all(
+        Array.from(
+          { length: 10 },
+          (): Promise<boolean> => throttle.claim(userId, NotificationTypeEnum.PAYMENT_FAILED),
+        ),
+      );
+
+      expect(claims.filter((claimed: boolean): boolean => claimed)).toHaveLength(1);
+
+      const redis: RedisClientType = app.get(REDIS_CLIENT);
+      const ttl: number = await redis.ttl(
+        `${NOTIFICATION_EMAIL_THROTTLE_KEY_PREFIX}:${userId}:${NotificationTypeEnum.PAYMENT_FAILED}`,
+      );
+
+      // Never pushed out by the losing claims — still the original window.
+      expect(ttl).toBeGreaterThan(NOTIFICATION_EMAIL_THROTTLE_WINDOW_SEC - 60);
+      expect(ttl).toBeLessThanOrEqual(NOTIFICATION_EMAIL_THROTTLE_WINDOW_SEC);
+    });
   });
 });
