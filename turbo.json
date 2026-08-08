@@ -3,7 +3,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"],
+      "outputs": ["dist/**", "src/generated/**"],
       "env": ["DATABASE_URL"]
     },
     "lint": {},
