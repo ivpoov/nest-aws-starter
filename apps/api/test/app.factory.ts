@@ -25,7 +25,7 @@ export async function createTestApp(): Promise<NestFastifyApplication> {
   await installWebsocketAdapter(app);
   // </module:notification>
 
-  configureApp(app);
+  await configureApp(app);
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 

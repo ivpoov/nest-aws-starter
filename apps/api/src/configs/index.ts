@@ -8,6 +8,7 @@ import { googleOauthConfig } from '@configs/google-oauth.config.js'; // <module:
 import { lambdaConfig } from '@configs/lambda.config.js';
 import { mailConfig } from '@configs/mail.config.js';
 import { paymentConfig } from '@configs/payment.config.js'; // <module:payment>
+import { productionGuardConfig } from '@configs/production-guard.config.js';
 import { redisConfig } from '@configs/redis.config.js';
 import { s3Config } from '@configs/s3.config.js';
 import { schedulerConfig } from '@configs/scheduler.config.js';
@@ -15,6 +16,7 @@ import { snsConfig } from '@configs/sns.config.js';
 import { sqsConfig } from '@configs/sqs.config.js';
 import { stripeConfig } from '@configs/stripe.config.js'; // <module:payment>
 import { suspiciousActivityConfig } from '@configs/suspicious-activity.config.js';
+import { swaggerConfig } from '@configs/swagger.config.js';
 import { webAppConfig } from '@configs/web-app.config.js';
 import { websocketConfig } from '@configs/websocket.config.js'; // <module:notification>
 
@@ -36,6 +38,10 @@ export const configs = [
   sqsConfig,
   stripeConfig, // <module:payment>
   suspiciousActivityConfig,
+  swaggerConfig,
   webAppConfig,
   websocketConfig, // <module:notification>
+  // Last: every other config has already validated its own slice by now, so a
+  // production boot reports provider-level problems and unsafe values together.
+  productionGuardConfig,
 ];

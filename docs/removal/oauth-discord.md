@@ -26,7 +26,7 @@ and the markers themselves.
   - line 75: `DiscordOauthModule, // <module:oauth-discord>`
 - `apps/api/src/configs/index.ts`
   - line 5: `import { discordOauthConfig } from '@configs/discord-oauth.config.js'; // <module:oauth-discord>`
-  - line 26: `discordOauthConfig, // <module:oauth-discord>`
+  - line 28: `discordOauthConfig, // <module:oauth-discord>`
 
 ### Not yet fence-marked (edit by hand)
 

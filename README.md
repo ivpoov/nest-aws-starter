@@ -106,6 +106,93 @@ docker compose --profile init up minio-init    # create the S3 bucket once
 docker compose --profile cluster up -d         # 4-node Redis cluster on 7000-7003
 ```
 
+## Going to production
+
+Every value in `apps/api/.env.example` works out of the box on a laptop, and
+several of them would be a breach on a server. With `NODE_ENV=production` the
+API therefore refuses to start — at boot, before it listens, not on first use —
+while any of the following holds:
+
+| Refusal | What trips it |
+|---|---|
+| `PRODUCTION_DEVELOPMENT_DEFAULT` | A credential, endpoint or redirect target still equals the value shipped in `.env.example`: `AUTH_JWT_SECRET`, `DATABASE_URL`, `REDIS_URL`, the `AWS_*` and `S3_*` keys and endpoints, `WEB_APP_BASE_URL`, `MAIL_FROM_ADDRESS`, and the payment module's queue and return URLs. |
+| `PRODUCTION_WEAK_JWT_SECRET` | `AUTH_JWT_SECRET` carries under 32 bytes (256 bits) of entropy. Length is not entropy — 64 repeated characters score zero. Generate one with `openssl rand -hex 48`. |
+| `PRODUCTION_UNSAFE_CORS_ORIGIN` | `CORS_ORIGINS` is unset, contains `*`, or lists a loopback address. |
+| `PRODUCTION_UNAUTHENTICATED_SWAGGER` | `SWAGGER_ENABLED=true` without `SWAGGER_USER` and `SWAGGER_PASSWORD`. |
+
+Every violation is reported in the same startup failure, each naming the
+variable and the fix, so a misconfigured deploy costs one round trip rather
+than one per mistake. Nothing changes outside production: the shipped defaults
+still boot for local development, tests and CI.
+
+**On the entropy check.** Entropy belongs to the process that generated a
+secret, not to the string, so no static check can measure it — what the guard
+computes is an upper bound from the secret's own composition: the shortest
+block whose repetition rebuilds it, times the bits per character its alphabet
+allows, dropped to the observed Shannon rate when the character distribution is
+lopsided. `openssl rand -hex 32` scores exactly 256 and passes; `openssl rand
+-hex 48` scores 384. A 44-character `openssl rand -base64 32` is a genuine
+32-byte secret but cannot *demonstrate* 256 bits in 44 characters, so it is
+turned away — the guard prints a generator that always passes rather than
+lowering the bar.
+
+### Response security headers
+
+`@fastify/helmet` runs for every route, configured in
+`src/modules/common/helpers/register-security-headers.helper.ts`. The values
+are tuned for a JSON API rather than for a rendered page:
+
+| Header | Value | Why |
+|---|---|---|
+| `Content-Security-Policy` | `default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` | A JSON API loads nothing, so the honest policy is the empty one. Its real job is to make any route that unexpectedly returns HTML inert rather than scriptable. `frame-ancestors` is listed explicitly because it does **not** fall back to `default-src`. |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains; preload` — **production only** | Sending it from a dev server on `http://localhost` pins the whole localhost origin to https in your browser, for every other project too, long after the process is gone. |
+| `X-Content-Type-Options` | `nosniff` | |
+| `X-Frame-Options` | `DENY` | The legacy pair of `frame-ancestors 'none'`; helmet's default is `SAMEORIGIN`, which this project has no use for. |
+| `Referrer-Policy` | `no-referrer` | A `Referer` carrying a path and an id has no legitimate reader on an API. |
+| `Cross-Origin-Resource-Policy` | `same-origin` (helmet default, kept) | Safe here because nothing this API returns is ever loaded as a no-cors subresource: downloads are presigned S3/CloudFront URLs, and the SPAs reach the API only through CORS-mode fetches, which CORP does not gate. |
+
+**Swagger is the exception, by construction.** `/docs` is the one route that is
+a real HTML document, and `default-src 'none'` would leave it blank. It is
+served under its own policy (`default-src 'self'`, scripts and styles from
+`'self'`, `'unsafe-inline'` for styles only, `frame-ancestors 'none'`), applied
+in `setup-swagger.helper.ts` and mounted only where the docs themselves are
+mounted — off in production unless `SWAGGER_ENABLED=true`, which the boot guard
+refuses without basic-auth credentials. If you add `customJs` or an inline
+script through `SwaggerCustomOptions`, widen `script-src` there deliberately.
+
+### CORS: an allowlist, and no credentials — on purpose
+
+`CORS_ORIGINS` is an exact-match allowlist (no wildcards, no regex), and
+`credentials` is **false**. That second one is a design consequence, not an
+oversight, and it should not be "fixed":
+
+- This API is bearer-only. The access token travels in the `Authorization`
+  header, the refresh token in a request body, and the socket token in the
+  Socket.IO handshake payload. Nothing in the tree sets a cookie, reads a
+  cookie, or uses any other ambient credential.
+- `Access-Control-Allow-Credentials: true` is what tells a browser it may
+  attach ambient credentials to a cross-origin call and hand the response back
+  to the calling page. With none to attach it buys nothing, while permanently
+  coupling the allowlist to a CSRF exposure: any change that widens
+  `CORS_ORIGINS` turns from "an attacker's page can make unauthenticated calls"
+  into "an attacker's page can make calls as the logged-in user".
+
+If a browser request starts failing with a CORS error, the fix is `CORS_ORIGINS`
+or the allowed-header list — never this flag. Enabling it is only correct
+alongside a deliberate move to cookie-based auth, which brings its own CSRF
+defences (`SameSite`, an anti-forgery token) that this starter does not ship.
+
+### Client ip and `TRUST_PROXY`
+
+`X-Forwarded-For` is attacker-controlled unless something trustworthy sets it.
+`TRUST_PROXY` is therefore honoured in exactly two places and nowhere else: the
+Fastify adapter (which is what makes `request.ip` derive from the header) and
+`ThrottlerBehindProxyGuard`. With `TRUST_PROXY=false` the header is ignored
+outright, so a client cannot mint itself fresh rate-limit budgets — or a clean
+suspicious-login history — by inventing one. Set it to `true` only when every
+request genuinely arrives through a proxy you control (ALB, CloudFront) that
+overwrites the header; if clients can reach the API directly, leave it off.
+
 ## Real-time notifications
 
 Domain events — a new-device login, a password change, a subscription

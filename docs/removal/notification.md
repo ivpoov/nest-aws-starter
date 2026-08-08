@@ -83,10 +83,10 @@ and the markers themselves.
   - line 14: `import { NotificationModule } from '@modules/notification/notification.module.js'; // <module:notification>`
   - line 78: `NotificationModule, // <module:notification>`
 - `apps/api/src/configs/index.ts`
-  - line 19: `import { websocketConfig } from '@configs/websocket.config.js'; // <module:notification>`
-  - line 40: `websocketConfig, // <module:notification>`
+  - line 21: `import { websocketConfig } from '@configs/websocket.config.js'; // <module:notification>`
+  - line 43: `websocketConfig, // <module:notification>`
 - `apps/api/src/main.ts`
-  - line 7: `import { installWebsocketAdapter } from '@modules/notification/helpers/install-websocket-adapter.helper.js'; // <module:notification>`
+  - line 8: `import { installWebsocketAdapter } from '@modules/notification/helpers/install-websocket-adapter.helper.js'; // <module:notification>`
   - lines 52-58 (block)
 - `apps/api/test/app.factory.ts`
   - line 2: `import { installWebsocketAdapter } from '@modules/notification/helpers/install-websocket-adapter.helper.js'; // <module:notification>`
