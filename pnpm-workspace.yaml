@@ -2,10 +2,39 @@ packages:
   - "apps/*"
   - "packages/*"
   - "lambdas/*"
+# Every entry below exists to pull a transitive dependency past a published
+# advisory that its parent has not yet picked up. The three security pins
+# added for the v1.0 audit are exact versions rather than ">=" ranges on
+# purpose: each package has a newer major on npm that its parent cannot
+# accept, so an open range would resolve forward into a break (nanoid 6 is
+# ESM-only and would take postcss with it). Raise them deliberately, in a
+# commit that says why.
 overrides:
   find-my-way: ">=9.7.0"
   "@fastify/static": ">=10.1.2"
   js-yaml: ">=4.3.1"
+  # helmet is what actually writes the security headers; @fastify/helmet is a
+  # thin wrapper over it. Its own `^8.0.0` range would float onto releases
+  # younger than the 30-day soak this repo applies to direct dependencies
+  # (renovate.json: minimumReleaseAge), so the soak is applied here instead.
+  # Raise this pin the same way renovate raises everything else: once the
+  # newer helmet has been out for 30 days.
+  helmet: "8.2.0"
+  # GHSA-2v37-7h3g-55p8 (CVSS 8.2). nanoid reaches the tree through postcss,
+  # the build-time CSS pipeline behind the web and admin Vite builds.
+  # postcss asks for ^3.3.11; 3.3.17 is the fix on that line.
+  nanoid: "3.3.17"
+  # GHSA-395f-4hp3-45gv (CVSS 8.7). shell-quote reaches the tree through
+  # concurrently, which the local `dev` script uses. concurrently 10 pins
+  # exactly 1.9.0, so this is the combination upstream itself ships.
+  shell-quote: "1.9.0"
+  # Clears seven advisories at once: 0.24.17 drops hono and
+  # @hono/node-server entirely (four hono advisories plus two node-server
+  # ones, one of which has no 1.x backport at all) and moves valibot to the
+  # fixed 1.4.2. This is the exact version prisma 7.9.1 ships, so it is an
+  # upstream-tested pairing rather than a guess; nothing here runs
+  # `prisma dev`, which is the only thing @prisma/dev provides.
+  "@prisma/dev": "0.24.17"
 allowBuilds:
   "@prisma/engines": true
   "@scarf/scarf": false
