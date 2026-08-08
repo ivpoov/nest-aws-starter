@@ -248,3 +248,72 @@ describe('websocket notification gateway', () => {
     await disconnected;
   });
 });
+
+// backend.md §12's "no third state" for the socket transport. The e2e env
+// pins WEBSOCKET_ENABLED=true for every other suite, so this one builds its
+// own app with the flag off — the whole point is that bootstrap, not the
+// gateway, is what turns the transport off.
+describe('websocket notification gateway (WEBSOCKET_ENABLED=false)', () => {
+  let app: NestFastifyApplication;
+  let baseUrl: string;
+  let originalFlag: string | undefined;
+
+  beforeAll(async () => {
+    originalFlag = process.env.WEBSOCKET_ENABLED;
+    process.env.WEBSOCKET_ENABLED = 'false';
+
+    app = await createTestApp();
+    await app.listen({ port: 0, host: '127.0.0.1' });
+
+    const address: string | AddressInfo | null = app.getHttpServer().address();
+    const port: number = typeof address === 'object' && address !== null ? address.port : 0;
+
+    baseUrl = `http://127.0.0.1:${port}`;
+  });
+
+  afterAll(async () => {
+    await app.close();
+
+    if (originalFlag === undefined) delete process.env.WEBSOCKET_ENABLED;
+    else process.env.WEBSOCKET_ENABLED = originalFlag;
+  });
+
+  it('exposes no socket endpoint on the API port', async () => {
+    // A 404 (not an engine.io open packet) is the observable proof that no
+    // Socket.IO server is attached to the HTTP server at all.
+    await request(app.getHttpServer()).get('/socket.io/?EIO=4&transport=polling').expect(404);
+  });
+
+  it('refuses a handshake outright instead of accepting then dropping it', async () => {
+    const email: string = `ws-off-e2e-${randomUUID()}@example.com`;
+    const registered = await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .set('x-forwarded-for', `10.${Math.floor(Math.random() * 255)}.9.9`)
+      .send({ displayName: 'WS Off E2E', email, password: 'correct-horse-battery' })
+      .expect(201);
+
+    const socket: Socket = io(baseUrl, {
+      auth: { token: registered.body.accessToken },
+      transports: ['websocket'],
+      forceNew: true,
+      reconnection: false,
+    });
+
+    try {
+      const outcome: string = await new Promise((resolve) => {
+        socket.once('connect', () => resolve('connected'));
+        socket.once('connect_error', () => resolve('refused'));
+      });
+
+      // "connected" here would mean the accept-then-disconnect reconnect-loop
+      // behaviour the disabled adapter exists to prevent.
+      expect(outcome).toBe('refused');
+    } finally {
+      socket.disconnect();
+    }
+  });
+
+  it('still serves HTTP, so the flag scopes to the socket transport only', async () => {
+    await request(app.getHttpServer()).get('/api/v1/auth/providers').expect(200);
+  });
+});

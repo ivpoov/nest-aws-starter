@@ -1,5 +1,5 @@
 import { configureApp } from '@helpers/configure-app.helper.js';
-import { RedisIoAdapter } from '@modules/notification/adapters/redis-io.adapter.js'; // <module:notification>
+import { installWebsocketAdapter } from '@modules/notification/helpers/install-websocket-adapter.helper.js'; // <module:notification>
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { AppModule } from '@src/app.module.js';
@@ -18,12 +18,11 @@ export async function createTestApp(): Promise<NestFastifyApplication> {
   );
 
   // <module:notification>
-  // Mirrors main.ts's Redis adapter wiring — must happen before app.init()
-  // so any e2e suite that opens a socket (websocket.e2e-spec.ts) connects
-  // through the same adapter production uses.
-  const redisIoAdapter: RedisIoAdapter = new RedisIoAdapter(app);
-  await redisIoAdapter.connectToRedis();
-  app.useWebSocketAdapter(redisIoAdapter);
+  // Mirrors main.ts's adapter wiring — must happen before app.init() so any
+  // e2e suite that opens a socket (websocket.e2e-spec.ts) connects through
+  // the same adapter production uses, and the disabled path is the same
+  // no-socket-endpoint path production gets.
+  await installWebsocketAdapter(app);
   // </module:notification>
 
   configureApp(app);

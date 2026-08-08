@@ -4,7 +4,7 @@ import type { AppConfig } from '@configs/app.config.js';
 import { configureApp } from '@helpers/configure-app.helper.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { RequestContextService } from '@modules/logger/services/request-context.service.js';
-import { RedisIoAdapter } from '@modules/notification/adapters/redis-io.adapter.js'; // <module:notification>
+import { installWebsocketAdapter } from '@modules/notification/helpers/install-websocket-adapter.helper.js'; // <module:notification>
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
@@ -51,11 +51,10 @@ async function bootstrap(): Promise<void> {
 
   // <module:notification>
   // Must be wired before app.listen() (which calls app.init() internally)
-  // so the gateway's namespace binds against the Redis-backed adapter from
-  // the start, not the in-memory default.
-  const redisIoAdapter: RedisIoAdapter = new RedisIoAdapter(app);
-  await redisIoAdapter.connectToRedis();
-  app.useWebSocketAdapter(redisIoAdapter);
+  // so the gateway's namespace binds against the configured adapter from
+  // the start: Redis-backed when WEBSOCKET_ENABLED, a detached no-op server
+  // (no socket endpoint, no Redis pub/sub) when disabled.
+  await installWebsocketAdapter(app);
   // </module:notification>
 
   app.useLogger(new CustomLoggerService('App'));
