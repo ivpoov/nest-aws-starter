@@ -364,6 +364,24 @@ public async findManyAfter(pagination: CursorPaginationInterface): Promise<NoteI
 }
 ```
 
+**Filtered lists paginate by keyset, not by `cursor` + `skip: 1`.** That `skip: 1`
+exists only to drop the cursor row itself, and it assumes the cursor row is still the
+first row the query matches. The moment the `where` filters on state a row can leave
+(read/unread, status), the assumption breaks: the filter has already excluded the
+cursor row, so the offset eats the *next* legitimate row and the reader silently never
+sees it. Put the comparison in the `where` instead — correct for every filter
+combination, because it stops depending on the cursor row surviving:
+
+```typescript
+where: {
+  ...filters,
+  // `lt` pairs with `id: 'desc'` — UUIDv7 ids are time-ordered
+  ...(pagination.cursor && { id: { lt: pagination.cursor } }),
+},
+take: pagination.limit,
+orderBy: { id: 'desc' },
+```
+
 Offset pagination is allowed only for bounded admin tables (search + page numbers),
 always with a hard `limit` cap.
 
