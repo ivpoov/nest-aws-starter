@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/ivpoov/nest-aws-starter/blob/main/SECURITY.md
+    about: >-
+      Please do not file security issues in the public tracker. SECURITY.md
+      explains how to report them privately.
+  - name: Documentation and setup
+    url: https://github.com/ivpoov/nest-aws-starter#readme
+    about: >-
+      Check the README, docs/conventions and docs/removal before opening an
+      issue — local setup and module removal are covered there.
