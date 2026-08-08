@@ -10,6 +10,7 @@ codebase.
 ## 1. Delete
 
 - `apps/api/src/modules/file` (delete)
+- `apps/api/test/files.e2e-spec.ts` (delete)
 - `apps/web/src/apis/files` (delete)
 - `apps/web/src/components/Attachments` (delete)
 - `apps/web/src/hooks/files` (delete)
@@ -38,6 +39,16 @@ and the markers themselves.
 - `apps/api/src/app.module.ts`
   - line 11: `import { FileModule } from '@modules/file/file.module.js'; // <module:file>`
   - line 77: `FileModule, // <module:file>`
+- `apps/api/test/maintenance-jobs.e2e-spec.ts`
+  - line 7: `import { FileIntentEnum, FileStatusEnum } from '@nest-aws-starter/shared'; // <module:file>`
+  - line 9: `import { S3_PROVIDER } from '@providers/s3/constants/s3.constants.js'; // <module:file>`
+  - line 10: `import type { S3ProviderInterface } from '@providers/s3/interfaces/s3-provider.interface.js'; // <module:file>`
+  - line 19: `import { ensureBucket } from './helpers/ensure-bucket.helper.js'; // <module:file>`
+  - lines 27-29 (block)
+  - line 42: `let s3: S3ProviderInterface; // <module:file>`
+  - line 48: `await ensureBucket(); // <module:file>`
+  - line 51: `s3 = app.get<S3ProviderInterface>(S3_PROVIDER); // <module:file>`
+  - lines 144-247 (block)
 - `apps/api/prisma/schema.prisma`
   - line 42: `files                   File[] // <module:file>`
   - lines 189-223 (block)
@@ -103,10 +114,17 @@ should happen to the existing tables. Pick one:
 ```
 pnpm --dir packages/shared run build
 pnpm --dir apps/api exec tsc --noEmit -p tsconfig.build.json
+pnpm --dir apps/api exec tsc --noEmit -p tsconfig.e2e.json
 pnpm --dir apps/api run test
 pnpm --dir apps/web run build && pnpm --dir apps/web run test
 pnpm --dir apps/admin run build && pnpm --dir apps/admin run test
+pnpm --dir apps/api run test:e2e   # needs docker compose up -d
 ```
 
-`scripts/subtraction-test.mjs --module file` proves this whole recipe nightly, in
-an isolated worktree — API, both frontends and `packages/shared`.
+`scripts/subtraction-test.mjs --module file` runs this whole recipe nightly, in an
+isolated worktree — API, both frontends and `packages/shared`. It proves everything the
+first six commands above cover: the subtracted tree type-checks (`apps/api/src` *and* the
+e2e suite) and its unit tests pass in all three packages. The last command is the one gap —
+the e2e suite needs a live Postgres/Redis/LocalStack, which a throwaway worktree has no
+access to, so the specs are type-checked but not executed. Run it yourself once, after
+following section 2.

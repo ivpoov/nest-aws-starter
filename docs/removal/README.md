@@ -32,10 +32,19 @@ apply and are *not* proven — every one of them is a hole in the proof. **Optio
 tidy-up** entries are proven harmless: the subtracted tree passes with them left in
 place, so they are only listed so a reader can clean up.
 
-Every module is fully fenced across `apps/api`, `apps/web`, `apps/admin` and
-`packages/shared`, so every recipe is proven end to end: the runner deletes the module,
-strips its fences, and then type-checks and unit-tests all three packages. Modules still
-missing frontend fences — the runner prints a `COVERAGE GAP` line for each:
+Every module is fully fenced across `apps/api` (`src` *and* `test`), `apps/web`,
+`apps/admin` and `packages/shared`, so every recipe is proven across the whole monorepo:
+the runner deletes the module, strips its fences, then type-checks all three packages —
+including `apps/api`'s e2e suite, via `tsconfig.e2e.json` — and runs their unit tests.
+
+What "proven" does **not** cover: the e2e suite is type-checked, never executed. It needs a
+live Postgres/Redis/LocalStack and a throwaway worktree has none, so
+`pnpm --dir apps/api run test:e2e` is the one step of each recipe's section 5 that stays a
+human's job. E2E specs that exist solely to exercise a removable module's endpoints are
+deleted with it (section 1); specs that merely touch one carry fence markers (section 2) —
+so an e2e spec can no longer quietly outlive the module it tests.
+
+Modules still missing frontend fences — the runner prints a `COVERAGE GAP` line for each:
 
 _None — every module is fully fence-marked and fully proven._
 

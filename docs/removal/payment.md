@@ -115,13 +115,13 @@ and the markers themselves.
   - line 3: `import { WebhookEventStatusEnum } from '@modules/payment/enums/webhook-event-status.enum.js'; // <module:payment>`
   - lines 11-15 (block)
   - lines 21-25 (block)
-  - lines 28-30 (block)
-  - line 41: `let sqs: SqsProviderInterface; // <module:payment>`
-  - line 50: `sqs = app.get<SqsProviderInterface>(SQS_PROVIDER); // <module:payment>`
-  - line 52: `await neutralizeStaleWebhookEventBacklog(); // <module:payment>`
-  - line 53: `await drainQueue(); // <module:payment>`
-  - lines 61-117 (block)
-  - lines 245-353 (block)
+  - lines 30-32 (block)
+  - line 43: `let sqs: SqsProviderInterface; // <module:payment>`
+  - line 52: `sqs = app.get<SqsProviderInterface>(SQS_PROVIDER); // <module:payment>`
+  - line 54: `await neutralizeStaleWebhookEventBacklog(); // <module:payment>`
+  - line 55: `await drainQueue(); // <module:payment>`
+  - lines 63-119 (block)
+  - lines 249-357 (block)
 - `apps/api/test/statistics.e2e-spec.ts`
   - lines 40-80 (block)
   - lines 146-155 (block)
@@ -238,10 +238,17 @@ should happen to the existing tables. Pick one:
 ```
 pnpm --dir packages/shared run build
 pnpm --dir apps/api exec tsc --noEmit -p tsconfig.build.json
+pnpm --dir apps/api exec tsc --noEmit -p tsconfig.e2e.json
 pnpm --dir apps/api run test
 pnpm --dir apps/web run build && pnpm --dir apps/web run test
 pnpm --dir apps/admin run build && pnpm --dir apps/admin run test
+pnpm --dir apps/api run test:e2e   # needs docker compose up -d
 ```
 
-`scripts/subtraction-test.mjs --module payment` proves this whole recipe nightly, in
-an isolated worktree — API, both frontends and `packages/shared`.
+`scripts/subtraction-test.mjs --module payment` runs this whole recipe nightly, in an
+isolated worktree — API, both frontends and `packages/shared`. It proves everything the
+first six commands above cover: the subtracted tree type-checks (`apps/api/src` *and* the
+e2e suite) and its unit tests pass in all three packages. The last command is the one gap —
+the e2e suite needs a live Postgres/Redis/LocalStack, which a throwaway worktree has no
+access to, so the specs are type-checked but not executed. Run it yourself once, after
+following section 2.

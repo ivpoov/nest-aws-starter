@@ -10,6 +10,7 @@ codebase.
 ## 1. Delete
 
 - `apps/api/src/modules/contact-us` (delete)
+- `apps/api/test/contact-us.e2e-spec.ts` (delete)
 - `apps/web/src/apis/contact` (delete)
 - `apps/web/src/interfaces/submit-contact-request.interface.ts` (delete)
 - `apps/web/src/pages/ContactPage.tsx` (delete)
@@ -113,10 +114,17 @@ should happen to the existing tables. Pick one:
 ```
 pnpm --dir packages/shared run build
 pnpm --dir apps/api exec tsc --noEmit -p tsconfig.build.json
+pnpm --dir apps/api exec tsc --noEmit -p tsconfig.e2e.json
 pnpm --dir apps/api run test
 pnpm --dir apps/web run build && pnpm --dir apps/web run test
 pnpm --dir apps/admin run build && pnpm --dir apps/admin run test
+pnpm --dir apps/api run test:e2e   # needs docker compose up -d
 ```
 
-`scripts/subtraction-test.mjs --module contact-us` proves this whole recipe nightly, in
-an isolated worktree — API, both frontends and `packages/shared`.
+`scripts/subtraction-test.mjs --module contact-us` runs this whole recipe nightly, in an
+isolated worktree — API, both frontends and `packages/shared`. It proves everything the
+first six commands above cover: the subtracted tree type-checks (`apps/api/src` *and* the
+e2e suite) and its unit tests pass in all three packages. The last command is the one gap —
+the e2e suite needs a live Postgres/Redis/LocalStack, which a throwaway worktree has no
+access to, so the specs are type-checked but not executed. Run it yourself once, after
+following section 2.
