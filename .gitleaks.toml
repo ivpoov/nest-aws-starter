@@ -45,3 +45,21 @@ targetRules = ["generic-api-key"]
 condition = "AND"
 paths = ['''apps/api/test/user\.e2e-spec\.ts''']
 regexes = ['''^argon2-placeholder$''']
+
+[[allowlists]]
+description = """
+Entropy-checker unit fixtures. The production boot guard scores AUTH_JWT_SECRET
+for entropy, so its spec must assert exact bit counts against known inputs —
+which means synthetic `openssl rand -hex`-shaped literals, hardcoded rather
+than generated so the assertions stay deterministic. They are test inputs to a
+scoring function; nothing signs or verifies with them, and they were never a
+credential anywhere. Scoped to the one spec file and to bare 64/96-character
+hex, so a real AWS key, GitHub PAT or private key pasted into the same file
+would still be caught.
+"""
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''apps/api/src/modules/common/helpers/tests/collect-production-violations\.helper\.spec\.ts''',
+]
+regexes = ['''^[0-9a-f]{64}$|^[0-9a-f]{96}$''']
