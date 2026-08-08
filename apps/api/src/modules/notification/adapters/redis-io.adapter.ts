@@ -1,5 +1,7 @@
+import type { AppConfig } from '@configs/app.config.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import type { INestApplicationContext } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { REDIS_CLIENT } from '@providers/redis/constants/redis.constants.js';
 import type { RedisClientType } from '@providers/redis/types/redis-client.type.js';
@@ -50,12 +52,26 @@ export class RedisIoAdapter extends IoAdapter {
     return client instanceof Cluster ? client.duplicate() : client.duplicate();
   }
 
+  // Socket CORS comes from the exact same resolved config object as HTTP
+  // CORS (AppConfig.corsOrigins — one parse, in app.config.ts, consumed by
+  // configure-app.helper.ts for HTTP and here for WS). Never a separate env
+  // read: gateway decorator options evaluate at module-import time, before
+  // .env is loaded, which is how a `.env`-configured deploy would silently
+  // get localhost socket origins while HTTP CORS got the real ones.
   public override createIOServer(port: number, options?: ServerOptions): Server {
-    const server: Server = super.createIOServer(port, options);
+    const corsOrigins: string[] = this.resolveCorsOrigins();
+    const server: Server = super.createIOServer(port, {
+      ...options,
+      cors: { origin: corsOrigins },
+    } as ServerOptions);
 
     if (this.adapterConstructor) server.adapter(this.adapterConstructor);
 
     return server;
+  }
+
+  private resolveCorsOrigins(): string[] {
+    return this.app.get(ConfigService).getOrThrow<AppConfig>('app').corsOrigins;
   }
 
   // Hooked automatically by Nest (SocketModule.close() calls

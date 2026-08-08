@@ -13,9 +13,17 @@ import request from 'supertest';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp } from './app.factory.js';
 
+// Deliberately not the localhost default the gateway used to hard-code as
+// its fallback: CORS_ORIGINS is set here before the app is built so a socket
+// endpoint reading its own env at import time (which happens before
+// loadEnv()) would visibly disagree with the HTTP layer.
+const CONFIGURED_ORIGIN: string = 'https://ws-cors-pin.example';
+const OTHER_CONFIGURED_ORIGIN: string = 'https://ws-cors-pin-admin.example';
+
 describe('websocket notification gateway', () => {
   let app: NestFastifyApplication;
   let baseUrl: string;
+  let originalCorsOrigins: string | undefined;
   const openSockets: Socket[] = [];
 
   function uniqueIp(): string {
@@ -100,6 +108,9 @@ describe('websocket notification gateway', () => {
   }
 
   beforeAll(async () => {
+    originalCorsOrigins = process.env.CORS_ORIGINS;
+    process.env.CORS_ORIGINS = `${CONFIGURED_ORIGIN},${OTHER_CONFIGURED_ORIGIN}`;
+
     app = await createTestApp();
     await app.listen({ port: 0, host: '127.0.0.1' });
 
@@ -111,6 +122,9 @@ describe('websocket notification gateway', () => {
 
   afterAll(async () => {
     await app.close();
+
+    if (originalCorsOrigins === undefined) delete process.env.CORS_ORIGINS;
+    else process.env.CORS_ORIGINS = originalCorsOrigins;
   });
 
   afterEach(() => {
@@ -160,6 +174,55 @@ describe('websocket notification gateway', () => {
     );
 
     await disconnected;
+  });
+
+  // One parse, one source: the socket endpoint and the HTTP app must answer
+  // an origin question identically, because both read AppConfig.corsOrigins.
+  // Asserting the two answers against each other (not against a literal) is
+  // what makes them impossible to drift apart again.
+  describe('socket CORS shares one source with HTTP CORS', () => {
+    async function httpAllowOrigin(origin: string): Promise<string | undefined> {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/auth/providers')
+        .set('origin', origin)
+        .expect(200);
+
+      return response.headers['access-control-allow-origin'];
+    }
+
+    // engine.io's polling handshake is the socket transport's own CORS-bearing
+    // response — the same endpoint a browser preflights before upgrading.
+    async function socketAllowOrigin(origin: string): Promise<string | undefined> {
+      const response = await request(app.getHttpServer())
+        .get('/socket.io/?EIO=4&transport=polling')
+        .set('origin', origin)
+        .expect(200);
+
+      return response.headers['access-control-allow-origin'];
+    }
+
+    it('allows every configured origin on both transports', async () => {
+      for (const origin of [CONFIGURED_ORIGIN, OTHER_CONFIGURED_ORIGIN]) {
+        const fromHttp: string | undefined = await httpAllowOrigin(origin);
+        const fromSocket: string | undefined = await socketAllowOrigin(origin);
+
+        expect(fromHttp).toBe(origin);
+        expect(fromSocket).toBe(fromHttp);
+      }
+    });
+
+    it('rejects an unconfigured origin on both transports', async () => {
+      const fromHttp: string | undefined = await httpAllowOrigin('https://evil.example');
+      const fromSocket: string | undefined = await socketAllowOrigin('https://evil.example');
+
+      expect(fromHttp).toBeUndefined();
+      expect(fromSocket).toBe(fromHttp);
+    });
+
+    it('never allows the gateway’s former hard-coded localhost fallback', async () => {
+      expect(await socketAllowOrigin('http://localhost:5173')).toBeUndefined();
+      expect(await httpAllowOrigin('http://localhost:5173')).toBeUndefined();
+    });
   });
 
   it('disconnects a live socket once its session is revoked (heartbeat re-check)', async () => {
