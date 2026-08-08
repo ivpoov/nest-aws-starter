@@ -269,6 +269,31 @@ describe('notification history API (e2e)', () => {
     expect(count.body.count).toBe(0);
   });
 
+  // `Boolean('false')` is true, so the DTO used to coerce ?unreadOnly=false
+  // into an unread-only listing: the filter could be turned on but never off.
+  it('treats unreadOnly=false as off, and a missing unreadOnly as off', async () => {
+    const owner = await registerUser();
+    const readRow = await seedUserNotification(owner.id);
+    const unreadRow = await seedUserNotification(owner.id);
+
+    await request(app.getHttpServer())
+      .patch(`/api/v1/notifications/${readRow.id}/read`)
+      .set('authorization', `Bearer ${owner.token}`)
+      .expect(204);
+
+    for (const query of ['?unreadOnly=false', '']) {
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/notifications${query}`)
+        .set('authorization', `Bearer ${owner.token}`)
+        .expect(200);
+      const ids: string[] = (response.body.items as NotificationBodyInterface[]).map(
+        (item: NotificationBodyInterface): string => item.id,
+      );
+
+      expect(ids).toEqual([unreadRow.id, readRow.id]);
+    }
+  });
+
   it('an admin sees a merged USER+ADMIN feed; a plain user never sees ADMIN rows', async () => {
     const admin = await registerAdmin();
     const plainUser = await registerUser();
@@ -305,10 +330,14 @@ describe('notification history API (e2e)', () => {
     expect(forbidden.body.code).toBe('NOTIFICATION_ACCESS_DENIED');
   });
 
-  // A UUIDv7 from 2023 — both notification ids and user ids are UUIDv7, so
-  // this row is unambiguously older than any account registered by this
-  // suite, whatever order the tests run in.
-  const PRE_ACCOUNT_NOTIFICATION_ID: string = '01890a5d-ac96-774b-bcce-b30209111111';
+  // A UUIDv7 whose 2023 timestamp prefix is fixed and whose node bits are
+  // random (the suite shares a long-lived database, so a hard-coded id would
+  // collide with the previous run): both notification ids and user ids are
+  // UUIDv7, so this row is unambiguously older than any account this suite
+  // registers, whatever order the tests run in.
+  function preAccountNotificationId(): string {
+    return `01890a5d-ac96-774b-bcce-${randomUUID().replaceAll('-', '').slice(-12)}`;
+  }
 
   // Plan Task 1: "unread count for admins = notifications newer than the
   // admin's account minus their receipts". Without the bound, a newly created
@@ -316,7 +345,7 @@ describe('notification history API (e2e)', () => {
   // (badge in the thousands on first login) and every 60s badge poll
   // anti-joins the whole table.
   it('starts a fresh admin at zero ADMIN backlog, with the badge equal to the feed', async () => {
-    const preAccount = await seedAdminNotification(PRE_ACCOUNT_NOTIFICATION_ID);
+    const preAccount = await seedAdminNotification(preAccountNotificationId());
     const admin = await registerAdmin();
     const fresh = await seedAdminNotification();
 
