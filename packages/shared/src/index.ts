@@ -35,14 +35,14 @@ export * from './contact/interfaces/contact-message-list-response.interface.js';
 export * from './contact/interfaces/contact-message-response.interface.js'; // <module:contact-us>
 export * from './contact/interfaces/create-contact-request.interface.js'; // <module:contact-us>
 export * from './contact/interfaces/update-contact-message-status-request.interface.js'; // <module:contact-us>
-export * from './files/constants/file-error-codes.constants.js';
+export * from './files/constants/file-error-codes.constants.js'; // <module:file>
 export * from './files/enums/file-intent.enum.js';
-export * from './files/enums/file-status.enum.js';
-export * from './files/interfaces/download-url-response.interface.js';
-export * from './files/interfaces/file-response.interface.js';
-export * from './files/interfaces/request-upload-request.interface.js';
-export * from './files/interfaces/request-upload-response.interface.js';
-export * from './files/types/file-error-code.type.js';
+export * from './files/enums/file-status.enum.js'; // <module:file>
+export * from './files/interfaces/download-url-response.interface.js'; // <module:file>
+export * from './files/interfaces/file-response.interface.js'; // <module:file>
+export * from './files/interfaces/request-upload-request.interface.js'; // <module:file>
+export * from './files/interfaces/request-upload-response.interface.js'; // <module:file>
+export * from './files/types/file-error-code.type.js'; // <module:file>
 export * from './notes/constants/note-error-codes.constants.js';
 export * from './notes/enums/note-status.enum.js';
 export * from './notes/interfaces/create-note-request.interface.js';

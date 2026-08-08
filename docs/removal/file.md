@@ -18,6 +18,13 @@ codebase.
 - `apps/web/src/types/file-upload-status.type.ts` (delete)
 - `apps/web/src/tests/AttachmentsCard.spec.tsx` (delete)
 - `apps/web/src/tests/useFileUpload.spec.tsx` (delete)
+- `packages/shared/src/files/constants/file-error-codes.constants.ts` (delete)
+- `packages/shared/src/files/enums/file-status.enum.ts` (delete)
+- `packages/shared/src/files/interfaces/download-url-response.interface.ts` (delete)
+- `packages/shared/src/files/interfaces/file-response.interface.ts` (delete)
+- `packages/shared/src/files/interfaces/request-upload-request.interface.ts` (delete)
+- `packages/shared/src/files/interfaces/request-upload-response.interface.ts` (delete)
+- `packages/shared/src/files/types/file-error-code.type.ts` (delete)
 
 ## 2. Strip cross-module references
 
@@ -34,6 +41,21 @@ and the markers themselves.
 - `apps/api/prisma/schema.prisma`
   - line 42: `files                   File[] // <module:file>`
   - lines 189-223 (block)
+- `apps/web/src/pages/NotesPage.tsx`
+  - line 2: `FileIntentEnum, // <module:file>`
+  - line 8: `import { AttachmentsCard } from '../components/Attachments/AttachmentsCard'; // <module:file>`
+  - line 15: `import { useFileUpload } from '../hooks/files/useFileUpload'; // <module:file>`
+  - line 17: `import type { UseFileUploadResultInterface } from '../interfaces/use-file-upload-result.interface'; // <module:file>`
+  - line 21: `const fileUpload: UseFileUploadResultInterface = useFileUpload(FileIntentEnum.ATTACHMENT); // <module:file>`
+  - lines 72-80 (block)
+- `packages/shared/src/index.ts`
+  - line 38: `export * from './files/constants/file-error-codes.constants.js'; // <module:file>`
+  - line 40: `export * from './files/enums/file-status.enum.js'; // <module:file>`
+  - line 41: `export * from './files/interfaces/download-url-response.interface.js'; // <module:file>`
+  - line 42: `export * from './files/interfaces/file-response.interface.js'; // <module:file>`
+  - line 43: `export * from './files/interfaces/request-upload-request.interface.js'; // <module:file>`
+  - line 44: `export * from './files/interfaces/request-upload-response.interface.js'; // <module:file>`
+  - line 45: `export * from './files/types/file-error-code.type.js'; // <module:file>`
 
 ### Not yet fence-marked (edit by hand)
 
@@ -44,18 +66,16 @@ hand" in section 1 belongs here too: the script leaves it in place because
 deleting the folder on its own would break `build shared`. Delete the folder and those
 export lines together. Work through the list by hand:
 
-- `apps/web/src/pages/NotesPage.tsx` — the useFileUpload / AttachmentsCard imports, the hook call and the <AttachmentsCard> render
-- `packages/shared/src/files` — delete everything EXCEPT enums/file-intent.enum.ts, and reduce that enum to AVATAR — the avatar flow (ProfilePage, useProfile) needs FileIntentEnum and survives this module
-- `apps/web/src/constants/file-upload.constants.ts` — the ATTACHMENT entries only — the AVATAR entries are used by ProfilePage
-- `packages/shared/src/index.ts` — the ./files/* export lines except the file-intent enum
-- `apps/web/src/utils/validateFileUpload.ts + apiClient.ts` — keep both — the avatar upload path uses them
+_None — every cross-module reference for this module is fence-marked._
 
 ### Optional tidy-up (proven harmless to skip)
 
 The subtracted tree type-checks and passes its tests with these left in place —
 they are cosmetic leftovers, not build breaks:
 
-_None — the subtraction leaves nothing behind worth tidying._
+- `packages/shared/src/files/enums/file-intent.enum.ts` — the ATTACHMENT member is now unreachable but harmless, and it is deliberately left in place: it is the key of two total Records in apps/web/src/constants/file-upload.constants.ts and is referenced by apps/api's activity listener spec, so reducing the enum to AVATAR means editing all three together for no functional gain
+- `apps/web/src/constants/file-upload.constants.ts` — the ATTACHMENT size cap and content-type allowlist go unused — the AVATAR entries next to them are what ProfilePage reads
+- `apps/web/src/utils/validateFileUpload.ts + apiClient.ts` — keep both — the avatar upload path uses them
 
 ## 3. Drop `.env` variables
 
@@ -88,8 +108,5 @@ pnpm --dir apps/web run build && pnpm --dir apps/web run test
 pnpm --dir apps/admin run build && pnpm --dir apps/admin run test
 ```
 
-`scripts/subtraction-test.mjs --module file` proves the `apps/api` half of this
-recipe nightly, in an isolated worktree. It deletes the frontend and
-`packages/shared` paths in section 1 too, but it cannot yet *verify* them, because
-the cross-references under "not yet fence-marked" above have no fence markers to
-strip — so run the last two commands yourself after following section 2.
+`scripts/subtraction-test.mjs --module file` proves this whole recipe nightly, in
+an isolated worktree — API, both frontends and `packages/shared`.

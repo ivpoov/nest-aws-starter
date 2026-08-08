@@ -176,22 +176,30 @@ const MODULES = [
       'apps/web/src/types/file-upload-status.type.ts',
       'apps/web/src/tests/AttachmentsCard.spec.tsx',
       'apps/web/src/tests/useFileUpload.spec.tsx',
+      // packages/shared/src/files is deleted file by file, not wholesale:
+      // enums/file-intent.enum.ts survives, because the avatar flow
+      // (ProfilePage, useProfile) and apps/api's activity listener both need
+      // FileIntentEnum and outlive this module.
+      'packages/shared/src/files/constants/file-error-codes.constants.ts',
+      'packages/shared/src/files/enums/file-status.enum.ts',
+      'packages/shared/src/files/interfaces/download-url-response.interface.ts',
+      'packages/shared/src/files/interfaces/file-response.interface.ts',
+      'packages/shared/src/files/interfaces/request-upload-request.interface.ts',
+      'packages/shared/src/files/interfaces/request-upload-response.interface.ts',
+      'packages/shared/src/files/types/file-error-code.type.ts',
     ],
     envVars: [],
-    manualSteps: [
+    frontendFenced: true,
+    manualSteps: [],
+    cosmeticSteps: [
       [
-        'apps/web/src/pages/NotesPage.tsx',
-        'the useFileUpload / AttachmentsCard imports, the hook call and the <AttachmentsCard> render',
-      ],
-      [
-        'packages/shared/src/files',
-        'delete everything EXCEPT enums/file-intent.enum.ts, and reduce that enum to AVATAR — the avatar flow (ProfilePage, useProfile) needs FileIntentEnum and survives this module',
+        'packages/shared/src/files/enums/file-intent.enum.ts',
+        "the ATTACHMENT member is now unreachable but harmless, and it is deliberately left in place: it is the key of two total Records in apps/web/src/constants/file-upload.constants.ts and is referenced by apps/api's activity listener spec, so reducing the enum to AVATAR means editing all three together for no functional gain",
       ],
       [
         'apps/web/src/constants/file-upload.constants.ts',
-        'the ATTACHMENT entries only — the AVATAR entries are used by ProfilePage',
+        'the ATTACHMENT size cap and content-type allowlist go unused — the AVATAR entries next to them are what ProfilePage reads',
       ],
-      ['packages/shared/src/index.ts', 'the ./files/* export lines except the file-intent enum'],
       [
         'apps/web/src/utils/validateFileUpload.ts + apiClient.ts',
         'keep both — the avatar upload path uses them',

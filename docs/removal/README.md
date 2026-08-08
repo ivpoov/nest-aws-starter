@@ -39,7 +39,7 @@ recipes and the script deletes the ones it safely can, but their cross-reference
 fenced, so the frontend result is **not** verified — the runner prints a `COVERAGE GAP`
 line for each. Modules in that state:
 
-- `file`
+_None — every module is fully fence-marked and fully proven._
 
 Closing a gap means moving that module's frontend entries out of `manualSteps` and into
 real fence markers — including the `{/* <module:x> */}` form for references that sit
