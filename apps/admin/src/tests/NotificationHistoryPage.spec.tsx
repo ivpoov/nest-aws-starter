@@ -7,6 +7,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as notificationsApi from '../apis/notifications';
+import { NOTIFICATION_HISTORY_PAGE_SIZE } from '../constants/notification-history.constants';
 import { NotificationHistoryPage } from '../pages/NotificationHistoryPage';
 
 vi.mock('../apis/notifications');
@@ -149,11 +150,48 @@ describe('NotificationHistoryPage', () => {
     expect(screen.queryByText('Users page')).not.toBeInTheDocument();
   });
 
-  it('filters the rendered rows by type via the filter bar (client-side)', async () => {
-    vi.mocked(notificationsApi.fetchNotifications).mockResolvedValue({
+  it('refetches page one with a type param when a type chip is picked', async () => {
+    vi.mocked(notificationsApi.fetchNotifications).mockResolvedValueOnce({
       items: [
         buildItem('n-1', NotificationTypeEnum.PASSWORD_CHANGED, NotificationAudienceEnum.USER),
         buildItem('n-2', NotificationTypeEnum.WEBHOOK_FAILED, NotificationAudienceEnum.ADMIN),
+      ],
+      nextCursor: 'n-2',
+    });
+
+    renderPage();
+
+    await screen.findByText('Title n-1');
+    expect(screen.getByText('Title n-2')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument();
+
+    // The server owns the filtering now, so the chip click produces a fresh
+    // request — and a `nextCursor` for the *filtered* result set, not the
+    // unfiltered one that was on screen a moment ago. That pairing is the bug
+    // this replaced: a filtered page next to a "Load more" button driven by an
+    // unfiltered cursor.
+    vi.mocked(notificationsApi.fetchNotifications).mockResolvedValueOnce({
+      items: [
+        buildItem('n-2', NotificationTypeEnum.WEBHOOK_FAILED, NotificationAudienceEnum.ADMIN),
+      ],
+      nextCursor: null,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: NotificationTypeEnum.WEBHOOK_FAILED }));
+
+    await waitFor(() => expect(screen.queryByText('Title n-1')).not.toBeInTheDocument());
+    expect(screen.getByText('Title n-2')).toBeInTheDocument();
+    expect(notificationsApi.fetchNotifications).toHaveBeenLastCalledWith({
+      limit: NOTIFICATION_HISTORY_PAGE_SIZE,
+      type: NotificationTypeEnum.WEBHOOK_FAILED,
+    });
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+  });
+
+  it('refetches with unreadOnly when the Unread chip is picked', async () => {
+    vi.mocked(notificationsApi.fetchNotifications).mockResolvedValue({
+      items: [
+        buildItem('n-1', NotificationTypeEnum.PASSWORD_CHANGED, NotificationAudienceEnum.USER),
       ],
       nextCursor: null,
     });
@@ -161,11 +199,14 @@ describe('NotificationHistoryPage', () => {
     renderPage();
 
     await screen.findByText('Title n-1');
-    expect(screen.getByText('Title n-2')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: NotificationTypeEnum.WEBHOOK_FAILED }));
+    fireEvent.click(screen.getByRole('button', { name: 'Unread' }));
 
-    await waitFor(() => expect(screen.queryByText('Title n-1')).not.toBeInTheDocument());
-    expect(screen.getByText('Title n-2')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(notificationsApi.fetchNotifications).toHaveBeenLastCalledWith({
+        limit: NOTIFICATION_HISTORY_PAGE_SIZE,
+        unreadOnly: true,
+      }),
+    );
   });
 });

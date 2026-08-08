@@ -7,4 +7,6 @@ export interface UseNotificationHistoryFiltersResultInterface {
   readonly clearType: () => void;
   readonly toggleAudience: (audience: NotificationAudienceEnum) => void;
   readonly clearAudience: () => void;
+  readonly toggleUnreadOnly: () => void;
+  readonly clearUnreadOnly: () => void;
 }

@@ -10,6 +10,8 @@ interface NotificationHistoryFilterBarPropsInterface {
   readonly onClearType: () => void;
   readonly onToggleAudience: (audience: NotificationAudienceEnum) => void;
   readonly onClearAudience: () => void;
+  readonly onToggleUnreadOnly: () => void;
+  readonly onClearUnreadOnly: () => void;
 }
 
 const TYPE_OPTIONS: NotificationTypeEnum[] = Object.values(NotificationTypeEnum);
@@ -27,6 +29,8 @@ export function NotificationHistoryFilterBar({
   onClearType,
   onToggleAudience,
   onClearAudience,
+  onToggleUnreadOnly,
+  onClearUnreadOnly,
 }: NotificationHistoryFilterBarPropsInterface): ReactElement {
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
@@ -42,6 +46,25 @@ export function NotificationHistoryFilterBar({
         </Button>
       </div>
       <div className={`${isExpanded ? 'mt-3 flex' : 'hidden'} flex-col gap-4 md:mt-0 md:flex`}>
+        <div className="flex flex-col gap-1">
+          <span className="text-sm text-content-muted">Read state</span>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onClearUnreadOnly}
+              className={chipClassName(!filters.unreadOnly)}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={onToggleUnreadOnly}
+              className={chipClassName(filters.unreadOnly)}
+            >
+              Unread
+            </button>
+          </div>
+        </div>
         <div className="flex flex-col gap-1">
           <span className="text-sm text-content-muted">Audience</span>
           <div className="flex flex-wrap gap-2">

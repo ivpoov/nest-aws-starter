@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { useNotificationHistoryFilters } from '../hooks/notifications/useNotificationHistoryFilters';
 
 describe('useNotificationHistoryFilters', () => {
-  it('starts with no type/audience filter applied', () => {
+  it('starts with no filter applied', () => {
     const { result } = renderHook(() => useNotificationHistoryFilters());
 
-    expect(result.current.filters).toEqual({ type: null, audience: null });
+    expect(result.current.filters).toEqual({ type: null, audience: null, unreadOnly: false });
   });
 
   it('toggles a type chip on then back off', () => {
@@ -61,6 +61,7 @@ describe('useNotificationHistoryFilters', () => {
     expect(result.current.filters).toEqual({
       type: NotificationTypeEnum.WEBHOOK_FAILED,
       audience: NotificationAudienceEnum.ADMIN,
+      unreadOnly: false,
     });
 
     act(() => {
@@ -70,6 +71,43 @@ describe('useNotificationHistoryFilters', () => {
     expect(result.current.filters).toEqual({
       type: NotificationTypeEnum.WEBHOOK_FAILED,
       audience: null,
+      unreadOnly: false,
     });
+  });
+
+  it('toggles the unread-only filter on then back off, leaving the others alone', () => {
+    const { result } = renderHook(() => useNotificationHistoryFilters());
+
+    act(() => {
+      result.current.toggleAudience(NotificationAudienceEnum.ADMIN);
+    });
+    act(() => {
+      result.current.toggleUnreadOnly();
+    });
+
+    expect(result.current.filters).toEqual({
+      type: null,
+      audience: NotificationAudienceEnum.ADMIN,
+      unreadOnly: true,
+    });
+
+    act(() => {
+      result.current.toggleUnreadOnly();
+    });
+
+    expect(result.current.filters.unreadOnly).toBe(false);
+  });
+
+  it('clears the unread-only filter via clearUnreadOnly', () => {
+    const { result } = renderHook(() => useNotificationHistoryFilters());
+
+    act(() => {
+      result.current.toggleUnreadOnly();
+    });
+    act(() => {
+      result.current.clearUnreadOnly();
+    });
+
+    expect(result.current.filters.unreadOnly).toBe(false);
   });
 });

@@ -10,8 +10,15 @@ import { resolveNotificationLink } from '../utils/resolveNotificationLink';
 
 export function NotificationHistoryPage(): ReactElement {
   const navigate = useNavigate();
-  const { filters, toggleType, clearType, toggleAudience, clearAudience } =
-    useNotificationHistoryFilters();
+  const {
+    filters,
+    toggleType,
+    clearType,
+    toggleAudience,
+    clearAudience,
+    toggleUnreadOnly,
+    clearUnreadOnly,
+  } = useNotificationHistoryFilters();
   const { items, isLoading, hasMore, error, loadMore, markRead, markAllRead } =
     useNotificationList(filters);
   const hasUnread: boolean = items.some(
@@ -42,6 +49,8 @@ export function NotificationHistoryPage(): ReactElement {
         onClearType={clearType}
         onToggleAudience={toggleAudience}
         onClearAudience={clearAudience}
+        onToggleUnreadOnly={toggleUnreadOnly}
+        onClearUnreadOnly={clearUnreadOnly}
       />
       <NotificationHistoryTable
         notifications={items}

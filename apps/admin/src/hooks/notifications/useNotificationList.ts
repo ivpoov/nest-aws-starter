@@ -2,6 +2,7 @@ import type {
   ApiErrorInterface,
   NotificationListResponseInterface,
   NotificationResponseInterface,
+  NotificationsQueryRequestInterface,
 } from '@nest-aws-starter/shared';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -16,12 +17,16 @@ import type { UseNotificationListResultInterface } from '../../interfaces/use-no
 import { toApiError } from '../../utils/toApiError';
 
 // REST-backed cursor pagination shared by two consumers: the bell dropdown
-// (call with no filters) and the history page (type/audience filters,
-// applied client-side per page — see notification-history-filters.interface.ts
-// for why). Read-state changes report up to the socket context so the bell
-// badge stays in sync; a successful mutation also triggers an authoritative
-// refetch of the merged count rather than trusting the optimistic delta
-// alone (see useNotificationSocket for why).
+// (call with no filters) and the history page (type/audience/unread filters).
+// Filters are sent as query params, so the server returns an already-filtered
+// page and `hasMore`/`nextCursor` describe the filtered result set — never a
+// "No notifications match" empty list next to a live "Load more" button.
+// Changing a filter drops the cursor and refetches page one rather than
+// appending a differently-filtered page onto a stale list.
+// Read-state changes report up to the socket context so the bell badge stays
+// in sync; a successful mutation also triggers an authoritative refetch of the
+// merged count rather than trusting the optimistic delta alone (see
+// useNotificationSocket for why).
 export function useNotificationList(
   filters?: NotificationHistoryFiltersInterface,
 ): UseNotificationListResultInterface {
@@ -35,13 +40,19 @@ export function useNotificationList(
   const load = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     setError(null);
+    // Drop the previous cursor up front, not just on success: a filter change
+    // re-runs this callback, and until the new page lands the old cursor
+    // belongs to a different result set — leaving it in place would let a
+    // "Load more" click append rows from the previous filter.
+    setCursor(null);
 
     try {
       const result: NotificationListResponseInterface = await fetchNotifications({
         limit: NOTIFICATION_HISTORY_PAGE_SIZE,
+        ...toFilterParams(filters),
       });
 
-      setItems(applyFilters(result.items, filters));
+      setItems(result.items);
       setCursor(result.nextCursor);
     } catch (caught) {
       setError(toApiError(caught));
@@ -60,12 +71,10 @@ export function useNotificationList(
       const result: NotificationListResponseInterface = await fetchNotifications({
         cursor,
         limit: NOTIFICATION_HISTORY_PAGE_SIZE,
+        ...toFilterParams(filters),
       });
 
-      setItems((previous: NotificationResponseInterface[]) => [
-        ...previous,
-        ...applyFilters(result.items, filters),
-      ]);
+      setItems((previous: NotificationResponseInterface[]) => [...previous, ...result.items]);
       setCursor(result.nextCursor);
     } catch (caught) {
       setError(toApiError(caught));
@@ -147,15 +156,17 @@ function setReadAt(
   );
 }
 
-function applyFilters(
-  items: NotificationResponseInterface[],
+// Maps filter-bar state onto the wire contract. An "All"/off filter is left
+// out of the object entirely rather than sent as null/false, so the request
+// carries only the params the user actually narrowed by.
+function toFilterParams(
   filters: NotificationHistoryFiltersInterface | undefined,
-): NotificationResponseInterface[] {
-  if (!filters) return items;
+): NotificationsQueryRequestInterface {
+  if (!filters) return {};
 
-  return items.filter(
-    (item: NotificationResponseInterface): boolean =>
-      (filters.type === null || item.type === filters.type) &&
-      (filters.audience === null || item.audience === filters.audience),
-  );
+  return {
+    ...(filters.type === null ? {} : { type: filters.type }),
+    ...(filters.audience === null ? {} : { audience: filters.audience }),
+    ...(filters.unreadOnly ? { unreadOnly: true } : {}),
+  };
 }
