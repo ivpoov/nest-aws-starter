@@ -118,9 +118,16 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
 
   // Lazy admin receipts: every ADMIN-audience row this admin has never seen
   // gets a reader receipt, created already-read (read-all's whole point).
+  // Bounded to the admin's visible scope (rows newer than their account, the
+  // same id cursor buildScopeWhere uses) — rows outside the feed need no
+  // receipt, so this stops materializing every ADMIN row ever written.
   private async createMissingAdminReceipts(adminId: string): Promise<void> {
     const unseen: { id: string }[] = await this.prisma.notification.findMany({
-      where: { audience: NotificationAudience.ADMIN, receipts: { none: { userId: adminId } } },
+      where: {
+        audience: NotificationAudience.ADMIN,
+        id: { gt: adminId },
+        receipts: { none: { userId: adminId } },
+      },
       select: { id: true },
     });
 
@@ -136,10 +143,16 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
     });
   }
 
-  // Own USER-audience rows, plus every ADMIN-audience row when the caller is
-  // an admin. The optional `audience` filter narrows the scope to one branch;
-  // it never widens it (a non-admin asking for ADMIN rows gets `OR: []` — no
-  // rows, not every admin row).
+  // Own USER-audience rows, plus ADMIN-audience rows when the caller is an
+  // admin. ADMIN rows are bounded to those newer than the admin's account:
+  // user ids and notification ids are both UUIDv7 (time-ordered), so the
+  // reader's own id doubles as the account-creation cursor. A fresh or newly
+  // promoted admin therefore starts at zero backlog instead of inheriting
+  // every ADMIN row ever written as unread, and the badge poll's anti-join
+  // becomes a range scan on @@index([audience, id]).
+  //
+  // The optional `audience` filter narrows the scope to one branch; it never
+  // widens it (a non-admin asking for ADMIN rows gets `OR: []` — no rows).
   private buildScopeWhere(
     filters: NotificationScopeFiltersInterface,
     audience?: NotificationAudienceEnum,
@@ -149,7 +162,7 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
         ? [{ audience: NotificationAudience.USER, userId: filters.userId }]
         : []),
       ...(filters.includeAdmin && audience !== NotificationAudienceEnum.USER
-        ? [{ audience: NotificationAudience.ADMIN }]
+        ? [{ audience: NotificationAudience.ADMIN, id: { gt: filters.userId } }]
         : []),
     ];
 

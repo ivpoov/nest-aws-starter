@@ -86,9 +86,16 @@ describe('notification history API (e2e)', () => {
     });
   }
 
-  async function seedAdminNotification(): Promise<NotificationModel> {
+  async function seedAdminNotification(id?: string): Promise<NotificationModel> {
     return prisma.notification.create({
-      data: { audience: 'ADMIN', userId: null, type: 'USER_BLOCKED', title: 'title', body: 'body' },
+      data: {
+        ...(id && { id }),
+        audience: 'ADMIN',
+        userId: null,
+        type: 'USER_BLOCKED',
+        title: 'title',
+        body: 'body',
+      },
     });
   }
 
@@ -296,6 +303,45 @@ describe('notification history API (e2e)', () => {
       .expect(403);
 
     expect(forbidden.body.code).toBe('NOTIFICATION_ACCESS_DENIED');
+  });
+
+  // A UUIDv7 from 2023 — both notification ids and user ids are UUIDv7, so
+  // this row is unambiguously older than any account registered by this
+  // suite, whatever order the tests run in.
+  const PRE_ACCOUNT_NOTIFICATION_ID: string = '01890a5d-ac96-774b-bcce-b30209111111';
+
+  // Plan Task 1: "unread count for admins = notifications newer than the
+  // admin's account minus their receipts". Without the bound, a newly created
+  // or promoted admin inherits the entire historical ADMIN backlog as unread
+  // (badge in the thousands on first login) and every 60s badge poll
+  // anti-joins the whole table.
+  it('starts a fresh admin at zero ADMIN backlog, with the badge equal to the feed', async () => {
+    const preAccount = await seedAdminNotification(PRE_ACCOUNT_NOTIFICATION_ID);
+    const admin = await registerAdmin();
+    const fresh = await seedAdminNotification();
+
+    const list = await request(app.getHttpServer())
+      .get('/api/v1/notifications?limit=100')
+      .set('authorization', `Bearer ${admin.token}`)
+      .expect(200);
+    const items = list.body.items as NotificationBodyInterface[];
+    const ids: string[] = items.map((item: NotificationBodyInterface): string => item.id);
+
+    // The whole visible feed fits in one page — with the backlog included it
+    // would fill the page and hand back a cursor.
+    expect(list.body.nextCursor).toBeNull();
+    expect(ids).toContain(fresh.id);
+    expect(ids).not.toContain(preAccount.id);
+
+    const count = await request(app.getHttpServer())
+      .get('/api/v1/notifications/unread-count')
+      .set('authorization', `Bearer ${admin.token}`)
+      .expect(200);
+    const unreadInFeed: number = items.filter(
+      (item: NotificationBodyInterface): boolean => item.readAt === null,
+    ).length;
+
+    expect(count.body.count).toBe(unreadInFeed);
   });
 
   // Server-side type/audience filters (the admin history page used to filter
