@@ -60,6 +60,6 @@ would still be caught.
 targetRules = ["generic-api-key"]
 condition = "AND"
 paths = [
-  '''apps/api/src/modules/common/helpers/tests/collect-production-violations\.helper\.spec\.ts''',
+  '''apps/api/src/modules/common/helpers/tests/(collect-production-violations|assert-production-config)\.helper\.spec\.ts''',
 ]
 regexes = ['''^[0-9a-f]{64}$|^[0-9a-f]{96}$''']
