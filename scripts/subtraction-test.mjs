@@ -445,32 +445,15 @@ const MODULES = [
       'apps/admin/src/tests/useNotificationHistoryFilters.spec.tsx',
       'apps/admin/src/tests/useNotificationList.spec.tsx',
       'apps/admin/src/tests/useNotificationSocket.spec.tsx',
+      'packages/shared/src/notifications',
     ],
     envVars: ['WEBSOCKET_ENABLED', 'WEBSOCKET_HEARTBEAT_INTERVAL_MS'],
-    manualPaths: ['packages/shared/src/notifications'],
+    frontendFenced: true,
     manualSteps: [
       [
-        'apps/web/src/App.tsx',
-        'the NotificationSocketProvider import + JSX wrapper, and the /settings/notifications route with its page import',
+        'apps/admin/src/pages/InboxPage.tsx + UsersPage.tsx + ActivitiesPage.tsx',
+        'comments only — they explain why each page re-syncs its deep-link query param on every change. The `?messageId=` / `?userId=` / `?type=` handling itself stays and keeps working; nothing here breaks the build',
       ],
-      [
-        'apps/web/src/components/Layout/AppLayout.tsx',
-        'the NotificationBell import + render, and the Notifications nav entry',
-      ],
-      ['apps/web/src/tests/AppLayout.spec.tsx', 'the vi.mock of the NotificationBell component'],
-      [
-        'apps/admin/src/App.tsx',
-        'the NotificationSocketProvider import + JSX wrapper, and the /notifications route with its page import',
-      ],
-      [
-        'apps/admin/src/components/Layout/AdminLayout.tsx',
-        'the NotificationBell import + render, and the Notifications nav entry',
-      ],
-      [
-        'apps/admin/src/pages/InboxPage.tsx',
-        'comments referencing the CONTACT_MESSAGE deep link (the ?messageId= handling itself stays)',
-      ],
-      ['packages/shared/src/index.ts', "the `export * from './notifications/...'` lines"],
       ['apps/api/test/vitest.e2e.config.ts', 'the WEBSOCKET_* env pins'],
       ['turbo.json', 'the WEBSOCKET_* entries in the test:e2e env allowlist'],
       [

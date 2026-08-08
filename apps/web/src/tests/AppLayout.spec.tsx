@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppLayout } from '../components/Layout/AppLayout';
 import { useAuthStore } from '../stores/auth.store';
 
+// <module:notification>
 // This suite only cares about the impersonation banner — the bell's own
 // behaviour (badge, socket lifecycle) is covered by NotificationBell.spec.tsx
 // and useNotificationSocket.spec.ts, so it is stubbed out here to avoid
@@ -12,6 +13,7 @@ import { useAuthStore } from '../stores/auth.store';
 vi.mock('../components/Notifications/NotificationBell', () => ({
   NotificationBell: () => null,
 }));
+// </module:notification>
 
 function base64UrlEncode(value: string): string {
   return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');

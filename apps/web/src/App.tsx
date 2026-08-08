@@ -2,7 +2,7 @@ import type { ReactElement } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { AppLayout } from './components/Layout/AppLayout';
 import { AuthGate } from './components/Layout/AuthGate';
-import { NotificationSocketProvider } from './contexts/NotificationSocketContext';
+import { NotificationSocketProvider } from './contexts/NotificationSocketContext'; // <module:notification>
 import { BillingCanceledPage } from './pages/BillingCanceledPage';
 import { BillingPage } from './pages/BillingPage';
 import { BillingSuccessPage } from './pages/BillingSuccessPage';
@@ -11,7 +11,7 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { MethodsPage } from './pages/MethodsPage';
 import { NotesPage } from './pages/NotesPage';
-import { NotificationPreferencesPage } from './pages/NotificationPreferencesPage';
+import { NotificationPreferencesPage } from './pages/NotificationPreferencesPage'; // <module:notification>
 import { OauthCallbackPage } from './pages/OauthCallbackPage';
 import { PricingPage } from './pages/PricingPage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -34,20 +34,22 @@ export function App(): ReactElement {
       <Route path="/billing/success" element={<BillingSuccessPage />} />
       <Route path="/billing/canceled" element={<BillingCanceledPage />} />
       <Route element={<AuthGate />}>
-        <Route
-          element={
-            <NotificationSocketProvider>
-              <AppLayout />
-            </NotificationSocketProvider>
-          }
-        >
-          <Route path="/notes" element={<NotesPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/settings/methods" element={<MethodsPage />} />
-          <Route path="/settings/sessions" element={<SessionsPage />} />
-          <Route path="/settings/billing" element={<BillingPage />} />
-          <Route path="/settings/notifications" element={<NotificationPreferencesPage />} />
+        {/* <module:notification> */}
+        <Route element={<NotificationSocketProvider />}>
+          {/* </module:notification> */}
+          <Route element={<AppLayout />}>
+            <Route path="/notes" element={<NotesPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/settings/methods" element={<MethodsPage />} />
+            <Route path="/settings/sessions" element={<SessionsPage />} />
+            <Route path="/settings/billing" element={<BillingPage />} />
+            {/* <module:notification> */}
+            <Route path="/settings/notifications" element={<NotificationPreferencesPage />} />
+            {/* </module:notification> */}
+          </Route>
+          {/* <module:notification> */}
         </Route>
+        {/* </module:notification> */}
       </Route>
       <Route path="*" element={<Navigate to="/notes" replace />} />
     </Routes>
