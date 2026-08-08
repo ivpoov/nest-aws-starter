@@ -57,6 +57,7 @@ export * from './notifications/interfaces/notification-list-response.interface.j
 export * from './notifications/interfaces/notification-preference-response.interface.js';
 export * from './notifications/interfaces/notification-preferences-response.interface.js';
 export * from './notifications/interfaces/notification-response.interface.js';
+export * from './notifications/interfaces/notifications-query-request.interface.js';
 export * from './notifications/interfaces/unread-count-response.interface.js';
 export * from './notifications/interfaces/update-notification-preference-request.interface.js';
 export * from './notifications/interfaces/update-notification-preferences-request.interface.js';

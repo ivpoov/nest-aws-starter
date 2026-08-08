@@ -69,12 +69,15 @@ describe('notification history API (e2e)', () => {
     return { id: user.id, token: login.body.accessToken };
   }
 
-  async function seedUserNotification(userId: string): Promise<NotificationModel> {
+  async function seedUserNotification(
+    userId: string,
+    type: string = 'NEW_DEVICE_LOGIN',
+  ): Promise<NotificationModel> {
     return prisma.notification.create({
       data: {
         audience: 'USER',
         userId,
-        type: 'NEW_DEVICE_LOGIN',
+        type,
         title: 'title',
         body: 'body',
         meta: {},
@@ -293,6 +296,125 @@ describe('notification history API (e2e)', () => {
       .expect(403);
 
     expect(forbidden.body.code).toBe('NOTIFICATION_ACCESS_DENIED');
+  });
+
+  // Server-side type/audience filters (the admin history page used to filter
+  // fetched pages in memory, so a filtered view showed an arbitrary subset of
+  // one page and "load more" could append nothing while staying enabled).
+  describe('server-side list filters', () => {
+    async function collectFilteredPages(
+      token: string,
+      query: string,
+      limit: number,
+    ): Promise<NotificationBodyInterface[]> {
+      const collected: NotificationBodyInterface[] = [];
+      let cursor: string | null = null;
+      let pages: number = 0;
+
+      do {
+        const url: string = `/api/v1/notifications?${query}&limit=${limit}${
+          cursor ? `&cursor=${cursor}` : ''
+        }`;
+        const response = await request(app.getHttpServer())
+          .get(url)
+          .set('authorization', `Bearer ${token}`)
+          .expect(200);
+
+        collected.push(...(response.body.items as NotificationBodyInterface[]));
+        cursor = response.body.nextCursor;
+        pages += 1;
+
+        if (pages > 10) throw new Error('Cursor paging did not terminate');
+      } while (cursor);
+
+      return collected;
+    }
+
+    it('pages a type-filtered feed across multiple cursor pages, newest first', async () => {
+      const owner = await registerUser();
+      const paymentRows: NotificationModel[] = [];
+
+      for (let index = 0; index < 5; index += 1) {
+        paymentRows.push(await seedUserNotification(owner.id, 'PAYMENT_FAILED'));
+      }
+
+      // Newest row overall, and of the excluded type — an unfiltered or
+      // page-local filter would surface it (or lose a PAYMENT_FAILED row to
+      // it) on the first page.
+      const excluded = await seedUserNotification(owner.id, 'NEW_DEVICE_LOGIN');
+
+      const items: NotificationBodyInterface[] = await collectFilteredPages(
+        owner.token,
+        'type=PAYMENT_FAILED',
+        2,
+      );
+      const ids: string[] = items.map((item: NotificationBodyInterface): string => item.id);
+
+      expect(ids).toEqual(
+        [...paymentRows].reverse().map((row: NotificationModel): string => row.id),
+      );
+      expect(ids).not.toContain(excluded.id);
+      expect(
+        items.every((item: NotificationBodyInterface): boolean => item.type === 'PAYMENT_FAILED'),
+      ).toBe(true);
+    });
+
+    // Both rows below are the newest of their audience, so the first page is
+    // enough to prove which branch of the merged scope each filter keeps.
+    async function fetchFirstPageIds(token: string, query: string): Promise<string[]> {
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/notifications?${query}&limit=20`)
+        .set('authorization', `Bearer ${token}`)
+        .expect(200);
+
+      return (response.body.items as NotificationBodyInterface[]).map(
+        (item: NotificationBodyInterface): string => item.id,
+      );
+    }
+
+    it('narrows an admin’s merged feed to one audience without widening anyone’s scope', async () => {
+      const admin = await registerAdmin();
+      const ownRow = await seedUserNotification(admin.id);
+      const adminRow = await seedAdminNotification();
+
+      const adminOnlyIds: string[] = await fetchFirstPageIds(admin.token, 'audience=ADMIN');
+
+      expect(adminOnlyIds).toContain(adminRow.id);
+      expect(adminOnlyIds).not.toContain(ownRow.id);
+
+      const userOnlyIds: string[] = await fetchFirstPageIds(admin.token, 'audience=USER');
+
+      expect(userOnlyIds).toContain(ownRow.id);
+      expect(userOnlyIds).not.toContain(adminRow.id);
+
+      // A plain user asking for ADMIN rows gets nothing — the filter narrows,
+      // it never grants.
+      const plainUser = await registerUser();
+
+      await seedUserNotification(plainUser.id);
+
+      const forbiddenScope = await request(app.getHttpServer())
+        .get('/api/v1/notifications?audience=ADMIN')
+        .set('authorization', `Bearer ${plainUser.token}`)
+        .expect(200);
+
+      expect(forbiddenScope.body.items).toEqual([]);
+      expect(forbiddenScope.body.nextCursor).toBeNull();
+    });
+
+    it('rejects an unknown type or audience with a 400', async () => {
+      const owner = await registerUser();
+
+      await request(app.getHttpServer())
+        .get('/api/v1/notifications?type=NOT_A_TYPE')
+        .set('authorization', `Bearer ${owner.token}`)
+        .expect(400);
+
+      await request(app.getHttpServer())
+        .get('/api/v1/notifications?audience=EVERYONE')
+        .set('authorization', `Bearer ${owner.token}`)
+        .expect(400);
+    });
   });
 
   // The FK/cascade added in 20260808175249_notification_user_fk_cascade: the

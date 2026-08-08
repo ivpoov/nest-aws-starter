@@ -59,7 +59,8 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
   ): Promise<NotificationListItemInterface[]> {
     const notifications: NotificationWithOwnReceipt[] = await this.prisma.notification.findMany({
       where: {
-        ...this.buildScopeWhere(filters),
+        ...this.buildScopeWhere(filters, filters.audience),
+        ...(filters.type && { type: filters.type }),
         ...(filters.unreadOnly && this.buildUnreadWhere(filters.userId)),
       },
       include: { receipts: { where: { userId: filters.userId } } },
@@ -135,17 +136,24 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
     });
   }
 
-  // Own USER-audience rows, plus every ADMIN-audience row when the caller
-  // is an admin.
+  // Own USER-audience rows, plus every ADMIN-audience row when the caller is
+  // an admin. The optional `audience` filter narrows the scope to one branch;
+  // it never widens it (a non-admin asking for ADMIN rows gets `OR: []` — no
+  // rows, not every admin row).
   private buildScopeWhere(
     filters: NotificationScopeFiltersInterface,
+    audience?: NotificationAudienceEnum,
   ): Prisma.NotificationWhereInput {
-    return {
-      OR: [
-        { audience: NotificationAudience.USER, userId: filters.userId },
-        ...(filters.includeAdmin ? [{ audience: NotificationAudience.ADMIN }] : []),
-      ],
-    };
+    const scopes: Prisma.NotificationWhereInput[] = [
+      ...(audience !== NotificationAudienceEnum.ADMIN
+        ? [{ audience: NotificationAudience.USER, userId: filters.userId }]
+        : []),
+      ...(filters.includeAdmin && audience !== NotificationAudienceEnum.USER
+        ? [{ audience: NotificationAudience.ADMIN }]
+        : []),
+    ];
+
+    return { OR: scopes };
   }
 
   // Unread = the reader has no read receipt for the row yet, OR has one
