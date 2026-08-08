@@ -99,6 +99,41 @@ describe('notification history API (e2e)', () => {
     });
   }
 
+  function idsOf(items: NotificationBodyInterface[]): string[] {
+    return items.map((item: NotificationBodyInterface): string => item.id);
+  }
+
+  // Walks every cursor page of a listing, so a test asserts the whole feed
+  // rather than whatever happened to land on page 1.
+  async function collectPages(
+    token: string,
+    query: string,
+    limit: number,
+  ): Promise<NotificationBodyInterface[]> {
+    const collected: NotificationBodyInterface[] = [];
+    let cursor: string | null = null;
+    let pages: number = 0;
+
+    do {
+      const filters: string = query ? `${query}&` : '';
+      const url: string = `/api/v1/notifications?${filters}limit=${limit}${
+        cursor ? `&cursor=${cursor}` : ''
+      }`;
+      const response = await request(app.getHttpServer())
+        .get(url)
+        .set('authorization', `Bearer ${token}`)
+        .expect(200);
+
+      collected.push(...(response.body.items as NotificationBodyInterface[]));
+      cursor = response.body.nextCursor;
+      pages += 1;
+
+      if (pages > 10) throw new Error('Cursor paging did not terminate');
+    } while (cursor);
+
+    return collected;
+  }
+
   beforeAll(async () => {
     app = await createTestApp();
     await app.listen({ port: 0, host: '127.0.0.1' });
@@ -377,34 +412,6 @@ describe('notification history API (e2e)', () => {
   // fetched pages in memory, so a filtered view showed an arbitrary subset of
   // one page and "load more" could append nothing while staying enabled).
   describe('server-side list filters', () => {
-    async function collectFilteredPages(
-      token: string,
-      query: string,
-      limit: number,
-    ): Promise<NotificationBodyInterface[]> {
-      const collected: NotificationBodyInterface[] = [];
-      let cursor: string | null = null;
-      let pages: number = 0;
-
-      do {
-        const url: string = `/api/v1/notifications?${query}&limit=${limit}${
-          cursor ? `&cursor=${cursor}` : ''
-        }`;
-        const response = await request(app.getHttpServer())
-          .get(url)
-          .set('authorization', `Bearer ${token}`)
-          .expect(200);
-
-        collected.push(...(response.body.items as NotificationBodyInterface[]));
-        cursor = response.body.nextCursor;
-        pages += 1;
-
-        if (pages > 10) throw new Error('Cursor paging did not terminate');
-      } while (cursor);
-
-      return collected;
-    }
-
     it('pages a type-filtered feed across multiple cursor pages, newest first', async () => {
       const owner = await registerUser();
       const paymentRows: NotificationModel[] = [];
@@ -418,7 +425,7 @@ describe('notification history API (e2e)', () => {
       // it) on the first page.
       const excluded = await seedUserNotification(owner.id, 'NEW_DEVICE_LOGIN');
 
-      const items: NotificationBodyInterface[] = await collectFilteredPages(
+      const items: NotificationBodyInterface[] = await collectPages(
         owner.token,
         'type=PAYMENT_FAILED',
         2,
@@ -489,6 +496,64 @@ describe('notification history API (e2e)', () => {
         .get('/api/v1/notifications?audience=EVERYONE')
         .set('authorization', `Bearer ${owner.token}`)
         .expect(400);
+    });
+  });
+
+  // Paging used Prisma's `cursor` + `skip: 1`, which offsets past exactly one
+  // row on the assumption that the cursor row is still the first match. A
+  // filter over mutable state breaks that assumption: once the cursor row has
+  // been marked read, `unreadOnly` already excludes it and the offset ate the
+  // next legitimate row instead — silently, and only for filtered feeds.
+  describe('cursor pagination', () => {
+    it('keeps the row after a cursor whose own row stopped matching the filter', async () => {
+      const owner = await registerUser();
+      const oldest: NotificationModel = await seedUserNotification(owner.id);
+      const middle: NotificationModel = await seedUserNotification(owner.id);
+      const newest: NotificationModel = await seedUserNotification(owner.id);
+
+      const firstPage = await request(app.getHttpServer())
+        .get('/api/v1/notifications?unreadOnly=true&limit=1')
+        .set('authorization', `Bearer ${owner.token}`)
+        .expect(200);
+
+      expect(idsOf(firstPage.body.items as NotificationBodyInterface[])).toEqual([newest.id]);
+      expect(firstPage.body.nextCursor).toBe(newest.id);
+
+      // The cursor row leaves the filtered set between the two requests —
+      // exactly what opening a notification from the dropdown does.
+      await request(app.getHttpServer())
+        .patch(`/api/v1/notifications/${newest.id}/read`)
+        .set('authorization', `Bearer ${owner.token}`)
+        .expect(204);
+
+      const secondPage = await request(app.getHttpServer())
+        .get(`/api/v1/notifications?unreadOnly=true&limit=1&cursor=${newest.id}`)
+        .set('authorization', `Bearer ${owner.token}`)
+        .expect(200);
+
+      expect(idsOf(secondPage.body.items as NotificationBodyInterface[])).toEqual([middle.id]);
+
+      const thirdPage = await request(app.getHttpServer())
+        .get(`/api/v1/notifications?unreadOnly=true&limit=1&cursor=${middle.id}`)
+        .set('authorization', `Bearer ${owner.token}`)
+        .expect(200);
+
+      expect(idsOf(thirdPage.body.items as NotificationBodyInterface[])).toEqual([oldest.id]);
+    });
+
+    it('walks an unfiltered feed page by page without dropping or repeating a row', async () => {
+      const owner = await registerUser();
+      const rows: NotificationModel[] = [];
+
+      for (let index = 0; index < 5; index += 1) {
+        rows.push(await seedUserNotification(owner.id));
+      }
+
+      const items: NotificationBodyInterface[] = await collectPages(owner.token, '', 2);
+      const ids: string[] = idsOf(items);
+
+      expect(ids).toEqual([...rows].reverse().map((row: NotificationModel): string => row.id));
+      expect(new Set(ids).size).toBe(ids.length);
     });
   });
 
