@@ -1,7 +1,4 @@
-import type {
-  NotificationResponseInterface,
-  UnreadCountResponseInterface,
-} from '@nest-aws-starter/shared';
+import type { UnreadCountResponseInterface } from '@nest-aws-starter/shared';
 import type { Dispatch, RefObject } from 'react';
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { io, type Socket } from 'socket.io-client';
@@ -78,7 +75,6 @@ export function useNotificationSocket(): UseNotificationSocketResultInterface {
 
   return {
     unreadCount: state.unreadCount,
-    liveNotifications: state.liveNotifications,
     isConnected: state.isConnected,
     adjustUnreadCount,
     refreshUnreadCount,
@@ -167,10 +163,11 @@ function attachSocketListeners(
     handleServerDisconnect(socket, reason, attemptsRef, reconnectTimerRef);
   });
   // No UNREAD_COUNT_EVENT listener here — deliberately, see
-  // notification-events.constants.ts.
-  socket.on(NOTIFICATION_EVENT, (notification: NotificationResponseInterface): void =>
-    dispatch({ kind: 'notification-received', notification }),
-  );
+  // notification-events.constants.ts. The arrival's payload is not kept
+  // either: the badge only needs to know that *something* arrived, and the
+  // lists that render notifications are REST-backed (see
+  // notificationSocketReducer).
+  socket.on(NOTIFICATION_EVENT, (): void => dispatch({ kind: 'notification-received' }));
 }
 
 // The client's built-in reconnection logic does not retry an `io server

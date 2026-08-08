@@ -5,7 +5,6 @@ import { NotificationBell } from '../components/Notifications/NotificationBell';
 
 const contextValue = {
   unreadCount: 0,
-  liveNotifications: [],
   isConnected: true,
   adjustUnreadCount: () => undefined,
   refreshUnreadCount: async () => undefined,

@@ -8,7 +8,6 @@ vi.mock('../apis/notifications');
 
 const contextValue = {
   unreadCount: 0,
-  liveNotifications: [],
   isConnected: true,
   adjustUnreadCount: vi.fn(),
   refreshUnreadCount: vi.fn().mockResolvedValue(undefined),

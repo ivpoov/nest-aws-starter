@@ -1,24 +1,9 @@
-import type { NotificationResponseInterface } from '@nest-aws-starter/shared';
 import { describe, expect, it } from 'vitest';
 import {
   INITIAL_NOTIFICATION_SOCKET_STATE,
   notificationSocketReducer,
 } from '../hooks/notifications/notificationSocketReducer';
 import type { NotificationSocketStateInterface } from '../interfaces/notification-socket-state.interface';
-
-function buildNotification(id: string): NotificationResponseInterface {
-  return {
-    id,
-    audience: 'USER' as NotificationResponseInterface['audience'],
-    userId: 'u-1',
-    type: 'PASSWORD_CHANGED' as NotificationResponseInterface['type'],
-    title: 'Title',
-    body: 'Body',
-    meta: {},
-    createdAt: '2026-08-01T00:00:00.000Z',
-    readAt: null,
-  };
-}
 
 describe('notificationSocketReducer', () => {
   it('sets isConnected on connected/disconnected', () => {
@@ -63,20 +48,18 @@ describe('notificationSocketReducer', () => {
     expect(flooredAtZero.unreadCount).toBe(0);
   });
 
-  it('prepends a received notification, bumps the badge, and caps the buffer', () => {
+  it('bumps the badge once per arrival and keeps no other state', () => {
     let state: NotificationSocketStateInterface = INITIAL_NOTIFICATION_SOCKET_STATE;
 
     for (let index = 0; index < 25; index += 1) {
-      state = notificationSocketReducer(state, {
-        kind: 'notification-received',
-        notification: buildNotification(`n-${index}`),
-      });
+      state = notificationSocketReducer(state, { kind: 'notification-received' });
     }
 
-    expect(state.liveNotifications).toHaveLength(20);
-    expect(state.liveNotifications[0]?.id).toBe('n-24');
-    // The badge counts every arrival even though the buffer is capped — the
-    // unread-count push is ignored, so this +1 is the only live signal.
+    // The +1 per arrival is the badge's only live signal (the unread-count
+    // push is ignored), and it is the *only* thing an arrival changes — the
+    // notification itself is not buffered, so the state's shape stays
+    // exactly the initial one plus the count.
     expect(state.unreadCount).toBe(25);
+    expect(Object.keys(state).sort()).toEqual(['isConnected', 'unreadCount']);
   });
 });

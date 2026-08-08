@@ -1,4 +1,3 @@
-import type { NotificationResponseInterface } from '@nest-aws-starter/shared';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { Socket } from 'socket.io-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -133,30 +132,16 @@ describe('useNotificationSocket', () => {
     expect(result.current.unreadCount).toBe(3);
   });
 
-  it('prepends new notifications and bumps the badge on the notification event', async () => {
+  it('bumps the badge on the notification event', async () => {
     useAuthStore.getState().setTokens('access-1', 'refresh-1');
 
     const { result } = renderHook(() => useNotificationSocket());
 
     await waitFor(() => expect(result.current.unreadCount).toBe(3));
 
-    const notification = {
-      id: 'n-1',
-      audience: 'ADMIN',
-      userId: null,
-      type: 'CONTACT_MESSAGE',
-      title: 'New contact message',
-      body: 'body',
-      meta: {},
-      createdAt: '2026-08-01T00:00:00.000Z',
-      readAt: null,
-    } as unknown as NotificationResponseInterface;
+    emit('notification');
 
-    emit('notification', notification);
-
-    await waitFor(() => expect(result.current.liveNotifications).toHaveLength(1));
-    expect(result.current.liveNotifications[0]).toEqual(notification);
-    expect(result.current.unreadCount).toBe(4);
+    await waitFor(() => expect(result.current.unreadCount).toBe(4));
   });
 
   it('exposes a refreshUnreadCount that overwrites the badge with the authoritative figure', async () => {
