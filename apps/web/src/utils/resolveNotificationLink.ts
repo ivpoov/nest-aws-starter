@@ -13,6 +13,10 @@ const NOTIFICATION_LINKS: Partial<Record<NotificationTypeEnum, string>> = {
   [NotificationTypeEnum.SUBSCRIPTION_ENDED]: '/settings/billing',
   [NotificationTypeEnum.AUTH_METHOD_CHANGED]: '/settings/methods',
   [NotificationTypeEnum.NEW_DEVICE_LOGIN]: '/settings/sessions',
+  // The body tells the user to secure the account if the change was not
+  // theirs, and the sessions page is where they do it (meta carries a
+  // sessionId, but there is no per-session route to target with it).
+  [NotificationTypeEnum.PASSWORD_CHANGED]: '/settings/sessions',
 };
 
 export function resolveNotificationLink(type: NotificationTypeEnum): string | null {

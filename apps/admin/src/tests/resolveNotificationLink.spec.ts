@@ -47,13 +47,59 @@ describe('resolveNotificationLink', () => {
     expect(resolveNotificationLink(notification)).toBeNull();
   });
 
-  it('does not link SUSPICIOUS_LOGIN — meta carries no userId, only scope/value', () => {
-    const notification = buildNotification(NotificationTypeEnum.SUSPICIOUS_LOGIN, {
+  it('links USER_BLOCKED to the user drawer carried in meta.userId', () => {
+    const notification = buildNotification(NotificationTypeEnum.USER_BLOCKED, {
+      userId: 'u-42',
+      actorId: 'admin-1',
+      reason: 'spam',
+    });
+
+    expect(resolveNotificationLink(notification)).toBe('/users?userId=u-42');
+  });
+
+  it('does not link USER_BLOCKED when meta carries no usable userId', () => {
+    // A row written before the builder attached userId, or one whose meta
+    // holds a non-string: navigating would open a drawer that 404s.
+    expect(resolveNotificationLink(buildNotification(NotificationTypeEnum.USER_BLOCKED, {}))).toBe(
+      null,
+    );
+    expect(
+      resolveNotificationLink(buildNotification(NotificationTypeEnum.USER_BLOCKED, { userId: 7 })),
+    ).toBeNull();
+    expect(
+      resolveNotificationLink(buildNotification(NotificationTypeEnum.USER_BLOCKED, { userId: '' })),
+    ).toBeNull();
+  });
+
+  it('encodes an id that is not URL-safe', () => {
+    const notification = buildNotification(NotificationTypeEnum.CONTACT_MESSAGE, {
+      contactMessageId: 'a b&c=d',
+    });
+
+    expect(resolveNotificationLink(notification)).toBe('/inbox?messageId=a%20b%26c%3Dd');
+  });
+
+  // meta is scope/value only (an email OR an ip), never a userId, so there is
+  // no user to open — but the activity log records the events themselves
+  // under a matching type, which works for both scopes.
+  it('links SUSPICIOUS_LOGIN to the suspicious-login activity log for either scope', () => {
+    const byEmail = buildNotification(NotificationTypeEnum.SUSPICIOUS_LOGIN, {
       scope: 'EMAIL',
       value: 'attacker@example.com',
     });
+    const byIp = buildNotification(NotificationTypeEnum.SUSPICIOUS_LOGIN, {
+      scope: 'IP',
+      value: '1.2.3.4',
+    });
 
-    expect(resolveNotificationLink(notification)).toBeNull();
+    expect(resolveNotificationLink(byEmail)).toBe('/activities?type=AUTH_SUSPICIOUS_LOGIN');
+    expect(resolveNotificationLink(byIp)).toBe('/activities?type=AUTH_SUSPICIOUS_LOGIN');
+  });
+
+  it('links SUSPICIOUS_LOGIN even when meta is empty — the target needs no meta', () => {
+    const notification = buildNotification(NotificationTypeEnum.SUSPICIOUS_LOGIN, {});
+
+    expect(resolveNotificationLink(notification)).toBe('/activities?type=AUTH_SUSPICIOUS_LOGIN');
   });
 
   it('does not link a type with no deep-link target at all', () => {

@@ -7,9 +7,10 @@ import { useNotificationList } from '../hooks/notifications/useNotificationList'
 vi.mock('../apis/notifications');
 
 const adjustUnreadCount = vi.fn();
+const refreshUnreadCount = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('../contexts/NotificationSocketContext', () => ({
-  useNotificationSocketContext: () => ({ unreadCount: 2, adjustUnreadCount }),
+  useNotificationSocketContext: () => ({ unreadCount: 2, adjustUnreadCount, refreshUnreadCount }),
 }));
 
 function buildItem(id: string, readAt: string | null = null): NotificationResponseInterface {
@@ -29,6 +30,7 @@ function buildItem(id: string, readAt: string | null = null): NotificationRespon
 describe('useNotificationList', () => {
   beforeEach(() => {
     adjustUnreadCount.mockClear();
+    refreshUnreadCount.mockClear();
   });
 
   it('loads the first page and fetches the next page on loadMore', async () => {
@@ -99,5 +101,44 @@ describe('useNotificationList', () => {
     expect(result.current.items[0]?.readAt).not.toBeNull();
     expect(adjustUnreadCount).toHaveBeenCalledTimes(1);
     expect(adjustUnreadCount).toHaveBeenCalledWith(-1);
+    // A successful read also refetches the authoritative count so a second
+    // tab's reads stop drifting the badge (parity with apps/admin).
+    expect(refreshUnreadCount).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refetch the authoritative count when the mark-read request fails', async () => {
+    vi.mocked(notificationsApi.fetchNotifications).mockResolvedValue({
+      items: [buildItem('n-1')],
+      nextCursor: null,
+    });
+    vi.mocked(notificationsApi.markNotificationRead).mockRejectedValue(new Error('network error'));
+
+    const { result } = renderHook(() => useNotificationList());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.markRead('n-1');
+    });
+
+    expect(refreshUnreadCount).not.toHaveBeenCalled();
+  });
+
+  it('refetches the authoritative count after a successful mark-all-read', async () => {
+    vi.mocked(notificationsApi.fetchNotifications).mockResolvedValue({
+      items: [buildItem('n-1')],
+      nextCursor: null,
+    });
+    vi.mocked(notificationsApi.markAllNotificationsRead).mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useNotificationList());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.markAllRead();
+    });
+
+    expect(refreshUnreadCount).toHaveBeenCalledTimes(1);
   });
 });

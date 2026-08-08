@@ -43,6 +43,8 @@ function renderPage(): ReturnType<typeof render> {
       <Routes>
         <Route path="/notifications" element={<NotificationHistoryPage />} />
         <Route path="/inbox" element={<p>Inbox page</p>} />
+        <Route path="/users" element={<p>Users page</p>} />
+        <Route path="/activities" element={<p>Activities page</p>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -90,6 +92,61 @@ describe('NotificationHistoryPage', () => {
     await waitFor(() => expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('n-2'));
     expect(screen.queryByText('Inbox page')).not.toBeInTheDocument();
     expect(screen.getByText('Title n-2')).toBeInTheDocument();
+  });
+
+  it('marks read and navigates to the user drawer when a USER_BLOCKED row is clicked', async () => {
+    vi.mocked(notificationsApi.fetchNotifications).mockResolvedValue({
+      items: [
+        buildItem('n-3', NotificationTypeEnum.USER_BLOCKED, NotificationAudienceEnum.ADMIN, {
+          userId: 'u-42',
+          actorId: 'admin-1',
+          reason: 'spam',
+        }),
+      ],
+      nextCursor: null,
+    });
+
+    renderPage();
+
+    fireEvent.click(await screen.findByText('Title n-3'));
+
+    expect(await screen.findByText('Users page')).toBeInTheDocument();
+    expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('n-3');
+  });
+
+  it('marks read and navigates to the activity log when a SUSPICIOUS_LOGIN row is clicked', async () => {
+    vi.mocked(notificationsApi.fetchNotifications).mockResolvedValue({
+      items: [
+        buildItem('n-4', NotificationTypeEnum.SUSPICIOUS_LOGIN, NotificationAudienceEnum.ADMIN, {
+          scope: 'IP',
+          value: '1.2.3.4',
+        }),
+      ],
+      nextCursor: null,
+    });
+
+    renderPage();
+
+    fireEvent.click(await screen.findByText('Title n-4'));
+
+    expect(await screen.findByText('Activities page')).toBeInTheDocument();
+    expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('n-4');
+  });
+
+  it('still does not navigate for a USER_BLOCKED row whose meta has no userId', async () => {
+    vi.mocked(notificationsApi.fetchNotifications).mockResolvedValue({
+      items: [
+        buildItem('n-5', NotificationTypeEnum.USER_BLOCKED, NotificationAudienceEnum.ADMIN, {}),
+      ],
+      nextCursor: null,
+    });
+
+    renderPage();
+
+    fireEvent.click(await screen.findByText('Title n-5'));
+
+    await waitFor(() => expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('n-5'));
+    expect(screen.queryByText('Users page')).not.toBeInTheDocument();
   });
 
   it('filters the rendered rows by type via the filter bar (client-side)', async () => {

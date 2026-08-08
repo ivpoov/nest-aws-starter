@@ -11,7 +11,7 @@ import { apiClient } from '../../utils/apiClient';
 export function fetchNotifications(
   params: FetchNotificationsParamsInterface,
 ): Promise<NotificationListResponseInterface> {
-  const query = new URLSearchParams();
+  const query: URLSearchParams = new URLSearchParams();
 
   if (params.cursor) query.set('cursor', params.cursor);
   if (params.limit) query.set('limit', String(params.limit));

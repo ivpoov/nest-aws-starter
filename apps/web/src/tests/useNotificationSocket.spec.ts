@@ -1,8 +1,13 @@
-import type { NotificationResponseInterface } from '@nest-aws-starter/shared';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { Socket } from 'socket.io-client';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as notificationsApi from '../apis/notifications';
+import {
+  MANUAL_RECONNECT_BASE_DELAY_MS,
+  MAX_MANUAL_RECONNECT_ATTEMPTS,
+  STABLE_CONNECTION_RESET_MS,
+} from '../constants/notification-socket.constants';
+import { UNREAD_COUNT_POLL_INTERVAL_MS } from '../constants/notification-unread-count-poll.constants';
 import { useNotificationSocket } from '../hooks/notifications/useNotificationSocket';
 import { useAuthStore } from '../stores/auth.store';
 import { logger } from '../utils/logger';
@@ -18,6 +23,7 @@ interface MockSocketOptionsInterface {
 
 const listeners: Record<string, SocketHandler> = {};
 const mockSocket = {
+  disconnected: false,
   on: vi.fn((event: string, handler: SocketHandler) => {
     listeners[event] = handler;
 
@@ -40,17 +46,51 @@ function emit(event: string, ...args: unknown[]): void {
   listeners[event]?.(...args);
 }
 
+function setVisibility(state: 'visible' | 'hidden'): void {
+  Object.defineProperty(document, 'visibilityState', { value: state, configurable: true });
+}
+
+// One handshake as the real gateway produces it when it rejects a client:
+// socket.io always writes CONNECT (so the client fires `connect`) before
+// Nest's handleConnection can run and disconnect the socket.
+function emitRejectedHandshake(): void {
+  act(() => {
+    emit('connect');
+    emit('disconnect', 'io server disconnect');
+  });
+}
+
+// Turns every `socket.connect()` the hook issues into another rejected
+// handshake, exactly like a gateway that keeps refusing the token (or has
+// websockets disabled). The safety valve stops a regressed implementation
+// from recursing forever — a bounded, visibly-wrong call count instead.
+function autoRejectManualReconnects(): void {
+  mockSocket.connect.mockImplementation((): void => {
+    if (mockSocket.connect.mock.calls.length > 10) return;
+
+    emit('connect');
+    emit('disconnect', 'io server disconnect');
+  });
+}
+
 describe('useNotificationSocket', () => {
   beforeEach(() => {
     useAuthStore.getState().clear();
     localStorage.clear();
     ioMock.mockClear();
+    mockSocket.disconnected = false;
     mockSocket.on.mockClear();
-    mockSocket.connect.mockClear();
+    mockSocket.connect.mockReset();
     mockSocket.disconnect.mockClear();
     mockSocket.removeAllListeners.mockClear();
     vi.mocked(notificationsApi.fetchUnreadCount).mockReset();
     vi.mocked(notificationsApi.fetchUnreadCount).mockResolvedValue({ count: 3 });
+    setVisibility('visible');
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    setVisibility('visible');
   });
 
   it('connects with the store token once authenticated', async () => {
@@ -78,41 +118,95 @@ describe('useNotificationSocket', () => {
     await waitFor(() => expect(result.current.unreadCount).toBe(3));
   });
 
-  it('updates the unread count on the unread-count event', async () => {
+  it('does not react to the socket unread-count event (it understates the merged count for ADMIN-role users, see notification-events.constants.ts)', async () => {
     useAuthStore.getState().setTokens('access-1', 'refresh-1');
 
     const { result } = renderHook(() => useNotificationSocket());
 
-    await waitFor(() => expect(ioMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.unreadCount).toBe(3));
 
-    emit('unread-count', 7);
+    emit('unread-count', 999);
 
-    await waitFor(() => expect(result.current.unreadCount).toBe(7));
+    // Give any accidental listener a tick to run, then assert nothing moved.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(result.current.unreadCount).toBe(3);
   });
 
-  it('prepends new notifications on the notification event', async () => {
+  it('bumps the badge on the notification event', async () => {
     useAuthStore.getState().setTokens('access-1', 'refresh-1');
 
     const { result } = renderHook(() => useNotificationSocket());
 
-    await waitFor(() => expect(ioMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.unreadCount).toBe(3));
 
-    const notification = {
-      id: 'n-1',
-      audience: 'USER',
-      userId: 'u-1',
-      type: 'PASSWORD_CHANGED',
-      title: 'Password changed',
-      body: 'body',
-      meta: {},
-      createdAt: '2026-08-01T00:00:00.000Z',
-      readAt: null,
-    } as unknown as NotificationResponseInterface;
+    emit('notification');
 
-    emit('notification', notification);
+    await waitFor(() => expect(result.current.unreadCount).toBe(4));
+  });
 
-    await waitFor(() => expect(result.current.liveNotifications).toHaveLength(1));
-    expect(result.current.liveNotifications[0]).toEqual(notification);
+  it('exposes a refreshUnreadCount that overwrites the badge with the authoritative figure', async () => {
+    useAuthStore.getState().setTokens('access-1', 'refresh-1');
+
+    const { result } = renderHook(() => useNotificationSocket());
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(3));
+
+    vi.mocked(notificationsApi.fetchUnreadCount).mockResolvedValueOnce({ count: 11 });
+
+    await act(async () => {
+      await result.current.refreshUnreadCount();
+    });
+
+    expect(result.current.unreadCount).toBe(11);
+  });
+
+  it('polls the unread count on the configured interval', async () => {
+    vi.useFakeTimers();
+    useAuthStore.getState().setTokens('access-1', 'refresh-1');
+
+    renderHook(() => useNotificationSocket());
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(notificationsApi.fetchUnreadCount).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(UNREAD_COUNT_POLL_INTERVAL_MS);
+    expect(notificationsApi.fetchUnreadCount).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(UNREAD_COUNT_POLL_INTERVAL_MS);
+    expect(notificationsApi.fetchUnreadCount).toHaveBeenCalledTimes(3);
+  });
+
+  it('skips a poll tick while the tab is hidden but keeps the interval alive', async () => {
+    vi.useFakeTimers();
+    useAuthStore.getState().setTokens('access-1', 'refresh-1');
+
+    renderHook(() => useNotificationSocket());
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(notificationsApi.fetchUnreadCount).toHaveBeenCalledTimes(1);
+
+    setVisibility('hidden');
+    await vi.advanceTimersByTimeAsync(UNREAD_COUNT_POLL_INTERVAL_MS);
+    expect(notificationsApi.fetchUnreadCount).toHaveBeenCalledTimes(1);
+
+    setVisibility('visible');
+    await vi.advanceTimersByTimeAsync(UNREAD_COUNT_POLL_INTERVAL_MS);
+    expect(notificationsApi.fetchUnreadCount).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops polling on unmount', async () => {
+    vi.useFakeTimers();
+    useAuthStore.getState().setTokens('access-1', 'refresh-1');
+
+    const { unmount } = renderHook(() => useNotificationSocket());
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(notificationsApi.fetchUnreadCount).toHaveBeenCalledTimes(1);
+
+    unmount();
+
+    await vi.advanceTimersByTimeAsync(UNREAD_COUNT_POLL_INTERVAL_MS * 2);
+    expect(notificationsApi.fetchUnreadCount).toHaveBeenCalledTimes(1);
   });
 
   it('disconnects the socket on unmount', async () => {
@@ -136,15 +230,28 @@ describe('useNotificationSocket', () => {
     expect(notificationsApi.fetchUnreadCount).not.toHaveBeenCalled();
   });
 
-  it('manually reconnects on an io server disconnect', async () => {
+  it('manually reconnects on an io server disconnect, after the backoff delay', async () => {
+    vi.useFakeTimers();
     useAuthStore.getState().setTokens('access-1', 'refresh-1');
 
     renderHook(() => useNotificationSocket());
 
-    await waitFor(() => expect(ioMock).toHaveBeenCalledTimes(1));
+    expect(ioMock).toHaveBeenCalledTimes(1);
 
-    emit('disconnect', 'io server disconnect');
+    emitRejectedHandshake();
 
+    // Not immediately — an instant retry against a gateway that rejects
+    // post-CONNECT would spin at one handshake per round trip.
+    expect(mockSocket.connect).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(MANUAL_RECONNECT_BASE_DELAY_MS - 1);
+    });
+    expect(mockSocket.connect).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
     expect(mockSocket.connect).toHaveBeenCalledTimes(1);
   });
 
@@ -160,24 +267,28 @@ describe('useNotificationSocket', () => {
     expect(mockSocket.connect).not.toHaveBeenCalled();
   });
 
-  it('bounds manual reconnect attempts and logs a warning once exhausted', async () => {
+  it('bounds manual reconnects when the gateway accepts the transport then rejects each handshake', async () => {
+    vi.useFakeTimers();
     const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
 
+    autoRejectManualReconnects();
     useAuthStore.getState().setTokens('access-1', 'refresh-1');
 
     renderHook(() => useNotificationSocket());
 
-    await waitFor(() => expect(ioMock).toHaveBeenCalledTimes(1));
+    expect(ioMock).toHaveBeenCalledTimes(1);
 
-    // Three server-initiated disconnects (never followed by a real
-    // `connect` event in this mock, so the attempt counter never resets)
-    // exhaust the bound; a fourth must not trigger a fourth `connect()`.
-    emit('disconnect', 'io server disconnect');
-    emit('disconnect', 'io server disconnect');
-    emit('disconnect', 'io server disconnect');
-    emit('disconnect', 'io server disconnect');
+    // The initial handshake is rejected the way the real gateway does it:
+    // client-side `connect` first, then the server-initiated disconnect.
+    emitRejectedHandshake();
 
-    expect(mockSocket.connect).toHaveBeenCalledTimes(3);
+    // Give every scheduled retry ample time to fire; each one is answered
+    // with another connect → reject cycle by the mock above.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+
+    expect(mockSocket.connect).toHaveBeenCalledTimes(MAX_MANUAL_RECONNECT_ATTEMPTS);
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining('giving up after repeated server-initiated disconnects'),
     );
@@ -185,12 +296,99 @@ describe('useNotificationSocket', () => {
     warnSpy.mockRestore();
   });
 
-  it('reads the freshly rotated token on a manual reconnect, not the one captured at mount', async () => {
+  it('restores the reconnect budget once a connection survives the stability window', async () => {
+    vi.useFakeTimers();
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+
+    autoRejectManualReconnects();
     useAuthStore.getState().setTokens('access-1', 'refresh-1');
 
     renderHook(() => useNotificationSocket());
 
-    await waitFor(() => expect(ioMock).toHaveBeenCalledTimes(1));
+    emitRejectedHandshake();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(mockSocket.connect).toHaveBeenCalledTimes(MAX_MANUAL_RECONNECT_ATTEMPTS);
+
+    // A connection that survives the stability window (i.e. the gateway
+    // accepted the handshake) earns the budget back…
+    mockSocket.connect.mockImplementation((): void => undefined);
+    act(() => {
+      emit('connect');
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STABLE_CONNECTION_RESET_MS);
+    });
+
+    // …so a later rejection retries again instead of staying given-up.
+    act(() => {
+      emit('disconnect', 'io server disconnect');
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(MANUAL_RECONNECT_BASE_DELAY_MS);
+    });
+
+    expect(mockSocket.connect).toHaveBeenCalledTimes(MAX_MANUAL_RECONNECT_ATTEMPTS + 1);
+
+    warnSpy.mockRestore();
+  });
+
+  it('replenishes the budget and reconnects as soon as a refreshed token lands', async () => {
+    vi.useFakeTimers();
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+
+    autoRejectManualReconnects();
+    useAuthStore.getState().setTokens('access-1', 'refresh-1');
+
+    renderHook(() => useNotificationSocket());
+
+    emitRejectedHandshake();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(mockSocket.connect).toHaveBeenCalledTimes(MAX_MANUAL_RECONNECT_ATTEMPTS);
+
+    // The session was rejected into giving up, then a silent refresh
+    // rotates the token: the previously-dead socket must come back with
+    // the new credentials rather than stay down until a reload.
+    mockSocket.connect.mockImplementation((): void => undefined);
+    mockSocket.disconnected = true;
+    act(() => {
+      useAuthStore.getState().setTokens('access-2', 'refresh-2');
+    });
+
+    expect(mockSocket.connect).toHaveBeenCalledTimes(MAX_MANUAL_RECONNECT_ATTEMPTS + 1);
+
+    warnSpy.mockRestore();
+  });
+
+  it('cancels a pending manual reconnect when the user logs out', async () => {
+    vi.useFakeTimers();
+    useAuthStore.getState().setTokens('access-1', 'refresh-1');
+
+    renderHook(() => useNotificationSocket());
+
+    emitRejectedHandshake();
+
+    act(() => {
+      useAuthStore.getState().clear();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+
+    expect(mockSocket.connect).not.toHaveBeenCalled();
+  });
+
+  it('reads the freshly rotated token on a manual reconnect, not the one captured at mount', async () => {
+    vi.useFakeTimers();
+    useAuthStore.getState().setTokens('access-1', 'refresh-1');
+
+    renderHook(() => useNotificationSocket());
+
+    expect(ioMock).toHaveBeenCalledTimes(1);
 
     const [, options] = ioMock.mock.calls[0] as [string, MockSocketOptionsInterface];
     let firstPayload: unknown;
@@ -203,8 +401,15 @@ describe('useNotificationSocket', () => {
     // A silent refresh rotates the store's token, then the gateway's
     // heartbeat sweep rejects the *original* token the socket connected
     // with — a server-initiated disconnect.
-    useAuthStore.getState().setTokens('access-2', 'refresh-2');
-    emit('disconnect', 'io server disconnect');
+    act(() => {
+      useAuthStore.getState().setTokens('access-2', 'refresh-2');
+      emit('connect');
+      emit('disconnect', 'io server disconnect');
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(MANUAL_RECONNECT_BASE_DELAY_MS);
+    });
 
     expect(mockSocket.connect).toHaveBeenCalledTimes(1);
     expect(ioMock).toHaveBeenCalledTimes(1); // same socket reused, not recreated
