@@ -169,12 +169,12 @@ Every authenticated socket joins `user:<userId>`; admins additionally join
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `WEBSOCKET_ENABLED` | `true` | Toggles the live socket transport. Persistence, the REST endpoints below and the email channel are unaffected — only live delivery stops. |
+| `WEBSOCKET_ENABLED` | `true` | Toggles the live socket transport. `false` installs **no** socket transport at all: no `/socket.io` endpoint exists, handshakes get a hard connection error rather than an accept-then-drop loop, and the adapter's two Redis pub/sub connections are never opened. Persistence, the REST endpoints below and the email channel are unaffected — only live delivery stops. |
 | `WEBSOCKET_HEARTBEAT_INTERVAL_MS` | `60000` | How often connected sockets are re-validated. |
 | `CORS_ORIGINS` | `http://localhost:5173,http://localhost:5174` | Comma-separated browser origins allowed by **both** HTTP CORS and the socket handshake. Add your deployed frontend origins here or the socket will not connect. |
 
-**Redis is what makes this multi-instance safe.** The gateway runs behind
-`@socket.io/redis-adapter`, so a notification created on API instance A still
+**Redis is what makes this multi-instance safe.** With `WEBSOCKET_ENABLED=true`
+the gateway runs behind `@socket.io/redis-adapter`, so a notification created on API instance A still
 reaches a socket held by instance B. Redis is already required for the API to
 boot at all (token allowlist, throttler storage, OAuth state), so this adds no
 new infrastructure — but without the adapter a horizontally scaled deployment
@@ -185,10 +185,29 @@ would deliver to only the instance that happened to handle the event.
 Users get a per-type, per-channel preference matrix:
 
 - **`IN_APP`** is always on and not editable — it is what the bell reads.
-- **`EMAIL`** is opt-out per notification type, and passes three gates: the
+- **`EMAIL`** is opt-out per notification type, and passes four gates: the
   global `MAIL_ENABLED` provider flag, the user's preference for that type,
-  and the user having an email address on file (OAuth-only accounts may not).
-  Any gate off means no mail is sent and no error is raised.
+  the user having an email address on file (OAuth-only accounts may not), and
+  the throttle below. Any gate off means no mail is sent and no error is
+  raised.
+
+#### The email throttle
+
+The EMAIL channel is rate-limited to **at most one email per user, per
+notification type, per hour**. A webhook or login storm still persists every
+row and still pushes every socket event — the throttle gates the email channel
+only, never persistence and never live delivery.
+
+It is Redis-backed: a single `SET <key> NX EX 3600` both claims the slot and
+starts the window, so concurrent dispatches on different API instances cannot
+both win, and later attempts inside the window never push the TTL out. The
+claim is the *last* gate before the transport, so a recipient with no email
+address on file never burns their window.
+
+**It fails open.** If Redis is unreachable the claim is treated as granted and
+a warning is logged — the same availability-over-strictness rule the login
+lockout follows. The worst case during a Redis outage is duplicate mail, never
+lost mail.
 
 ```
 GET    /api/v1/notifications                 # cursor-paginated feed
@@ -199,9 +218,20 @@ GET    /api/v1/notifications/preferences     # the matrix
 PUT    /api/v1/notifications/preferences
 ```
 
+The feed takes all-optional query params, and they compose with each other and
+with the cursor: `cursor` (the last id of the previous page), `limit`
+(`1`–`100`, default `20`), `unreadOnly` (only the literal string `true` is
+true), `type` (a `NotificationTypeEnum` member) and `audience` (`USER` |
+`ADMIN`). Anything outside those ranges is a `400`. `audience` only ever
+narrows: a non-admin asking for `ADMIN` gets an empty page, not a `403`.
+`nextCursor` is non-null only on a full page, and it describes the *filtered*
+result set — so a filter never leaves a "Load more" button pointing at rows the
+user is not looking at.
+
 In the frontends this is the bell in both layouts, plus
 `/settings/notifications` in the user app and `/notifications` (full history,
-filterable) in the admin panel.
+filterable by type, audience and read state — all server-side) in the admin
+panel.
 
 ## Testing
 
