@@ -23,8 +23,15 @@ export function notificationSocketReducer(
     case 'unread-count-adjusted':
       return { ...state, unreadCount: Math.max(0, state.unreadCount + action.delta) };
     case 'notification-received':
+      // Also bumps the badge by one: the gateway's `unread-count` push is
+      // deliberately ignored (it would understate the merged badge for an
+      // ADMIN-role user — see notification-events.constants.ts), so a live
+      // arrival's only immediate signal is this optimistic +1 — the next
+      // poll tick (or the post-read refetch) reconciles it against the
+      // server.
       return {
         ...state,
+        unreadCount: state.unreadCount + 1,
         liveNotifications: prependNotification(state.liveNotifications, action.notification),
       };
     default:

@@ -63,7 +63,7 @@ describe('notificationSocketReducer', () => {
     expect(flooredAtZero.unreadCount).toBe(0);
   });
 
-  it('prepends a received notification and caps the buffer', () => {
+  it('prepends a received notification, bumps the badge, and caps the buffer', () => {
     let state: NotificationSocketStateInterface = INITIAL_NOTIFICATION_SOCKET_STATE;
 
     for (let index = 0; index < 25; index += 1) {
@@ -75,5 +75,8 @@ describe('notificationSocketReducer', () => {
 
     expect(state.liveNotifications).toHaveLength(20);
     expect(state.liveNotifications[0]?.id).toBe('n-24');
+    // The badge counts every arrival even though the buffer is capped — the
+    // unread-count push is ignored, so this +1 is the only live signal.
+    expect(state.unreadCount).toBe(25);
   });
 });
