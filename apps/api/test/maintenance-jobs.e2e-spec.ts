@@ -4,10 +4,10 @@ import { WebhookEventStatusEnum } from '@modules/payment/enums/webhook-event-sta
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import type { ScheduledJobInterface } from '@modules/task-scheduler/interfaces/scheduled-job.interface.js';
 import { ScheduledJobRegistryService } from '@modules/task-scheduler/services/scheduled-job-registry.service.js';
-import { FileIntentEnum, FileStatusEnum } from '@nest-aws-starter/shared';
+import { FileIntentEnum, FileStatusEnum } from '@nest-aws-starter/shared'; // <module:file>
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { S3_PROVIDER } from '@providers/s3/constants/s3.constants.js';
-import type { S3ProviderInterface } from '@providers/s3/interfaces/s3-provider.interface.js';
+import { S3_PROVIDER } from '@providers/s3/constants/s3.constants.js'; // <module:file>
+import type { S3ProviderInterface } from '@providers/s3/interfaces/s3-provider.interface.js'; // <module:file>
 // <module:payment>
 import { SQS_PROVIDER } from '@providers/sqs/constants/sqs.constants.js';
 import type { SqsMessageInterface } from '@providers/sqs/interfaces/sqs-message.interface.js';
@@ -16,7 +16,7 @@ import type { SqsProviderInterface } from '@providers/sqs/interfaces/sqs-provide
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createTestApp } from './app.factory.js';
-import { ensureBucket } from './helpers/ensure-bucket.helper.js';
+import { ensureBucket } from './helpers/ensure-bucket.helper.js'; // <module:file>
 
 // <module:payment>
 const queueUrl: string =
@@ -24,7 +24,9 @@ const queueUrl: string =
   'http://localhost:4567/000000000000/starter-payment-webhook-queue';
 // </module:payment>
 
+// <module:file>
 const ONE_DAY_MS = 25 * 60 * 60 * 1000; // 25h — clears the 24h staleness threshold
+// </module:file>
 // <module:payment>
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000; // clears the 1h webhook-retry threshold
 // </module:payment>
@@ -37,16 +39,16 @@ const TWO_HOURS_MS = 2 * 60 * 60 * 1000; // clears the 1h webhook-retry threshol
 describe('maintenance jobs (real postgres/redis/localstack)', () => {
   let app: NestFastifyApplication;
   let prisma: PrismaService;
-  let s3: S3ProviderInterface;
+  let s3: S3ProviderInterface; // <module:file>
   let sqs: SqsProviderInterface; // <module:payment>
   let registry: ScheduledJobRegistryService;
   let ownerId: string;
 
   beforeAll(async () => {
-    await ensureBucket();
+    await ensureBucket(); // <module:file>
     app = await createTestApp();
     prisma = app.get(PrismaService);
-    s3 = app.get<S3ProviderInterface>(S3_PROVIDER);
+    s3 = app.get<S3ProviderInterface>(S3_PROVIDER); // <module:file>
     sqs = app.get<SqsProviderInterface>(SQS_PROVIDER); // <module:payment>
     registry = app.get(ScheduledJobRegistryService);
     await neutralizeStaleWebhookEventBacklog(); // <module:payment>
@@ -139,6 +141,7 @@ describe('maintenance jobs (real postgres/redis/localstack)', () => {
     return job;
   }
 
+  // <module:file>
   describe('OrphanFileSweepJob', () => {
     it('is registered with the scheduler', () => {
       const job = findJobOrThrow('orphan-file-sweep');
@@ -241,6 +244,7 @@ describe('maintenance jobs (real postgres/redis/localstack)', () => {
       expect(row.status).toBe(FileStatusEnum.PENDING);
     });
   });
+  // </module:file>
 
   // <module:payment>
   // Asserts re-enqueue via a pass-through spy on the real SqsProviderInterface

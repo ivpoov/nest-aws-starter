@@ -11,6 +11,7 @@ import { EventModule } from '@modules/event/event.module.js';
 import { FileModule } from '@modules/file/file.module.js'; // <module:file>
 import { HealthModule } from '@modules/health/health.module.js';
 import { NoteModule } from '@modules/note/note.module.js';
+import { NotificationModule } from '@modules/notification/notification.module.js'; // <module:notification>
 import { OauthModule } from '@modules/oauth/oauth.module.js';
 import { DiscordOauthModule } from '@modules/oauth-discord/discord-oauth.module.js'; // <module:oauth-discord>
 import { FacebookOauthModule } from '@modules/oauth-facebook/facebook-oauth.module.js'; // <module:oauth-facebook>
@@ -74,6 +75,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     DiscordOauthModule, // <module:oauth-discord>
     NoteModule,
     FileModule, // <module:file>
+    NotificationModule, // <module:notification>
     ActivityModule,
     SuspiciousActivityModule,
     StatisticModule, // <module:statistic>

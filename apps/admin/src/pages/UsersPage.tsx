@@ -1,6 +1,7 @@
 import { type AdminUserResponseInterface, UserStatusEnum } from '@nest-aws-starter/shared';
 import type { ReactElement } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { UserDetailDrawer } from '../components/Users/UserDetailDrawer';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -40,8 +41,36 @@ const COLUMNS: Array<TableColumnInterface<AdminUserResponseInterface>> = [
 export function UsersPage(): ReactElement {
   const [search, setSearch] = useState<string>('');
   const [submittedSearch, setSubmittedSearch] = useState<string>('');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const { users, hasMore, isLoading, error, loadMore, reload } = useAdminUsers(submittedSearch);
+
+  // Deep link from a USER_BLOCKED notification (see resolveNotificationLink).
+  // The drawer fetches by id, so it opens on a cold navigation without the
+  // user having to be in the loaded page — and it renders the API's error if
+  // the id no longer exists. Syncs on every param change, not just mount, so
+  // clicking a second notification while already on /users re-targets the
+  // drawer; only acts when the param is present, so an unrelated re-render
+  // never forces the drawer shut (closeDrawer clears both).
+  useEffect(() => {
+    const userId: string | null = searchParams.get('userId');
+
+    if (userId) setSelectedUserId(userId);
+  }, [searchParams]);
+
+  function closeDrawer(): void {
+    setSelectedUserId(null);
+    setSearchParams(
+      (current: URLSearchParams): URLSearchParams => {
+        const next: URLSearchParams = new URLSearchParams(current);
+
+        next.delete('userId');
+
+        return next;
+      },
+      { replace: true },
+    );
+  }
 
   if (error && users.length === 0) return <ErrorMessage error={error} />;
 
@@ -76,7 +105,7 @@ export function UsersPage(): ReactElement {
       ) : null}
       <UserDetailDrawer
         userId={selectedUserId}
-        onClose={(): void => setSelectedUserId(null)}
+        onClose={closeDrawer}
         onUserChanged={(): void => void reload()}
       />
     </div>

@@ -3,7 +3,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"],
+      "outputs": ["dist/**", "src/generated/**"],
       "env": ["DATABASE_URL"]
     },
     "lint": {},
@@ -37,7 +37,9 @@
         "AUTH_ACCESS_TTL_SEC",
         "AUTH_REFRESH_TTL_SEC",
         "AUTH_REFRESH_GRACE_SEC",
-        "TRUST_PROXY"
+        "TRUST_PROXY",
+        "WEBSOCKET_ENABLED",
+        "WEBSOCKET_HEARTBEAT_INTERVAL_MS"
       ]
     }
   }

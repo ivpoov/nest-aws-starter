@@ -71,7 +71,9 @@ describe('webhooks (fake stripe provider)', () => {
     await app.close();
   });
 
-  async function findMessageFor(webhookEventId: string): Promise<SqsMessageInterface | undefined> {
+  async function findMessageFor(
+    webhookEventId: string,
+  ): Promise<SqsMessageInterface | null | undefined> {
     return waitForActivity(async () => {
       const messages: SqsMessageInterface[] = await sqs.receiveMessages(queueUrl, 10);
 
@@ -138,7 +140,7 @@ describe('webhooks (fake stripe provider)', () => {
 
     expect(rows).toHaveLength(1);
 
-    const message: SqsMessageInterface | undefined = await findMessageFor(rows[0]?.id ?? '');
+    const message: SqsMessageInterface | null | undefined = await findMessageFor(rows[0]?.id ?? '');
 
     expect(message).toBeDefined();
 

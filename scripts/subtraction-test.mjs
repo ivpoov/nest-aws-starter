@@ -6,6 +6,18 @@
 // the removal recipes in docs/removal/ from the same fence markers, so the
 // docs can never drift from what the script actually strips.
 //
+// Coverage: a module's `paths` cover apps/api (src and test), both frontends
+// and packages/shared, so the recipes list every file a removal touches. The
+// *verification* extends to the frontends for modules flagged
+// `frontendFenced` — every module carries that flag today, so each removal is
+// type-checked and unit-tested across apps/api, apps/web and apps/admin. The
+// apps/api type-check covers the e2e suite too (tsconfig.e2e.json), but the
+// e2e suite is never run: it needs a live Postgres/Redis/LocalStack that a
+// throwaway worktree has no access to. A
+// module that still needs its apps/web / apps/admin / packages/shared
+// cross-references converted from `manualSteps` into real fence markers
+// prints a COVERAGE GAP line when it runs.
+//
 // Usage:
 //   node scripts/subtraction-test.mjs                  # run every module
 //   node scripts/subtraction-test.mjs --module file     # run one module
@@ -29,48 +41,190 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// A module is only removable if the whole monorepo survives its removal, so
+// the fence scanner has to reach the frontends and the shared wire contracts
+// too — not just the API. A module whose API half is fenced but whose React
+// half is not would pass the subtraction test and still leave `apps/web`
+// unable to build.
 const FENCE_SCAN_ROOTS = [
   'apps/api/src',
   'apps/api/test',
   'apps/api/prisma/schema.prisma',
   'apps/api/prisma/seed.ts',
+  'apps/web/src',
+  'apps/admin/src',
+  'packages/shared/src',
 ];
-const FENCE_FILE_EXTENSIONS = new Set(['.ts', '.prisma']);
+const FENCE_FILE_EXTENSIONS = new Set(['.ts', '.tsx', '.prisma']);
 const SKIP_DIR_NAMES = new Set(['node_modules', 'dist', 'generated', '.git']);
 
 // Every module the subtraction test proves removable. `paths` are
 // repo-relative folders/files deleted wholesale; the fence scanner finds
 // everything else (cross-module references left behind in files that
 // otherwise stay).
+//
+// `manualSteps` are cross-references that are NOT fence-marked yet — they are
+// documented for the reader but cannot be stripped mechanically, and each one
+// is a hole in what the script proves.
+//
+// `cosmeticSteps` are leftovers the subtracted tree is *proven* to survive:
+// stale prose comments, an unused dependency in a package.json, an env var
+// nothing reads any more. They are listed so a reader can tidy up, and kept
+// separate from `manualSteps` so the flag below cannot be earned by
+// relabelling a real break as a footnote.
+//
+// `manualPaths` are folders a removal must delete that the script deliberately
+// does NOT, because doing so breaks a build step it cannot then repair. The
+// `packages/shared/src/<module>` folders are all in this bucket:
+// `packages/shared/src/index.ts` re-exports them and those export lines are
+// not fenced, so deleting the folder alone makes `build shared` fail on a
+// barrel pointing at nothing. They are still listed in the recipe — the reader
+// deletes them together with the matching `index.ts` lines from `manualSteps`.
+//
+// `frontendFenced: true` asserts a module has nothing left in `manualPaths`
+// and no `manualSteps` under apps/web, apps/admin or packages/shared, which is
+// what lets the runner type-check and unit-test both frontends after the
+// subtraction. Until a module earns that flag its frontend half is deleted but
+// unverified, and the runner prints a COVERAGE GAP line for it.
+// assertFrontendFencedClaims() below enforces the assertion mechanically, so
+// the flag cannot drift away from what the entry actually says.
 const MODULES = [
   {
     id: 'contact-us',
     summary: 'Public contact form + admin inbox.',
-    paths: ['apps/api/src/modules/contact-us'],
+    paths: [
+      'apps/api/src/modules/contact-us',
+      'apps/api/test/contact-us.e2e-spec.ts',
+      'apps/web/src/apis/contact',
+      'apps/web/src/interfaces/submit-contact-request.interface.ts',
+      'apps/web/src/pages/ContactPage.tsx',
+      'apps/web/src/tests/ContactPage.spec.tsx',
+      'apps/admin/src/apis/contact',
+      'apps/admin/src/components/Contact',
+      'apps/admin/src/hooks/contact',
+      'apps/admin/src/interfaces/use-contact-messages-result.interface.ts',
+      'apps/admin/src/interfaces/use-contact-message-status-result.interface.ts',
+      'apps/admin/src/pages/InboxPage.tsx',
+      'apps/admin/src/tests/ContactMessageDrawer.spec.tsx',
+      'apps/admin/src/tests/InboxPage.spec.tsx',
+      'apps/admin/src/tests/useContactMessages.spec.tsx',
+      'packages/shared/src/contact',
+    ],
     envVars: [],
+    frontendFenced: true,
+    manualSteps: [],
+    cosmeticSteps: [
+      [
+        'packages/shared/src/notifications/enums/notification-type.enum.ts',
+        "the CONTACT_MESSAGE member stays on purpose, for the same reason as payment's types: apps/api's notification dispatcher keeps its contact-message builder and handler, which compile against the core event bus and simply never fire once nothing emits contact.message.created. Keeping the member keeps apps/web's NOTIFICATION_TYPE_LABELS (a total Record over the enum) valid. Dropping it means dropping the member, the label line, USER_NOTIFICATION_TYPES and the dispatcher handler together",
+      ],
+    ],
   },
   {
     id: 'statistic',
     summary: 'Admin dashboard statistics (cached TypedSQL aggregates).',
-    paths: ['apps/api/src/modules/statistic', 'apps/api/prisma/sql'],
+    paths: [
+      'apps/api/src/modules/statistic',
+      'apps/api/test/statistics.e2e-spec.ts',
+      'apps/api/prisma/sql',
+      'apps/admin/src/apis/statistics',
+      'apps/admin/src/components/Statistics',
+      'apps/admin/src/hooks/statistics',
+      'apps/admin/src/constants/statistics.constants.ts',
+      'apps/admin/src/interfaces/chart-colors.interface.ts',
+      'apps/admin/src/interfaces/use-statistics-overview-result.interface.ts',
+      'apps/admin/src/interfaces/use-statistics-series-result.interface.ts',
+      'apps/admin/src/pages/StatisticsPage.tsx',
+      'apps/admin/src/utils/chartColors.ts',
+      'apps/admin/src/utils/formatMoney.ts',
+      'apps/admin/src/tests/AuthMethodBreakdown.spec.tsx',
+      'apps/admin/src/tests/KpiTiles.spec.tsx',
+      'apps/admin/src/tests/RegistrationsChart.spec.tsx',
+      'apps/admin/src/tests/RevenueByPlanBreakdown.spec.tsx',
+      'apps/admin/src/tests/RevenueChart.spec.tsx',
+      'apps/admin/src/tests/StatisticsPage.spec.tsx',
+      'apps/admin/src/tests/UsersByStatusBreakdown.spec.tsx',
+      'apps/admin/src/tests/useChartColors.spec.tsx',
+      'apps/admin/src/tests/useStatisticsOverview.spec.tsx',
+      'apps/admin/src/tests/useStatisticsSeries.spec.tsx',
+      'packages/shared/src/statistics',
+    ],
     envVars: [],
+    frontendFenced: true,
+    manualSteps: [],
+    cosmeticSteps: [
+      [
+        'apps/admin/src/App.tsx + pages/LoginPage.tsx',
+        'nothing to repoint. Both redirects read ADMIN_HOME_ROUTE, which is derived from the first surviving ADMIN_NAV_ITEMS entry — fencing the Dashboard entry out moves them onto /users automatically. This used to be the one runtime break in the set that no type-check or unit test could catch',
+      ],
+    ],
   },
   {
     id: 'api-key',
     summary: 'Long-lived API key issuance, guard, and admin management.',
-    paths: ['apps/api/src/modules/api-key'],
+    paths: [
+      'apps/api/src/modules/api-key',
+      'apps/api/test/api-keys.e2e-spec.ts',
+      'packages/shared/src/api-keys',
+    ],
     envVars: [],
+    frontendFenced: true,
+    manualSteps: [],
+    cosmeticSteps: [
+      ['apps/web, apps/admin', 'nothing — this module has no frontend surface at all'],
+    ],
   },
   {
     id: 'file',
     summary: 'S3-backed presigned upload/download flow.',
-    paths: ['apps/api/src/modules/file'],
+    paths: [
+      'apps/api/src/modules/file',
+      'apps/api/test/files.e2e-spec.ts',
+      'apps/web/src/apis/files',
+      'apps/web/src/components/Attachments',
+      'apps/web/src/hooks/files',
+      'apps/web/src/interfaces/uploaded-file.interface.ts',
+      'apps/web/src/interfaces/use-file-upload-result.interface.ts',
+      'apps/web/src/types/file-upload-status.type.ts',
+      'apps/web/src/tests/AttachmentsCard.spec.tsx',
+      'apps/web/src/tests/useFileUpload.spec.tsx',
+      // packages/shared/src/files is deleted file by file, not wholesale:
+      // enums/file-intent.enum.ts survives, because the avatar flow
+      // (ProfilePage, useProfile) and apps/api's activity listener both need
+      // FileIntentEnum and outlive this module.
+      'packages/shared/src/files/constants/file-error-codes.constants.ts',
+      'packages/shared/src/files/enums/file-status.enum.ts',
+      'packages/shared/src/files/interfaces/download-url-response.interface.ts',
+      'packages/shared/src/files/interfaces/file-response.interface.ts',
+      'packages/shared/src/files/interfaces/request-upload-request.interface.ts',
+      'packages/shared/src/files/interfaces/request-upload-response.interface.ts',
+      'packages/shared/src/files/types/file-error-code.type.ts',
+    ],
     envVars: [],
+    frontendFenced: true,
+    manualSteps: [],
+    cosmeticSteps: [
+      [
+        'packages/shared/src/files/enums/file-intent.enum.ts',
+        "the ATTACHMENT member is now unreachable but harmless, and it is deliberately left in place: it is the key of two total Records in apps/web/src/constants/file-upload.constants.ts and is referenced by apps/api's activity listener spec, so reducing the enum to AVATAR means editing all three together for no functional gain",
+      ],
+      [
+        'apps/web/src/constants/file-upload.constants.ts',
+        'the ATTACHMENT size cap and content-type allowlist go unused — the AVATAR entries next to them are what ProfilePage reads',
+      ],
+      [
+        'apps/web/src/utils/validateFileUpload.ts + apiClient.ts',
+        'keep both — the avatar upload path uses them',
+      ],
+    ],
   },
   {
     id: 'oauth-google',
     summary: 'Google OAuth login/link provider.',
     paths: ['apps/api/src/modules/oauth-google', 'apps/api/src/configs/google-oauth.config.ts'],
+    // No frontend or packages/shared surface at all, so both frontends are
+    // fully verified after this subtraction.
+    frontendFenced: true,
     envVars: [
       'GOOGLE_OAUTH_ENABLED',
       'GOOGLE_OAUTH_CLIENT_ID',
@@ -82,6 +236,9 @@ const MODULES = [
     id: 'oauth-facebook',
     summary: 'Facebook OAuth login/link provider.',
     paths: ['apps/api/src/modules/oauth-facebook', 'apps/api/src/configs/facebook-oauth.config.ts'],
+    // No frontend or packages/shared surface at all, so both frontends are
+    // fully verified after this subtraction.
+    frontendFenced: true,
     envVars: [
       'FACEBOOK_OAUTH_ENABLED',
       'FACEBOOK_OAUTH_CLIENT_ID',
@@ -93,6 +250,9 @@ const MODULES = [
     id: 'oauth-discord',
     summary: 'Discord OAuth login/link provider.',
     paths: ['apps/api/src/modules/oauth-discord', 'apps/api/src/configs/discord-oauth.config.ts'],
+    // No frontend or packages/shared surface at all, so both frontends are
+    // fully verified after this subtraction.
+    frontendFenced: true,
     envVars: [
       'DISCORD_OAUTH_ENABLED',
       'DISCORD_OAUTH_CLIENT_ID',
@@ -107,6 +267,9 @@ const MODULES = [
       'apps/api/src/modules/common/providers/cloudfront',
       'apps/api/src/configs/cloudfront.config.ts',
     ],
+    // No frontend or packages/shared surface at all, so both frontends are
+    // fully verified after this subtraction.
+    frontendFenced: true,
     envVars: [
       'CLOUDFRONT_ENABLED',
       'CLOUDFRONT_DOMAIN',
@@ -145,6 +308,49 @@ const MODULES = [
       'apps/api/test/webhook-consumer.e2e-spec.ts',
       'apps/api/test/subscription-access.e2e-spec.ts',
       'apps/api/test/subscription-lifecycle.e2e-spec.ts',
+      'apps/web/src/apis/billing',
+      'apps/web/src/components/Billing',
+      'apps/web/src/hooks/billing',
+      'apps/web/src/constants/billing.constants.ts',
+      'apps/web/src/interfaces/use-billing-subscription-result.interface.ts',
+      'apps/web/src/interfaces/use-checkout-result.interface.ts',
+      'apps/web/src/interfaces/use-public-plans-result.interface.ts',
+      'apps/web/src/pages/BillingCanceledPage.tsx',
+      'apps/web/src/pages/BillingPage.tsx',
+      'apps/web/src/pages/BillingSuccessPage.tsx',
+      'apps/web/src/pages/PricingPage.tsx',
+      'apps/web/src/utils/formatBillingInterval.ts',
+      'apps/web/src/utils/formatMoney.ts',
+      'apps/web/src/tests/BillingSuccessPage.spec.tsx',
+      'apps/web/src/tests/useBillingSubscription.spec.ts',
+      'apps/web/src/tests/useCheckout.spec.ts',
+      'apps/web/src/tests/usePublicPlans.spec.ts',
+      'apps/admin/src/apis/plans',
+      'apps/admin/src/apis/transactions',
+      'apps/admin/src/components/Plans',
+      'apps/admin/src/components/Transactions',
+      'apps/admin/src/hooks/plans',
+      'apps/admin/src/hooks/transactions',
+      'apps/admin/src/interfaces/transaction-filters.interface.ts',
+      'apps/admin/src/interfaces/use-admin-plans-result.interface.ts',
+      'apps/admin/src/interfaces/use-plan-mutations-result.interface.ts',
+      'apps/admin/src/interfaces/use-transaction-filters-result.interface.ts',
+      'apps/admin/src/interfaces/use-transaction-list-result.interface.ts',
+      'apps/admin/src/pages/PlansPage.tsx',
+      'apps/admin/src/pages/TransactionsPage.tsx',
+      'apps/admin/src/tests/PlanFormModal.spec.tsx',
+      'apps/admin/src/tests/PlanRowActions.spec.tsx',
+      'apps/admin/src/tests/TransactionFilterBar.spec.tsx',
+      'apps/admin/src/tests/TransactionList.spec.tsx',
+      'apps/admin/src/tests/useAdminPlans.spec.tsx',
+      'apps/admin/src/tests/useTransactionFilters.spec.tsx',
+      // These live under the statistic tree, but every consumer path is
+      // revenue — they become unreferenced the moment payment's tables go.
+      'apps/admin/src/components/Statistics/RevenueChart.tsx',
+      'apps/admin/src/components/Statistics/RevenueByPlanBreakdown.tsx',
+      'apps/admin/src/tests/RevenueChart.spec.tsx',
+      'apps/admin/src/tests/RevenueByPlanBreakdown.spec.tsx',
+      'packages/shared/src/payments',
     ],
     envVars: [
       'STRIPE_ENABLED',
@@ -153,6 +359,109 @@ const MODULES = [
       'STRIPE_PORTAL_RETURN_URL',
       'SQS_PAYMENT_WEBHOOK_QUEUE_URL',
       'PAYMENT_WEBHOOK_CONSUMER_ENABLED',
+    ],
+    frontendFenced: true,
+    manualSteps: [],
+    cosmeticSteps: [
+      [
+        'packages/shared/src/notifications/enums/notification-type.enum.ts',
+        "the four payment notification types stay on purpose. apps/api's notification dispatcher keeps its payment builders and @OnDomainEvent handlers — they compile against the core event bus and simply never fire once nothing emits subscription.* — so the wire enum stays total, and apps/web's NOTIFICATION_TYPE_LABELS (a total Record over it) stays valid. The visible leftover is four rows in the preferences grid that can never be triggered; dropping them means dropping the enum members, the label lines, USER_NOTIFICATION_TYPES in apps/api and the dispatcher handlers together",
+      ],
+      [
+        'apps/admin/src/components/Statistics/KpiTiles.tsx',
+        'no edit needed — it already renders a placeholder when revenue is null, and the revenue/mrrCents fields stay in the shared statistics contract as `number | null` for exactly this case',
+      ],
+    ],
+  },
+  {
+    // Task 1 shipped schema-only (no module folder). Task 2 (this round)
+    // adds the Socket.IO gateway — its own module folder plus e2e spec are
+    // included here in the same commit series (see task-1-report.md's note
+    // for PR 2-5 implementers: v0.4's payment entry missed this once and
+    // briefly broke the subtracted tree). Tasks 3-5 extend `paths` further
+    // as the dispatcher/history API/email digest land in the same folder.
+    id: 'notification',
+    summary:
+      'Notification/receipt/preference schema, WS gateway, the persist-first dispatcher (IN_APP + ' +
+      'the per-type/per-channel EMAIL gate, PR 5), the history API ' +
+      '(list/unread-count/mark-read/read-all), and the preferences API (GET/PUT matrix).',
+    paths: [
+      'apps/api/src/modules/notification',
+      'apps/api/src/configs/websocket.config.ts',
+      'apps/api/test/websocket.e2e-spec.ts',
+      'apps/api/test/notification-dispatcher.e2e-spec.ts',
+      'apps/api/test/notification-api.e2e-spec.ts',
+      'apps/api/test/notification-preferences.e2e-spec.ts',
+      'apps/web/src/apis/notifications',
+      'apps/web/src/components/Notifications',
+      'apps/web/src/hooks/notifications',
+      'apps/web/src/contexts/NotificationSocketContext.tsx',
+      'apps/web/src/pages/NotificationPreferencesPage.tsx',
+      'apps/web/src/constants/notification-channel-labels.constants.ts',
+      'apps/web/src/constants/notification-events.constants.ts',
+      'apps/web/src/constants/notification-list.constants.ts',
+      'apps/web/src/constants/notification-socket.constants.ts',
+      'apps/web/src/constants/notification-unread-count-poll.constants.ts',
+      'apps/web/src/constants/notification-type-labels.constants.ts',
+      'apps/web/src/interfaces/notification-socket-state.interface.ts',
+      'apps/web/src/interfaces/use-notification-list-result.interface.ts',
+      'apps/web/src/interfaces/use-notification-preferences-result.interface.ts',
+      'apps/web/src/interfaces/use-notification-socket-result.interface.ts',
+      'apps/web/src/types/notification-socket-action.type.ts',
+      'apps/web/src/utils/getSocketBaseUrl.ts',
+      'apps/web/src/utils/resolveNotificationLink.ts',
+      'apps/web/src/tests/NotificationBell.spec.tsx',
+      'apps/web/src/tests/NotificationDropdown.spec.tsx',
+      'apps/web/src/tests/PreferencesGrid.spec.tsx',
+      'apps/web/src/tests/notificationSocketReducer.spec.ts',
+      'apps/web/src/tests/notificationsApi.spec.ts',
+      'apps/web/src/tests/resolveNotificationLink.spec.ts',
+      'apps/web/src/tests/useNotificationList.spec.ts',
+      'apps/web/src/tests/useNotificationPreferences.spec.ts',
+      'apps/web/src/tests/useNotificationSocket.spec.ts',
+      'apps/admin/src/apis/notifications',
+      'apps/admin/src/components/Notifications',
+      'apps/admin/src/hooks/notifications',
+      'apps/admin/src/contexts/NotificationSocketContext.tsx',
+      'apps/admin/src/pages/NotificationHistoryPage.tsx',
+      'apps/admin/src/constants/notification-events.constants.ts',
+      'apps/admin/src/constants/notification-history.constants.ts',
+      'apps/admin/src/constants/notification-socket.constants.ts',
+      'apps/admin/src/constants/notification-unread-count-poll.constants.ts',
+      'apps/admin/src/interfaces/notification-history-filters.interface.ts',
+      'apps/admin/src/interfaces/notification-socket-state.interface.ts',
+      'apps/admin/src/interfaces/use-notification-history-filters-result.interface.ts',
+      'apps/admin/src/interfaces/use-notification-list-result.interface.ts',
+      'apps/admin/src/interfaces/use-notification-socket-result.interface.ts',
+      'apps/admin/src/types/notification-socket-action.type.ts',
+      'apps/admin/src/utils/getSocketBaseUrl.ts',
+      'apps/admin/src/utils/resolveNotificationLink.ts',
+      'apps/admin/src/tests/NotificationBell.spec.tsx',
+      'apps/admin/src/tests/NotificationDropdown.spec.tsx',
+      'apps/admin/src/tests/NotificationHistoryPage.spec.tsx',
+      'apps/admin/src/tests/notificationsApi.spec.ts',
+      'apps/admin/src/tests/notificationSocketReducer.spec.ts',
+      'apps/admin/src/tests/resolveNotificationLink.spec.ts',
+      'apps/admin/src/tests/useNotificationHistoryFilters.spec.tsx',
+      'apps/admin/src/tests/useNotificationList.spec.tsx',
+      'apps/admin/src/tests/useNotificationSocket.spec.tsx',
+      'packages/shared/src/notifications',
+    ],
+    envVars: ['WEBSOCKET_ENABLED', 'WEBSOCKET_HEARTBEAT_INTERVAL_MS'],
+    frontendFenced: true,
+    manualSteps: [
+      ['apps/api/test/vitest.e2e.config.ts', 'the WEBSOCKET_* env pins'],
+      ['turbo.json', 'the WEBSOCKET_* entries in the test:e2e env allowlist'],
+    ],
+    cosmeticSteps: [
+      [
+        'apps/admin/src/pages/InboxPage.tsx + UsersPage.tsx + ActivitiesPage.tsx',
+        'comments explaining why each page re-syncs its deep-link query param on every change. The `?messageId=` / `?userId=` / `?type=` handling itself stays and keeps working — only the notification-shaped prose goes stale',
+      ],
+      [
+        'apps/api/package.json + apps/web/package.json + apps/admin/package.json',
+        'the socket.io / @socket.io/redis-adapter / @nestjs/websockets / @nestjs/platform-socket.io dependencies, then re-run pnpm install',
+      ],
     ],
   },
 ];
@@ -239,7 +548,10 @@ const DEFERRED_PROVIDERS = [
       'Coupled into core auth: `EmailFlowService` (verify/reset emails, `auth` module) calls ' +
       '`MAIL_TRANSPORT` unconditionally; `NewDeviceService` (`suspicious-activity`) also ' +
       "injects it directly, gated only by its own `newDeviceEmailEnabled` flag, not by mail's " +
-      'own `isEnabled`. Removing mail outright breaks core auth email flows.',
+      "own `isEnabled`. `NotificationEmailService` (`notification`, PR 5) checks mail's own " +
+      '`isEnabled` before every send, so it degrades cleanly — but it is still a removable ' +
+      "module's unconditional dependency on this deferred provider. Removing mail outright " +
+      'breaks core auth email flows.',
   },
   {
     id: 'lambda',
@@ -252,6 +564,64 @@ const DEFERRED_PROVIDERS = [
 
 function log(message) {
   process.stdout.write(`${message}\n`);
+}
+
+const FRONTEND_PATH_PREFIXES = ['apps/web/', 'apps/admin/', 'packages/shared/'];
+
+function hasFrontendPaths(module) {
+  return [...module.paths, ...(module.manualPaths ?? [])].some((p) =>
+    FRONTEND_PATH_PREFIXES.some((prefix) => p.startsWith(prefix)),
+  );
+}
+
+// A recipe that names a file which no longer exists is worse than no recipe:
+// the reader assumes they mis-followed it. The generated docs list `paths`
+// verbatim, so refuse to emit or run against a stale entry.
+function assertModulePathsExist(modules) {
+  const stale = [];
+
+  for (const module of modules) {
+    for (const relPath of [...module.paths, ...(module.manualPaths ?? [])]) {
+      if (!statSync(path.join(REPO_ROOT, relPath), { throwIfNoEntry: false })) {
+        stale.push(`${module.id}: ${relPath}`);
+      }
+    }
+  }
+
+  if (stale.length > 0) {
+    throw new Error(
+      `MODULES lists paths that no longer exist — update scripts/subtraction-test.mjs:\n  ${stale.join('\n  ')}`,
+    );
+  }
+}
+
+// The `frontendFenced` flag is what switches the frontend verification on, so
+// it must never be able to disagree with the entry that carries it: a module
+// claiming it while still listing a hand-edit under apps/web, apps/admin or
+// packages/shared would advertise a proof it does not have. Cosmetic leftovers
+// live in `cosmeticSteps` precisely so they cannot be smuggled in here.
+function assertFrontendFencedClaims(modules) {
+  const violations = [];
+
+  for (const module of modules) {
+    if (!module.frontendFenced) continue;
+
+    for (const relPath of module.manualPaths ?? []) {
+      violations.push(`${module.id}: manualPaths still lists ${relPath}`);
+    }
+
+    for (const [file] of module.manualSteps ?? []) {
+      if (FRONTEND_PATH_PREFIXES.some((prefix) => file.includes(prefix))) {
+        violations.push(`${module.id}: manualSteps still lists ${file}`);
+      }
+    }
+  }
+
+  if (violations.length > 0) {
+    throw new Error(
+      `frontendFenced is claimed but not earned — fence the reference or drop the flag:\n  ${violations.join('\n  ')}`,
+    );
+  }
 }
 
 function parseArgs(argv) {
@@ -317,8 +687,11 @@ function fenceFilesUnder(treeRoot) {
 // `// <module:x>` / `// </module:x>` markers. Returns the fence hits found
 // (used by --emit-docs) and, when `write` is true, persists the stripped file.
 function stripFencesInFile(filePath, moduleId, write) {
-  const startMarker = `// <module:${moduleId}>`;
-  const endMarker = `// </module:${moduleId}>`;
+  // `//` fences cover .ts/.prisma; the `{/* */}` variants exist because a
+  // line comment is a syntax error inside JSX children, which is exactly
+  // where a frontend cross-reference lives (a <Bell /> inside a layout).
+  const startMarkers = [`// <module:${moduleId}>`, `{/* <module:${moduleId}> */}`];
+  const endMarkers = [`// </module:${moduleId}>`, `{/* </module:${moduleId}> */}`];
   const original = readFileSync(filePath, 'utf8');
   const lines = original.split('\n');
   const kept = [];
@@ -329,14 +702,14 @@ function stripFencesInFile(filePath, moduleId, write) {
   lines.forEach((line, index) => {
     const trimmed = line.trim();
 
-    if (trimmed === startMarker) {
+    if (startMarkers.includes(trimmed)) {
       inBlock = true;
       blockStartLine = index + 1;
 
       return;
     }
 
-    if (trimmed === endMarker) {
+    if (endMarkers.includes(trimmed)) {
       inBlock = false;
       hits.push({ kind: 'block', startLine: blockStartLine, endLine: index + 1 });
 
@@ -345,7 +718,7 @@ function stripFencesInFile(filePath, moduleId, write) {
 
     if (inBlock) return;
 
-    if (line.includes(startMarker)) {
+    if (startMarkers.some((marker) => line.includes(marker))) {
       hits.push({ kind: 'line', startLine: index + 1, endLine: index + 1, preview: line.trim() });
 
       return;
@@ -428,7 +801,26 @@ function copyGeneratedPrismaClient(worktreeDir) {
   }
 }
 
-function subtractionSteps(worktreeDir) {
+// The frontend half of a removal: `tsc --noEmit` catches imports of deleted
+// modules that `apps/api`'s own type-check can never see, and the vitest run
+// catches specs left behind referencing removed components.
+function frontendSteps(worktreeDir, appDir) {
+  return [
+    [
+      `${appDir} tsc --noEmit`,
+      () =>
+        run('pnpm', ['--dir', appDir, 'exec', 'tsc', '--noEmit', '-p', 'tsconfig.json'], {
+          cwd: worktreeDir,
+        }),
+    ],
+    [
+      `${appDir} unit tests`,
+      () => run('pnpm', ['--dir', appDir, 'run', 'test'], { cwd: worktreeDir }),
+    ],
+  ];
+}
+
+function subtractionSteps(worktreeDir, module) {
   return [
     ['install', () => run('pnpm', ['install', '--frozen-lockfile'], { cwd: worktreeDir })],
     [
@@ -443,18 +835,42 @@ function subtractionSteps(worktreeDir) {
           cwd: worktreeDir,
         }),
     ],
+    // tsconfig.build.json excludes apps/api/test, so the e2e suite used to sit
+    // outside the proof entirely: a spec importing a symbol the removal
+    // deleted still "passed". tsconfig.e2e.json adds test/**/*.e2e-spec.ts (and
+    // the shared factory/helpers) to the same type-check, so an unfenced
+    // cross-reference from an e2e spec fails the run instead of the reader's
+    // first `pnpm run test:e2e` after following the recipe.
+    [
+      'tsc --noEmit (e2e suite)',
+      () =>
+        run('pnpm', ['--dir', 'apps/api', 'exec', 'tsc', '--noEmit', '-p', 'tsconfig.e2e.json'], {
+          cwd: worktreeDir,
+        }),
+    ],
     ['unit tests', () => run('pnpm', ['--dir', 'apps/api', 'run', 'test'], { cwd: worktreeDir })],
+    ...(module.frontendFenced ? frontendSteps(worktreeDir, 'apps/web') : []),
+    ...(module.frontendFenced ? frontendSteps(worktreeDir, 'apps/admin') : []),
   ];
 }
 
 function runModule(module, keepOnFailure) {
   log(`\n=== ${module.id} ===`);
+
+  if (!module.frontendFenced && hasFrontendPaths(module)) {
+    log(
+      `  COVERAGE GAP  deletes frontend/shared files, but its cross-references there are ` +
+        'not fence-marked — apps/web + apps/admin are NOT verified for this module ' +
+        `(see the "not yet fence-marked" section of docs/removal/${module.id}.md).`,
+    );
+  }
+
   const worktree = createWorktree(module.id);
 
   deleteModulePaths(worktree.dir, module.paths);
   scanFences(worktree.dir, module.id, true);
 
-  for (const [name, step] of subtractionSteps(worktree.dir)) {
+  for (const [name, step] of subtractionSteps(worktree.dir, module)) {
     const result = step();
 
     if (result.status !== 0) {
@@ -519,16 +935,108 @@ function renderFenceSection(fenceResults) {
     .join('\n');
 }
 
+function renderCosmeticStepsSection(cosmeticSteps) {
+  if (!cosmeticSteps || cosmeticSteps.length === 0) {
+    return '_None — the subtraction leaves nothing behind worth tidying._';
+  }
+
+  return cosmeticSteps.map(([file, what]) => `- \`${file}\` — ${what}`).join('\n');
+}
+
+function renderManualStepsSection(manualSteps) {
+  if (!manualSteps || manualSteps.length === 0) {
+    return '_None — every cross-module reference for this module is fence-marked._';
+  }
+
+  return manualSteps.map(([file, what]) => `- \`${file}\` — ${what}`).join('\n');
+}
+
+// Pulls the Prisma models/enums out of the module's own fenced block in
+// schema.prisma, so the database section names exactly what the fence
+// deletion takes with it and can never drift from the schema.
+function prismaObjectsFor(moduleId) {
+  const schemaPath = path.join(REPO_ROOT, 'apps/api/prisma/schema.prisma');
+  const startMarker = `// <module:${moduleId}>`;
+  const endMarker = `// </module:${moduleId}>`;
+  const objects = [];
+  let inBlock = false;
+
+  for (const line of readFileSync(schemaPath, 'utf8').split('\n')) {
+    const trimmed = line.trim();
+
+    if (trimmed === startMarker) {
+      inBlock = true;
+      continue;
+    }
+
+    if (trimmed === endMarker) {
+      inBlock = false;
+      continue;
+    }
+
+    if (!inBlock) continue;
+
+    const match = trimmed.match(/^(model|enum)\s+(\w+)/);
+
+    if (match) objects.push(`${match[1]} \`${match[2]}\``);
+  }
+
+  return objects;
+}
+
+function renderDatabaseSection(moduleId) {
+  const objects = prismaObjectsFor(moduleId);
+
+  if (objects.length === 0) {
+    return '_This module owns no Prisma models — there is nothing to migrate._';
+  }
+
+  return `Stripping the fenced block in \`apps/api/prisma/schema.prisma\` (section 2) removes
+${objects.join(', ')}.
+
+Prisma migrations are an append-only history, so **editing the schema does not drop
+anything from a database that already ran those migrations** — you have to say what
+should happen to the existing tables. Pick one:
+
+- **No deployed database yet** (the usual case for a fresh clone): delete
+  \`apps/api/prisma/migrations/\` outright and re-baseline with a single migration —
+  \`pnpm --dir apps/api exec prisma migrate dev --name init\`.
+- **An existing database you need to keep**: leave the history alone and add a drop
+  migration — \`pnpm --dir apps/api exec prisma migrate dev --name drop_${moduleId.replace(/-/g, '_')}\`.
+  Read the generated SQL before applying it anywhere real: it will \`DROP TABLE\` the
+  models above, which is irreversible and takes their rows with it.`;
+}
+
 function renderModuleDoc(module) {
   const fenceResults = scanFences(REPO_ROOT, module.id, false);
-  const pathsSection = module.paths.map((p) => `- \`${p}\` (delete)`).join('\n');
+  const pathsSection = [
+    ...module.paths.map((p) => `- \`${p}\` (delete)`),
+    ...(module.manualPaths ?? []).map(
+      (p) => `- \`${p}\` (delete **by hand** — see the note under section 2)`,
+    ),
+  ].join('\n');
+  const proof = module.frontendFenced
+    ? `\`scripts/subtraction-test.mjs --module ${module.id}\` runs this whole recipe nightly, in an
+isolated worktree — API, both frontends and \`packages/shared\`. It proves everything the
+first six commands above cover: the subtracted tree type-checks (\`apps/api/src\` *and* the
+e2e suite) and its unit tests pass in all three packages. The last command is the one gap —
+the e2e suite needs a live Postgres/Redis/LocalStack, which a throwaway worktree has no
+access to, so the specs are type-checked but not executed. Run it yourself once, after
+following section 2.`
+    : `\`scripts/subtraction-test.mjs --module ${module.id}\` proves the \`apps/api\` half of this
+recipe nightly, in an isolated worktree. It deletes the frontend and
+\`packages/shared\` paths in section 1 too, but it cannot yet *verify* them, because
+the cross-references under "not yet fence-marked" above have no fence markers to
+strip — so run the last two commands yourself after following section 2.`;
 
   return `# Removing \`${module.id}\`
 
 ${module.summary}
 
-Generated by \`scripts/subtraction-test.mjs --emit-docs\` from the \`// <module:${module.id}>\`
-fence markers in the codebase — do not hand-edit; re-run the generator instead.
+Generated by \`scripts/subtraction-test.mjs --emit-docs\` — do not hand-edit; re-run
+the generator instead. Sections 1, 3, 4 and 5 come from the module's entry in that
+script; section 2 is read out of the \`// <module:${module.id}>\` fence markers in the
+codebase.
 
 ## 1. Delete
 
@@ -536,24 +1044,54 @@ ${pathsSection}
 
 ## 2. Strip cross-module references
 
+### Fence-marked (mechanical)
+
 Every line/block below carries a \`// <module:${module.id}>\` (or
-\`// <module:${module.id}>\` ... \`// </module:${module.id}>\`) fence comment. Delete
-the marked lines/blocks and the markers themselves.
+\`// <module:${module.id}>\` ... \`// </module:${module.id}>\`) fence comment — inside JSX the
+same markers appear as \`{/* <module:${module.id}> */}\`. Delete the marked lines/blocks
+and the markers themselves.
 
 ${renderFenceSection(fenceResults)}
+
+### Not yet fence-marked (edit by hand)
+
+These references are **not** fenced, so \`scripts/subtraction-test.mjs\` neither strips
+them nor proves they were handled. Any \`packages/shared/src/*\` folder marked "delete by
+hand" in section 1 belongs here too: the script leaves it in place because
+\`packages/shared/src/index.ts\` re-exports it through unfenced \`export *\` lines, so
+deleting the folder on its own would break \`build shared\`. Delete the folder and those
+export lines together. Work through the list by hand:
+
+${renderManualStepsSection(module.manualSteps)}
+
+### Optional tidy-up (proven harmless to skip)
+
+The subtracted tree type-checks and passes its tests with these left in place —
+they are cosmetic leftovers, not build breaks:
+
+${renderCosmeticStepsSection(module.cosmeticSteps)}
 
 ## 3. Drop \`.env\` variables
 
 ${renderEnvVarsSection(module.envVars)}
 
-## 4. Verify
+## 4. Database
+
+${renderDatabaseSection(module.id)}
+
+## 5. Verify
 
 \`\`\`
+pnpm --dir packages/shared run build
 pnpm --dir apps/api exec tsc --noEmit -p tsconfig.build.json
+pnpm --dir apps/api exec tsc --noEmit -p tsconfig.e2e.json
 pnpm --dir apps/api run test
+pnpm --dir apps/web run build && pnpm --dir apps/web run test
+pnpm --dir apps/admin run build && pnpm --dir apps/admin run test
+pnpm --dir apps/api run test:e2e   # needs docker compose up -d
 \`\`\`
 
-This exact recipe is proven nightly by \`scripts/subtraction-test.mjs --module ${module.id}\`.
+${proof}
 `;
 }
 
@@ -565,6 +1103,11 @@ function renderReadme() {
   const deferredProvidersList = DEFERRED_PROVIDERS.map((p) => `- **${p.id}** — ${p.note}`).join(
     '\n\n',
   );
+  const gaps = MODULES.filter((m) => !m.frontendFenced && hasFrontendPaths(m));
+  const gapList =
+    gaps.length === 0
+      ? '_None — every module is fully fence-marked and fully proven._'
+      : gaps.map((m) => `- \`${m.id}\``).join('\n');
 
   return `# Removal recipes
 
@@ -580,6 +1123,53 @@ of the app still type-checks and passes its unit tests — see
 ## Removable modules
 
 ${removableList}
+
+## Coverage: what is proven vs. documented
+
+Each recipe splits its cross-references three ways. **Fence-marked** ones carry a
+\`// <module:x>\` comment (or \`{/* <module:x> */}\` inside JSX), are stripped
+mechanically by the script, and are therefore *proven*: the subtracted tree is
+type-checked and unit-tested. **Not-yet-fence-marked** ones are listed for a human to
+apply and are *not* proven — every one of them is a hole in the proof. **Optional
+tidy-up** entries are proven harmless: the subtracted tree passes with them left in
+place, so they are only listed so a reader can clean up.
+
+Every module is fully fenced across \`apps/api\` (\`src\` *and* \`test\`), \`apps/web\`,
+\`apps/admin\` and \`packages/shared\`, so every recipe is proven across the whole monorepo:
+the runner deletes the module, strips its fences, then type-checks all three packages —
+including \`apps/api\`'s e2e suite, via \`tsconfig.e2e.json\` — and runs their unit tests.
+
+What "proven" does **not** cover: the e2e suite is type-checked, never executed. It needs a
+live Postgres/Redis/LocalStack and a throwaway worktree has none, so
+\`pnpm --dir apps/api run test:e2e\` is the one step of each recipe's section 5 that stays a
+human's job. E2E specs that exist solely to exercise a removable module's endpoints are
+deleted with it (section 1); specs that merely touch one carry fence markers (section 2) —
+so an e2e spec can no longer quietly outlive the module it tests.
+
+Modules still missing frontend fences — the runner prints a \`COVERAGE GAP\` line for each:
+
+${gapList}
+
+Closing a gap means moving a module's frontend entries out of \`manualSteps\` and into
+real fence markers, then setting \`frontendFenced: true\`, which switches on
+\`tsc --noEmit\` + \`vitest\` for both frontends in the subtracted worktree.
+\`assertFrontendFencedClaims()\` refuses to run a module that claims the flag while still
+listing a hand-edit under \`apps/web\`, \`apps/admin\` or \`packages/shared\`, so the flag
+cannot outrun the fences.
+
+Two couplings were not mechanical and are worth knowing before adding a module:
+
+- \`apps/web\`'s \`NOTIFICATION_TYPE_LABELS\` is a total \`Record\` over
+  \`NotificationTypeEnum\`, so a payment- or contact-us-shaped enum member cannot be
+  fenced out on its own. Those members stay by design: \`apps/api\`'s notification
+  dispatcher keeps the matching builders and handlers, which compile against the core
+  event bus and simply never fire. What is fenced instead is the *link target* — a
+  notification pointing at \`/settings/billing\` after that route is gone would be a real
+  dead end.
+- Removing \`statistic\` used to break \`apps/admin\`'s post-login and catch-all redirects
+  at runtime with no type error to catch it. \`ADMIN_HOME_ROUTE\` now derives from the
+  first surviving \`ADMIN_NAV_ITEMS\` entry, so fencing the Dashboard nav entry out moves
+  both redirects onto \`/users\` on its own.
 
 ## Scope note: v0.1 providers
 
@@ -611,6 +1201,9 @@ function emitDocs() {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
+
+  assertModulePathsExist(MODULES);
+  assertFrontendFencedClaims(MODULES);
 
   if (args.emitDocs) {
     emitDocs();
