@@ -53,6 +53,14 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
   // scope (see NotificationScopeFiltersInterface). `readAt` is resolved
   // from the caller's own receipt via a filtered include, never a second
   // query.
+  //
+  // Keyset pagination, not Prisma's `cursor` + `skip: 1`: this feed's `where`
+  // carries filters over mutable state (unreadOnly), so the cursor row can
+  // stop matching between two page requests. `skip: 1` exists only to drop
+  // the cursor row, and once the filter has already dropped it the offset
+  // eats the next legitimate row instead — the reader silently never sees
+  // it. Comparing ids in the `where` is correct for every filter
+  // combination because it does not depend on the cursor row surviving.
   public async findManyAfter(
     pagination: CursorPaginationInterface,
     filters: NotificationListFiltersInterface,
@@ -62,10 +70,12 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
         ...this.buildScopeWhere(filters, filters.audience),
         ...(filters.type && { type: filters.type }),
         ...(filters.unreadOnly && this.buildUnreadWhere(filters.userId)),
+        // Strictly older than the previous page's last id — UUIDv7 ids are
+        // time-ordered, so `lt` under `id: 'desc'` is "the next page".
+        ...(pagination.cursor && { id: { lt: pagination.cursor } }),
       },
       include: { receipts: { where: { userId: filters.userId } } },
       take: pagination.limit,
-      ...(pagination.cursor && { cursor: { id: pagination.cursor }, skip: 1 }),
       // UUIDv7 ids are time-ordered — id order IS creation order.
       orderBy: { id: 'desc' },
     });
