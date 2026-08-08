@@ -160,6 +160,28 @@ mounted — off in production unless `SWAGGER_ENABLED=true`, which the boot guar
 refuses without basic-auth credentials. If you add `customJs` or an inline
 script through `SwaggerCustomOptions`, widen `script-src` there deliberately.
 
+### CORS: an allowlist, and no credentials — on purpose
+
+`CORS_ORIGINS` is an exact-match allowlist (no wildcards, no regex), and
+`credentials` is **false**. That second one is a design consequence, not an
+oversight, and it should not be "fixed":
+
+- This API is bearer-only. The access token travels in the `Authorization`
+  header, the refresh token in a request body, and the socket token in the
+  Socket.IO handshake payload. Nothing in the tree sets a cookie, reads a
+  cookie, or uses any other ambient credential.
+- `Access-Control-Allow-Credentials: true` is what tells a browser it may
+  attach ambient credentials to a cross-origin call and hand the response back
+  to the calling page. With none to attach it buys nothing, while permanently
+  coupling the allowlist to a CSRF exposure: any change that widens
+  `CORS_ORIGINS` turns from "an attacker's page can make unauthenticated calls"
+  into "an attacker's page can make calls as the logged-in user".
+
+If a browser request starts failing with a CORS error, the fix is `CORS_ORIGINS`
+or the allowed-header list — never this flag. Enabling it is only correct
+alongside a deliberate move to cookie-based auth, which brings its own CSRF
+defences (`SameSite`, an anti-forgery token) that this starter does not ship.
+
 ## Real-time notifications
 
 Domain events — a new-device login, a password change, a subscription

@@ -639,6 +639,14 @@ one greppable thread, across services, repositories, and providers.
   own same-origin policy in `setup-swagger.helper.ts`, mounted only where the docs
   are mounted. A route needing different headers gets them at that hook, with the
   reason written down; controllers never set security headers.
+- **CORS is an exact-match allowlist and `credentials: false` — permanently.** This
+  API is bearer-only: tokens travel in the `Authorization` header, in request bodies,
+  and in the Socket.IO handshake payload. Nothing sets or reads a cookie, so there is
+  no ambient credential for a browser to attach and
+  `Access-Control-Allow-Credentials` would buy nothing while coupling the allowlist
+  to a CSRF exposure. A failing browser call is fixed in `CORS_ORIGINS` or the
+  allowed-header list, never by flipping that flag; flipping it is only correct as
+  part of a deliberate move to cookie auth, with the CSRF defences that implies.
 ## 10b. Caching
 
 One agnostic `CacheService` facade in front of pluggable, contract-bound stores.
