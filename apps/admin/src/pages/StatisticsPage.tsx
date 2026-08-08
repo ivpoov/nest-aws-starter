@@ -4,18 +4,18 @@ import { useState } from 'react';
 import { AuthMethodBreakdown } from '../components/Statistics/AuthMethodBreakdown';
 import { KpiTiles } from '../components/Statistics/KpiTiles';
 import { RegistrationsChart } from '../components/Statistics/RegistrationsChart';
-import { RevenueByPlanBreakdown } from '../components/Statistics/RevenueByPlanBreakdown';
-import { RevenueChart } from '../components/Statistics/RevenueChart';
+import { RevenueByPlanBreakdown } from '../components/Statistics/RevenueByPlanBreakdown'; // <module:payment>
+import { RevenueChart } from '../components/Statistics/RevenueChart'; // <module:payment>
 import { UsersByStatusBreakdown } from '../components/Statistics/UsersByStatusBreakdown';
 import { useStatisticsOverview } from '../hooks/statistics/useStatisticsOverview';
 import { useStatisticsSeries } from '../hooks/statistics/useStatisticsSeries';
 
 export function StatisticsPage(): ReactElement {
   const [registrationDays, setRegistrationDays] = useState<number>(30);
-  const [revenueDays, setRevenueDays] = useState<number>(30);
+  const [revenueDays, setRevenueDays] = useState<number>(30); // <module:payment>
   const overview = useStatisticsOverview();
   const registrations = useStatisticsSeries(StatisticsMetricEnum.REGISTRATIONS, registrationDays);
-  const revenue = useStatisticsSeries(StatisticsMetricEnum.REVENUE, revenueDays);
+  const revenue = useStatisticsSeries(StatisticsMetricEnum.REVENUE, revenueDays); // <module:payment>
 
   return (
     <div className="flex max-w-5xl flex-col gap-6">
@@ -33,6 +33,7 @@ export function StatisticsPage(): ReactElement {
         onDaysChange={setRegistrationDays}
         onRetry={registrations.reload}
       />
+      {/* <module:payment> */}
       <RevenueChart
         points={revenue.points}
         isLoading={revenue.isLoading}
@@ -48,6 +49,7 @@ export function StatisticsPage(): ReactElement {
         error={overview.error}
         onRetry={overview.reload}
       />
+      {/* </module:payment> */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <AuthMethodBreakdown
           items={overview.overview?.authMethodDistribution ?? []}

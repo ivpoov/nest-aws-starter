@@ -59,7 +59,14 @@ const SKIP_DIR_NAMES = new Set(['node_modules', 'dist', 'generated', '.git']);
 // otherwise stay).
 //
 // `manualSteps` are cross-references that are NOT fence-marked yet — they are
-// documented for the reader but cannot be stripped mechanically.
+// documented for the reader but cannot be stripped mechanically, and each one
+// is a hole in what the script proves.
+//
+// `cosmeticSteps` are leftovers the subtracted tree is *proven* to survive:
+// stale prose comments, an unused dependency in a package.json, an env var
+// nothing reads any more. They are listed so a reader can tidy up, and kept
+// separate from `manualSteps` so the flag below cannot be earned by
+// relabelling a real break as a footnote.
 //
 // `manualPaths` are folders a removal must delete that the script deliberately
 // does NOT, because doing so breaks a build step it cannot then repair. The
@@ -74,6 +81,8 @@ const SKIP_DIR_NAMES = new Set(['node_modules', 'dist', 'generated', '.git']);
 // what lets the runner type-check and unit-test both frontends after the
 // subtraction. Until a module earns that flag its frontend half is deleted but
 // unverified, and the runner prints a COVERAGE GAP line for it.
+// assertFrontendFencedClaims() below enforces the assertion mechanically, so
+// the flag cannot drift away from what the entry actually says.
 const MODULES = [
   {
     id: 'contact-us',
@@ -336,6 +345,7 @@ const MODULES = [
       'apps/admin/src/components/Statistics/RevenueByPlanBreakdown.tsx',
       'apps/admin/src/tests/RevenueChart.spec.tsx',
       'apps/admin/src/tests/RevenueByPlanBreakdown.spec.tsx',
+      'packages/shared/src/payments',
     ],
     envVars: [
       'STRIPE_ENABLED',
@@ -345,35 +355,16 @@ const MODULES = [
       'SQS_PAYMENT_WEBHOOK_QUEUE_URL',
       'PAYMENT_WEBHOOK_CONSUMER_ENABLED',
     ],
-    manualPaths: ['packages/shared/src/payments'],
-    manualSteps: [
-      [
-        'apps/web/src/App.tsx',
-        'the billing/pricing page imports and the /pricing, /billing/success, /billing/canceled and /settings/billing routes',
-      ],
-      ['apps/web/src/components/Layout/AppLayout.tsx', 'the Billing nav entry'],
-      ['apps/web/src/pages/LoginPage.tsx + RegisterPage.tsx', 'the "Pricing" links'],
-      [
-        'apps/web/src/utils/resolveNotificationLink.ts',
-        'the PAYMENT_FAILED / SUBSCRIPTION_* branches',
-      ],
-      ['apps/admin/src/App.tsx', 'the plans/transactions page imports and their routes'],
-      [
-        'apps/admin/src/components/Layout/AdminLayout.tsx',
-        'the Plans and Transactions nav entries',
-      ],
-      [
-        'apps/admin/src/pages/StatisticsPage.tsx',
-        'the RevenueChart / RevenueByPlanBreakdown imports, the revenue series state and their render blocks',
-      ],
-      ['packages/shared/src/index.ts', "the `export * from './payments/...'` lines"],
+    frontendFenced: true,
+    manualSteps: [],
+    cosmeticSteps: [
       [
         'packages/shared/src/notifications/enums/notification-type.enum.ts',
-        "the payment notification types — coupled: both apps' NOTIFICATION_TYPE_LABELS are total Records over this enum, so members and label lines must go together",
+        "the four payment notification types stay on purpose. apps/api's notification dispatcher keeps its payment builders and @OnDomainEvent handlers — they compile against the core event bus and simply never fire once nothing emits subscription.* — so the wire enum stays total, and apps/web's NOTIFICATION_TYPE_LABELS (a total Record over it) stays valid. The visible leftover is four rows in the preferences grid that can never be triggered; dropping them means dropping the enum members, the label lines, USER_NOTIFICATION_TYPES in apps/api and the dispatcher handlers together",
       ],
       [
         'apps/admin/src/components/Statistics/KpiTiles.tsx',
-        'no edit needed — it already renders a placeholder when revenue is null',
+        'no edit needed — it already renders a placeholder when revenue is null, and the revenue/mrrCents fields stay in the shared statistics contract as `number | null` for exactly this case',
       ],
     ],
   },
@@ -454,12 +445,14 @@ const MODULES = [
     envVars: ['WEBSOCKET_ENABLED', 'WEBSOCKET_HEARTBEAT_INTERVAL_MS'],
     frontendFenced: true,
     manualSteps: [
-      [
-        'apps/admin/src/pages/InboxPage.tsx + UsersPage.tsx + ActivitiesPage.tsx',
-        'comments only — they explain why each page re-syncs its deep-link query param on every change. The `?messageId=` / `?userId=` / `?type=` handling itself stays and keeps working; nothing here breaks the build',
-      ],
       ['apps/api/test/vitest.e2e.config.ts', 'the WEBSOCKET_* env pins'],
       ['turbo.json', 'the WEBSOCKET_* entries in the test:e2e env allowlist'],
+    ],
+    cosmeticSteps: [
+      [
+        'apps/admin/src/pages/InboxPage.tsx + UsersPage.tsx + ActivitiesPage.tsx',
+        'comments explaining why each page re-syncs its deep-link query param on every change. The `?messageId=` / `?userId=` / `?type=` handling itself stays and keeps working — only the notification-shaped prose goes stale',
+      ],
       [
         'apps/api/package.json + apps/web/package.json + apps/admin/package.json',
         'the socket.io / @socket.io/redis-adapter / @nestjs/websockets / @nestjs/platform-socket.io dependencies, then re-run pnpm install',
@@ -593,6 +586,35 @@ function assertModulePathsExist(modules) {
   if (stale.length > 0) {
     throw new Error(
       `MODULES lists paths that no longer exist — update scripts/subtraction-test.mjs:\n  ${stale.join('\n  ')}`,
+    );
+  }
+}
+
+// The `frontendFenced` flag is what switches the frontend verification on, so
+// it must never be able to disagree with the entry that carries it: a module
+// claiming it while still listing a hand-edit under apps/web, apps/admin or
+// packages/shared would advertise a proof it does not have. Cosmetic leftovers
+// live in `cosmeticSteps` precisely so they cannot be smuggled in here.
+function assertFrontendFencedClaims(modules) {
+  const violations = [];
+
+  for (const module of modules) {
+    if (!module.frontendFenced) continue;
+
+    for (const relPath of module.manualPaths ?? []) {
+      violations.push(`${module.id}: manualPaths still lists ${relPath}`);
+    }
+
+    for (const [file] of module.manualSteps ?? []) {
+      if (FRONTEND_PATH_PREFIXES.some((prefix) => file.includes(prefix))) {
+        violations.push(`${module.id}: manualSteps still lists ${file}`);
+      }
+    }
+  }
+
+  if (violations.length > 0) {
+    throw new Error(
+      `frontendFenced is claimed but not earned — fence the reference or drop the flag:\n  ${violations.join('\n  ')}`,
     );
   }
 }
@@ -895,6 +917,14 @@ function renderFenceSection(fenceResults) {
     .join('\n');
 }
 
+function renderCosmeticStepsSection(cosmeticSteps) {
+  if (!cosmeticSteps || cosmeticSteps.length === 0) {
+    return '_None — the subtraction leaves nothing behind worth tidying._';
+  }
+
+  return cosmeticSteps.map(([file, what]) => `- \`${file}\` — ${what}`).join('\n');
+}
+
 function renderManualStepsSection(manualSteps) {
   if (!manualSteps || manualSteps.length === 0) {
     return '_None — every cross-module reference for this module is fence-marked._';
@@ -1011,6 +1041,13 @@ export lines together. Work through the list by hand:
 
 ${renderManualStepsSection(module.manualSteps)}
 
+### Optional tidy-up (proven harmless to skip)
+
+The subtracted tree type-checks and passes its tests with these left in place —
+they are cosmetic leftovers, not build breaks:
+
+${renderCosmeticStepsSection(module.cosmeticSteps)}
+
 ## 3. Drop \`.env\` variables
 
 ${renderEnvVarsSection(module.envVars)}
@@ -1122,6 +1159,7 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
 
   assertModulePathsExist(MODULES);
+  assertFrontendFencedClaims(MODULES);
 
   if (args.emitDocs) {
     emitDocs();

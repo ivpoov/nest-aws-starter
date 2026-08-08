@@ -38,7 +38,13 @@ and the markers themselves.
   - line 9: `import { ContactUsModule } from '@modules/contact-us/contact-us.module.js'; // <module:contact-us>`
   - line 82: `ContactUsModule, // <module:contact-us>`
 - `apps/api/prisma/schema.prisma`
-  - lines 162-185 (block)
+  - lines 164-187 (block)
+- `packages/shared/src/index.ts`
+  - line 33: `export * from './contact/enums/contact-message-status.enum.js'; // <module:contact-us>`
+  - line 34: `export * from './contact/interfaces/contact-message-list-response.interface.js'; // <module:contact-us>`
+  - line 35: `export * from './contact/interfaces/contact-message-response.interface.js'; // <module:contact-us>`
+  - line 36: `export * from './contact/interfaces/create-contact-request.interface.js'; // <module:contact-us>`
+  - line 37: `export * from './contact/interfaces/update-contact-message-status-request.interface.js'; // <module:contact-us>`
 
 ### Not yet fence-marked (edit by hand)
 
@@ -57,6 +63,13 @@ export lines together. Work through the list by hand:
 - `apps/admin/src/utils/resolveNotificationLink.ts` — CONTACT_MESSAGE is its only branch — the function reduces to `return null`
 - `packages/shared/src/index.ts` — the `export * from './contact/...'` lines
 - `packages/shared/src/notifications/enums/notification-type.enum.ts` — the CONTACT_MESSAGE member — coupled with both apps' NOTIFICATION_TYPE_LABELS entries, which are total Records over this enum
+
+### Optional tidy-up (proven harmless to skip)
+
+The subtracted tree type-checks and passes its tests with these left in place —
+they are cosmetic leftovers, not build breaks:
+
+_None — the subtraction leaves nothing behind worth tidying._
 
 ## 3. Drop `.env` variables
 

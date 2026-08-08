@@ -10,10 +10,12 @@ const USER_TYPES: NotificationTypeEnum[] = [
   NotificationTypeEnum.NEW_DEVICE_LOGIN,
   NotificationTypeEnum.PASSWORD_CHANGED,
   NotificationTypeEnum.AUTH_METHOD_CHANGED,
+  // <module:payment>
   NotificationTypeEnum.SUBSCRIPTION_ACTIVATED,
   NotificationTypeEnum.SUBSCRIPTION_RENEWED,
   NotificationTypeEnum.PAYMENT_FAILED,
   NotificationTypeEnum.SUBSCRIPTION_ENDED,
+  // </module:payment>
 ];
 
 const ADMIN_TYPES: NotificationTypeEnum[] = [
@@ -34,6 +36,7 @@ describe('resolveNotificationLink', () => {
     );
   });
 
+  // <module:payment>
   it('sends every billing-related type to the billing page', () => {
     expect(resolveNotificationLink(NotificationTypeEnum.PAYMENT_FAILED)).toBe('/settings/billing');
     expect(resolveNotificationLink(NotificationTypeEnum.SUBSCRIPTION_ACTIVATED)).toBe(
@@ -46,6 +49,7 @@ describe('resolveNotificationLink', () => {
       '/settings/billing',
     );
   });
+  // </module:payment>
 
   it.each(
     ADMIN_TYPES,

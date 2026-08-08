@@ -7,9 +7,9 @@ import { ActivitiesPage } from './pages/ActivitiesPage';
 import { InboxPage } from './pages/InboxPage';
 import { LoginPage } from './pages/LoginPage';
 import { NotificationHistoryPage } from './pages/NotificationHistoryPage'; // <module:notification>
-import { PlansPage } from './pages/PlansPage';
+import { PlansPage } from './pages/PlansPage'; // <module:payment>
 import { StatisticsPage } from './pages/StatisticsPage';
-import { TransactionsPage } from './pages/TransactionsPage';
+import { TransactionsPage } from './pages/TransactionsPage'; // <module:payment>
 import { UsersPage } from './pages/UsersPage';
 
 export function App(): ReactElement {
@@ -23,8 +23,10 @@ export function App(): ReactElement {
           <Route element={<AdminLayout />}>
             <Route path="/dashboard" element={<StatisticsPage />} />
             <Route path="/users" element={<UsersPage />} />
+            {/* <module:payment> */}
             <Route path="/plans" element={<PlansPage />} />
             <Route path="/transactions" element={<TransactionsPage />} />
+            {/* </module:payment> */}
             <Route path="/activities" element={<ActivitiesPage />} />
             <Route path="/inbox" element={<InboxPage />} />
             {/* <module:notification> */}

@@ -7,10 +7,12 @@ import { NotificationTypeEnum } from '@nest-aws-starter/shared';
 // here — apps/web has no admin section) resolve to null: the item still
 // marks read on click, it just does not navigate.
 const NOTIFICATION_LINKS: Partial<Record<NotificationTypeEnum, string>> = {
+  // <module:payment>
   [NotificationTypeEnum.PAYMENT_FAILED]: '/settings/billing',
   [NotificationTypeEnum.SUBSCRIPTION_ACTIVATED]: '/settings/billing',
   [NotificationTypeEnum.SUBSCRIPTION_RENEWED]: '/settings/billing',
   [NotificationTypeEnum.SUBSCRIPTION_ENDED]: '/settings/billing',
+  // </module:payment>
   [NotificationTypeEnum.AUTH_METHOD_CHANGED]: '/settings/methods',
   [NotificationTypeEnum.NEW_DEVICE_LOGIN]: '/settings/sessions',
   // The body tells the user to secure the account if the change was not

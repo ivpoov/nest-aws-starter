@@ -3,9 +3,9 @@ import { Navigate, Route, Routes } from 'react-router';
 import { AppLayout } from './components/Layout/AppLayout';
 import { AuthGate } from './components/Layout/AuthGate';
 import { NotificationSocketProvider } from './contexts/NotificationSocketContext'; // <module:notification>
-import { BillingCanceledPage } from './pages/BillingCanceledPage';
-import { BillingPage } from './pages/BillingPage';
-import { BillingSuccessPage } from './pages/BillingSuccessPage';
+import { BillingCanceledPage } from './pages/BillingCanceledPage'; // <module:payment>
+import { BillingPage } from './pages/BillingPage'; // <module:payment>
+import { BillingSuccessPage } from './pages/BillingSuccessPage'; // <module:payment>
 import { ContactPage } from './pages/ContactPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { LoginPage } from './pages/LoginPage';
@@ -13,7 +13,7 @@ import { MethodsPage } from './pages/MethodsPage';
 import { NotesPage } from './pages/NotesPage';
 import { NotificationPreferencesPage } from './pages/NotificationPreferencesPage'; // <module:notification>
 import { OauthCallbackPage } from './pages/OauthCallbackPage';
-import { PricingPage } from './pages/PricingPage';
+import { PricingPage } from './pages/PricingPage'; // <module:payment>
 import { ProfilePage } from './pages/ProfilePage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
@@ -30,9 +30,11 @@ export function App(): ReactElement {
       <Route path="/password/forgot" element={<ForgotPasswordPage />} />
       <Route path="/password/reset" element={<ResetPasswordPage />} />
       <Route path="/contact" element={<ContactPage />} />
+      {/* <module:payment> */}
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/billing/success" element={<BillingSuccessPage />} />
       <Route path="/billing/canceled" element={<BillingCanceledPage />} />
+      {/* </module:payment> */}
       <Route element={<AuthGate />}>
         {/* <module:notification> */}
         <Route element={<NotificationSocketProvider />}>
@@ -42,7 +44,9 @@ export function App(): ReactElement {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/settings/methods" element={<MethodsPage />} />
             <Route path="/settings/sessions" element={<SessionsPage />} />
+            {/* <module:payment> */}
             <Route path="/settings/billing" element={<BillingPage />} />
+            {/* </module:payment> */}
             {/* <module:notification> */}
             <Route path="/settings/notifications" element={<NotificationPreferencesPage />} />
             {/* </module:notification> */}

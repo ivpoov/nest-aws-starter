@@ -63,7 +63,7 @@ codebase.
 - `apps/admin/src/components/Statistics/RevenueByPlanBreakdown.tsx` (delete)
 - `apps/admin/src/tests/RevenueChart.spec.tsx` (delete)
 - `apps/admin/src/tests/RevenueByPlanBreakdown.spec.tsx` (delete)
-- `packages/shared/src/payments` (delete **by hand** — see the note under section 2)
+- `packages/shared/src/payments` (delete)
 
 ## 2. Strip cross-module references
 
@@ -129,11 +129,64 @@ and the markers themselves.
 - `apps/api/prisma/schema.prisma`
   - line 44: `subscriptions           Subscription[] // <module:payment>`
   - line 45: `paymentTransactions     PaymentTransaction[] // <module:payment>`
-  - lines 249-345 (block)
+  - lines 251-347 (block)
 - `apps/api/prisma/seed.ts`
   - lines 15-40 (block)
   - lines 48-64 (block)
   - lines 70-74 (block)
+- `apps/web/src/App.tsx`
+  - line 6: `import { BillingCanceledPage } from './pages/BillingCanceledPage'; // <module:payment>`
+  - line 7: `import { BillingPage } from './pages/BillingPage'; // <module:payment>`
+  - line 8: `import { BillingSuccessPage } from './pages/BillingSuccessPage'; // <module:payment>`
+  - line 16: `import { PricingPage } from './pages/PricingPage'; // <module:payment>`
+  - lines 33-37 (block)
+  - lines 47-49 (block)
+- `apps/web/src/components/Layout/AppLayout.tsx`
+  - line 14: `{ to: '/settings/billing', label: 'Billing' }, // <module:payment>`
+- `apps/web/src/pages/LoginPage.tsx`
+  - lines 65-70 (block)
+- `apps/web/src/pages/RegisterPage.tsx`
+  - lines 63-68 (block)
+- `apps/web/src/tests/resolveNotificationLink.spec.ts`
+  - lines 13-18 (block)
+  - lines 39-52 (block)
+- `apps/web/src/utils/resolveNotificationLink.ts`
+  - lines 10-15 (block)
+- `apps/admin/src/App.tsx`
+  - line 10: `import { PlansPage } from './pages/PlansPage'; // <module:payment>`
+  - line 12: `import { TransactionsPage } from './pages/TransactionsPage'; // <module:payment>`
+  - lines 26-29 (block)
+- `apps/admin/src/components/Layout/AdminLayout.tsx`
+  - line 11: `{ to: '/plans', label: 'Plans' }, // <module:payment>`
+  - line 12: `{ to: '/transactions', label: 'Transactions' }, // <module:payment>`
+- `apps/admin/src/pages/StatisticsPage.tsx`
+  - line 7: `import { RevenueByPlanBreakdown } from '../components/Statistics/RevenueByPlanBreakdown'; // <module:payment>`
+  - line 8: `import { RevenueChart } from '../components/Statistics/RevenueChart'; // <module:payment>`
+  - line 15: `const [revenueDays, setRevenueDays] = useState<number>(30); // <module:payment>`
+  - line 18: `const revenue = useStatisticsSeries(StatisticsMetricEnum.REVENUE, revenueDays); // <module:payment>`
+  - lines 36-52 (block)
+- `apps/admin/src/tests/StatisticsPage.spec.tsx`
+  - lines 29-37 (block)
+  - lines 102-144 (block)
+- `packages/shared/src/index.ts`
+  - line 64: `export * from './payments/constants/payment-error-codes.constants.js'; // <module:payment>`
+  - line 65: `export * from './payments/enums/subscription-status.enum.js'; // <module:payment>`
+  - line 66: `export * from './payments/enums/transaction-status.enum.js'; // <module:payment>`
+  - line 67: `export * from './payments/interfaces/admin-plan-list-response.interface.js'; // <module:payment>`
+  - line 68: `export * from './payments/interfaces/admin-plan-response.interface.js'; // <module:payment>`
+  - line 69: `export * from './payments/interfaces/admin-transaction-list-response.interface.js'; // <module:payment>`
+  - line 70: `export * from './payments/interfaces/admin-transaction-response.interface.js'; // <module:payment>`
+  - line 71: `export * from './payments/interfaces/checkout-response.interface.js'; // <module:payment>`
+  - line 72: `export * from './payments/interfaces/create-checkout-request.interface.js'; // <module:payment>`
+  - line 73: `export * from './payments/interfaces/create-plan-request.interface.js'; // <module:payment>`
+  - line 74: `export * from './payments/interfaces/public-plan-response.interface.js'; // <module:payment>`
+  - line 75: `export * from './payments/interfaces/public-plans-response.interface.js'; // <module:payment>`
+  - line 76: `export * from './payments/interfaces/subscription-response.interface.js'; // <module:payment>`
+  - line 77: `export * from './payments/interfaces/transaction-list-response.interface.js'; // <module:payment>`
+  - line 78: `export * from './payments/interfaces/transaction-response.interface.js'; // <module:payment>`
+  - line 79: `export * from './payments/interfaces/update-plan-activation-request.interface.js'; // <module:payment>`
+  - line 80: `export * from './payments/interfaces/update-plan-request.interface.js'; // <module:payment>`
+  - line 81: `export * from './payments/types/payment-error-code.type.js'; // <module:payment>`
 
 ### Not yet fence-marked (edit by hand)
 
@@ -144,16 +197,15 @@ hand" in section 1 belongs here too: the script leaves it in place because
 deleting the folder on its own would break `build shared`. Delete the folder and those
 export lines together. Work through the list by hand:
 
-- `apps/web/src/App.tsx` — the billing/pricing page imports and the /pricing, /billing/success, /billing/canceled and /settings/billing routes
-- `apps/web/src/components/Layout/AppLayout.tsx` — the Billing nav entry
-- `apps/web/src/pages/LoginPage.tsx + RegisterPage.tsx` — the "Pricing" links
-- `apps/web/src/utils/resolveNotificationLink.ts` — the PAYMENT_FAILED / SUBSCRIPTION_* branches
-- `apps/admin/src/App.tsx` — the plans/transactions page imports and their routes
-- `apps/admin/src/components/Layout/AdminLayout.tsx` — the Plans and Transactions nav entries
-- `apps/admin/src/pages/StatisticsPage.tsx` — the RevenueChart / RevenueByPlanBreakdown imports, the revenue series state and their render blocks
-- `packages/shared/src/index.ts` — the `export * from './payments/...'` lines
-- `packages/shared/src/notifications/enums/notification-type.enum.ts` — the payment notification types — coupled: both apps' NOTIFICATION_TYPE_LABELS are total Records over this enum, so members and label lines must go together
-- `apps/admin/src/components/Statistics/KpiTiles.tsx` — no edit needed — it already renders a placeholder when revenue is null
+_None — every cross-module reference for this module is fence-marked._
+
+### Optional tidy-up (proven harmless to skip)
+
+The subtracted tree type-checks and passes its tests with these left in place —
+they are cosmetic leftovers, not build breaks:
+
+- `packages/shared/src/notifications/enums/notification-type.enum.ts` — the four payment notification types stay on purpose. apps/api's notification dispatcher keeps its payment builders and @OnDomainEvent handlers — they compile against the core event bus and simply never fire once nothing emits subscription.* — so the wire enum stays total, and apps/web's NOTIFICATION_TYPE_LABELS (a total Record over it) stays valid. The visible leftover is four rows in the preferences grid that can never be triggered; dropping them means dropping the enum members, the label lines, USER_NOTIFICATION_TYPES in apps/api and the dispatcher handlers together
+- `apps/admin/src/components/Statistics/KpiTiles.tsx` — no edit needed — it already renders a placeholder when revenue is null, and the revenue/mrrCents fields stay in the shared statistics contract as `number | null` for exactly this case
 
 ## 3. Drop `.env` variables
 
@@ -191,8 +243,5 @@ pnpm --dir apps/web run build && pnpm --dir apps/web run test
 pnpm --dir apps/admin run build && pnpm --dir apps/admin run test
 ```
 
-`scripts/subtraction-test.mjs --module payment` proves the `apps/api` half of this
-recipe nightly, in an isolated worktree. It deletes the frontend and
-`packages/shared` paths in section 1 too, but it cannot yet *verify* them, because
-the cross-references under "not yet fence-marked" above have no fence markers to
-strip — so run the last two commands yourself after following section 2.
+`scripts/subtraction-test.mjs --module payment` proves this whole recipe nightly, in
+an isolated worktree — API, both frontends and `packages/shared`.

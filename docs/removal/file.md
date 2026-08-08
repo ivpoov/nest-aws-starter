@@ -33,7 +33,7 @@ and the markers themselves.
   - line 77: `FileModule, // <module:file>`
 - `apps/api/prisma/schema.prisma`
   - line 42: `files                   File[] // <module:file>`
-  - lines 187-221 (block)
+  - lines 189-223 (block)
 
 ### Not yet fence-marked (edit by hand)
 
@@ -49,6 +49,13 @@ export lines together. Work through the list by hand:
 - `apps/web/src/constants/file-upload.constants.ts` — the ATTACHMENT entries only — the AVATAR entries are used by ProfilePage
 - `packages/shared/src/index.ts` — the ./files/* export lines except the file-intent enum
 - `apps/web/src/utils/validateFileUpload.ts + apiClient.ts` — keep both — the avatar upload path uses them
+
+### Optional tidy-up (proven harmless to skip)
+
+The subtracted tree type-checks and passes its tests with these left in place —
+they are cosmetic leftovers, not build breaks:
+
+_None — the subtraction leaves nothing behind worth tidying._
 
 ## 3. Drop `.env` variables
 

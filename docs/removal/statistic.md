@@ -45,6 +45,14 @@ and the markers themselves.
 - `apps/api/src/app.module.ts`
   - line 22: `import { StatisticModule } from '@modules/statistic/statistic.module.js'; // <module:statistic>`
   - line 81: `StatisticModule, // <module:statistic>`
+- `packages/shared/src/index.ts`
+  - line 84: `export * from './statistics/enums/statistics-metric.enum.js'; // <module:statistic>`
+  - line 85: `export * from './statistics/interfaces/statistics-count-breakdown.interface.js'; // <module:statistic>`
+  - line 86: `export * from './statistics/interfaces/statistics-overview-response.interface.js'; // <module:statistic>`
+  - line 87: `export * from './statistics/interfaces/statistics-revenue-by-plan.interface.js'; // <module:statistic>`
+  - line 88: `export * from './statistics/interfaces/statistics-series-point.interface.js'; // <module:statistic>`
+  - line 89: `export * from './statistics/interfaces/statistics-series-response.interface.js'; // <module:statistic>`
+  - line 90: `export * from './statistics/interfaces/statistics-totals.interface.js'; // <module:statistic>`
 
 ### Not yet fence-marked (edit by hand)
 
@@ -59,6 +67,13 @@ export lines together. Work through the list by hand:
 - `apps/admin/src/pages/LoginPage.tsx` — repoint the post-login navigate away from /dashboard — also runtime-only
 - `apps/admin/src/components/Layout/AdminLayout.tsx` — the Dashboard nav entry
 - `packages/shared/src/index.ts` — the `export * from './statistics/...'` lines
+
+### Optional tidy-up (proven harmless to skip)
+
+The subtracted tree type-checks and passes its tests with these left in place —
+they are cosmetic leftovers, not build breaks:
+
+_None — the subtraction leaves nothing behind worth tidying._
 
 ## 3. Drop `.env` variables
 

@@ -60,10 +60,12 @@ export function RegisterPage(): ReactElement {
               Already have an account?
             </Link>
             {' · '}
+            {/* <module:payment> */}
             <Link to="/pricing" className="hover:text-content">
               Pricing
             </Link>
             {' · '}
+            {/* </module:payment> */}
             <Link to="/contact" className="hover:text-content">
               Contact us
             </Link>

@@ -8,8 +8,8 @@ import { ThemeToggle } from '../ui/ThemeToggle';
 const NAV_ITEMS: ReadonlyArray<{ readonly to: string; readonly label: string }> = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/users', label: 'Users' },
-  { to: '/plans', label: 'Plans' },
-  { to: '/transactions', label: 'Transactions' },
+  { to: '/plans', label: 'Plans' }, // <module:payment>
+  { to: '/transactions', label: 'Transactions' }, // <module:payment>
   { to: '/activities', label: 'Activity' },
   { to: '/inbox', label: 'Inbox' },
   { to: '/notifications', label: 'Notifications' }, // <module:notification>

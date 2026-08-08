@@ -39,6 +39,13 @@ export lines together. Work through the list by hand:
 
 _None — every cross-module reference for this module is fence-marked._
 
+### Optional tidy-up (proven harmless to skip)
+
+The subtracted tree type-checks and passes its tests with these left in place —
+they are cosmetic leftovers, not build breaks:
+
+_None — the subtraction leaves nothing behind worth tidying._
+
 ## 3. Drop `.env` variables
 
 - `GOOGLE_OAUTH_ENABLED`

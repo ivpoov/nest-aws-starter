@@ -43,8 +43,6 @@ line for each. Modules in that state:
 - `statistic`
 - `api-key`
 - `file`
-- `payment`
-- `notification`
 
 Closing a gap means moving that module's frontend entries out of `manualSteps` and into
 real fence markers — including the `{/* <module:x> */}` form for references that sit

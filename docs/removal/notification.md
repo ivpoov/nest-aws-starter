@@ -24,8 +24,8 @@ codebase.
 - `apps/web/src/constants/notification-events.constants.ts` (delete)
 - `apps/web/src/constants/notification-list.constants.ts` (delete)
 - `apps/web/src/constants/notification-socket.constants.ts` (delete)
+- `apps/web/src/constants/notification-unread-count-poll.constants.ts` (delete)
 - `apps/web/src/constants/notification-type-labels.constants.ts` (delete)
-- `apps/web/src/interfaces/fetch-notifications-params.interface.ts` (delete)
 - `apps/web/src/interfaces/notification-socket-state.interface.ts` (delete)
 - `apps/web/src/interfaces/use-notification-list-result.interface.ts` (delete)
 - `apps/web/src/interfaces/use-notification-preferences-result.interface.ts` (delete)
@@ -34,8 +34,11 @@ codebase.
 - `apps/web/src/utils/getSocketBaseUrl.ts` (delete)
 - `apps/web/src/utils/resolveNotificationLink.ts` (delete)
 - `apps/web/src/tests/NotificationBell.spec.tsx` (delete)
+- `apps/web/src/tests/NotificationDropdown.spec.tsx` (delete)
 - `apps/web/src/tests/PreferencesGrid.spec.tsx` (delete)
 - `apps/web/src/tests/notificationSocketReducer.spec.ts` (delete)
+- `apps/web/src/tests/notificationsApi.spec.ts` (delete)
+- `apps/web/src/tests/resolveNotificationLink.spec.ts` (delete)
 - `apps/web/src/tests/useNotificationList.spec.ts` (delete)
 - `apps/web/src/tests/useNotificationPreferences.spec.ts` (delete)
 - `apps/web/src/tests/useNotificationSocket.spec.ts` (delete)
@@ -48,7 +51,6 @@ codebase.
 - `apps/admin/src/constants/notification-history.constants.ts` (delete)
 - `apps/admin/src/constants/notification-socket.constants.ts` (delete)
 - `apps/admin/src/constants/notification-unread-count-poll.constants.ts` (delete)
-- `apps/admin/src/interfaces/fetch-notifications-params.interface.ts` (delete)
 - `apps/admin/src/interfaces/notification-history-filters.interface.ts` (delete)
 - `apps/admin/src/interfaces/notification-socket-state.interface.ts` (delete)
 - `apps/admin/src/interfaces/use-notification-history-filters-result.interface.ts` (delete)
@@ -58,13 +60,15 @@ codebase.
 - `apps/admin/src/utils/getSocketBaseUrl.ts` (delete)
 - `apps/admin/src/utils/resolveNotificationLink.ts` (delete)
 - `apps/admin/src/tests/NotificationBell.spec.tsx` (delete)
+- `apps/admin/src/tests/NotificationDropdown.spec.tsx` (delete)
 - `apps/admin/src/tests/NotificationHistoryPage.spec.tsx` (delete)
+- `apps/admin/src/tests/notificationsApi.spec.ts` (delete)
 - `apps/admin/src/tests/notificationSocketReducer.spec.ts` (delete)
 - `apps/admin/src/tests/resolveNotificationLink.spec.ts` (delete)
 - `apps/admin/src/tests/useNotificationHistoryFilters.spec.tsx` (delete)
 - `apps/admin/src/tests/useNotificationList.spec.tsx` (delete)
 - `apps/admin/src/tests/useNotificationSocket.spec.tsx` (delete)
-- `packages/shared/src/notifications` (delete **by hand** — see the note under section 2)
+- `packages/shared/src/notifications` (delete)
 
 ## 2. Strip cross-module references
 
@@ -82,16 +86,52 @@ and the markers themselves.
   - line 19: `import { websocketConfig } from '@configs/websocket.config.js'; // <module:notification>`
   - line 40: `websocketConfig, // <module:notification>`
 - `apps/api/src/main.ts`
-  - line 7: `import { RedisIoAdapter } from '@modules/notification/adapters/redis-io.adapter.js'; // <module:notification>`
-  - lines 52-59 (block)
+  - line 7: `import { installWebsocketAdapter } from '@modules/notification/helpers/install-websocket-adapter.helper.js'; // <module:notification>`
+  - lines 52-58 (block)
 - `apps/api/test/app.factory.ts`
-  - line 2: `import { RedisIoAdapter } from '@modules/notification/adapters/redis-io.adapter.js'; // <module:notification>`
-  - lines 20-27 (block)
+  - line 2: `import { installWebsocketAdapter } from '@modules/notification/helpers/install-websocket-adapter.helper.js'; // <module:notification>`
+  - lines 20-26 (block)
 - `apps/api/test/webhook-consumer.e2e-spec.ts`
   - lines 154-171 (block)
 - `apps/api/prisma/schema.prisma`
   - line 46: `notificationPreferences NotificationPreference[] // <module:notification>`
-  - lines 347-393 (block)
+  - line 47: `notifications           Notification[] // <module:notification>`
+  - line 48: `notificationReceipts    NotificationReceipt[] // <module:notification>`
+  - lines 349-397 (block)
+- `apps/web/src/App.tsx`
+  - line 5: `import { NotificationSocketProvider } from './contexts/NotificationSocketContext'; // <module:notification>`
+  - line 14: `import { NotificationPreferencesPage } from './pages/NotificationPreferencesPage'; // <module:notification>`
+  - lines 39-41 (block)
+  - lines 50-52 (block)
+  - lines 54-56 (block)
+- `apps/web/src/components/Layout/AppLayout.tsx`
+  - line 5: `import { NotificationBell } from '../Notifications/NotificationBell'; // <module:notification>`
+  - line 15: `{ to: '/settings/notifications', label: 'Notifications' }, // <module:notification>`
+  - lines 40-42 (block)
+- `apps/web/src/tests/AppLayout.spec.tsx`
+  - lines 7-16 (block)
+- `apps/admin/src/App.tsx`
+  - line 5: `import { NotificationSocketProvider } from './contexts/NotificationSocketContext'; // <module:notification>`
+  - line 9: `import { NotificationHistoryPage } from './pages/NotificationHistoryPage'; // <module:notification>`
+  - lines 20-22 (block)
+  - lines 32-34 (block)
+  - lines 36-38 (block)
+- `apps/admin/src/components/Layout/AdminLayout.tsx`
+  - line 5: `import { NotificationBell } from '../Notifications/NotificationBell'; // <module:notification>`
+  - line 15: `{ to: '/notifications', label: 'Notifications' }, // <module:notification>`
+  - lines 60-62 (block)
+- `packages/shared/src/index.ts`
+  - line 53: `export * from './notifications/enums/notification-audience.enum.js'; // <module:notification>`
+  - line 54: `export * from './notifications/enums/notification-channel.enum.js'; // <module:notification>`
+  - line 55: `export * from './notifications/enums/notification-type.enum.js'; // <module:notification>`
+  - line 56: `export * from './notifications/interfaces/notification-list-response.interface.js'; // <module:notification>`
+  - line 57: `export * from './notifications/interfaces/notification-preference-response.interface.js'; // <module:notification>`
+  - line 58: `export * from './notifications/interfaces/notification-preferences-response.interface.js'; // <module:notification>`
+  - line 59: `export * from './notifications/interfaces/notification-response.interface.js'; // <module:notification>`
+  - line 60: `export * from './notifications/interfaces/notifications-query-request.interface.js'; // <module:notification>`
+  - line 61: `export * from './notifications/interfaces/unread-count-response.interface.js'; // <module:notification>`
+  - line 62: `export * from './notifications/interfaces/update-notification-preference-request.interface.js'; // <module:notification>`
+  - line 63: `export * from './notifications/interfaces/update-notification-preferences-request.interface.js'; // <module:notification>`
 
 ### Not yet fence-marked (edit by hand)
 
@@ -102,15 +142,15 @@ hand" in section 1 belongs here too: the script leaves it in place because
 deleting the folder on its own would break `build shared`. Delete the folder and those
 export lines together. Work through the list by hand:
 
-- `apps/web/src/App.tsx` — the NotificationSocketProvider import + JSX wrapper, and the /settings/notifications route with its page import
-- `apps/web/src/components/Layout/AppLayout.tsx` — the NotificationBell import + render, and the Notifications nav entry
-- `apps/web/src/tests/AppLayout.spec.tsx` — the vi.mock of the NotificationBell component
-- `apps/admin/src/App.tsx` — the NotificationSocketProvider import + JSX wrapper, and the /notifications route with its page import
-- `apps/admin/src/components/Layout/AdminLayout.tsx` — the NotificationBell import + render, and the Notifications nav entry
-- `apps/admin/src/pages/InboxPage.tsx` — comments referencing the CONTACT_MESSAGE deep link (the ?messageId= handling itself stays)
-- `packages/shared/src/index.ts` — the `export * from './notifications/...'` lines
 - `apps/api/test/vitest.e2e.config.ts` — the WEBSOCKET_* env pins
 - `turbo.json` — the WEBSOCKET_* entries in the test:e2e env allowlist
+
+### Optional tidy-up (proven harmless to skip)
+
+The subtracted tree type-checks and passes its tests with these left in place —
+they are cosmetic leftovers, not build breaks:
+
+- `apps/admin/src/pages/InboxPage.tsx + UsersPage.tsx + ActivitiesPage.tsx` — comments explaining why each page re-syncs its deep-link query param on every change. The `?messageId=` / `?userId=` / `?type=` handling itself stays and keeps working — only the notification-shaped prose goes stale
 - `apps/api/package.json + apps/web/package.json + apps/admin/package.json` — the socket.io / @socket.io/redis-adapter / @nestjs/websockets / @nestjs/platform-socket.io dependencies, then re-run pnpm install
 
 ## 3. Drop `.env` variables
@@ -145,8 +185,5 @@ pnpm --dir apps/web run build && pnpm --dir apps/web run test
 pnpm --dir apps/admin run build && pnpm --dir apps/admin run test
 ```
 
-`scripts/subtraction-test.mjs --module notification` proves the `apps/api` half of this
-recipe nightly, in an isolated worktree. It deletes the frontend and
-`packages/shared` paths in section 1 too, but it cannot yet *verify* them, because
-the cross-references under "not yet fence-marked" above have no fence markers to
-strip — so run the last two commands yourself after following section 2.
+`scripts/subtraction-test.mjs --module notification` proves this whole recipe nightly, in
+an isolated worktree — API, both frontends and `packages/shared`.

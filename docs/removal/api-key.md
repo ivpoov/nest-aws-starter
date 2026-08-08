@@ -26,7 +26,15 @@ and the markers themselves.
   - line 83: `ApiKeyModule, // <module:api-key>`
 - `apps/api/prisma/schema.prisma`
   - line 43: `apiKeys                 ApiKey[] // <module:api-key>`
-  - lines 223-247 (block)
+  - lines 225-249 (block)
+- `packages/shared/src/index.ts`
+  - line 6: `export * from './api-keys/constants/api-key-error-codes.constants.js'; // <module:api-key>`
+  - line 7: `export * from './api-keys/interfaces/api-demo-whoami-response.interface.js'; // <module:api-key>`
+  - line 8: `export * from './api-keys/interfaces/api-key-list-response.interface.js'; // <module:api-key>`
+  - line 9: `export * from './api-keys/interfaces/api-key-response.interface.js'; // <module:api-key>`
+  - line 10: `export * from './api-keys/interfaces/create-api-key-request.interface.js'; // <module:api-key>`
+  - line 11: `export * from './api-keys/interfaces/create-api-key-response.interface.js'; // <module:api-key>`
+  - line 12: `export * from './api-keys/types/api-key-error-code.type.js'; // <module:api-key>`
 
 ### Not yet fence-marked (edit by hand)
 
@@ -39,6 +47,13 @@ export lines together. Work through the list by hand:
 
 - `packages/shared/src/index.ts` — the `export * from './api-keys/...'` lines
 - `apps/web, apps/admin` — nothing — this module has no frontend surface
+
+### Optional tidy-up (proven harmless to skip)
+
+The subtracted tree type-checks and passes its tests with these left in place —
+they are cosmetic leftovers, not build breaks:
+
+_None — the subtraction leaves nothing behind worth tidying._
 
 ## 3. Drop `.env` variables
 
