@@ -182,6 +182,17 @@ or the allowed-header list — never this flag. Enabling it is only correct
 alongside a deliberate move to cookie-based auth, which brings its own CSRF
 defences (`SameSite`, an anti-forgery token) that this starter does not ship.
 
+### Client ip and `TRUST_PROXY`
+
+`X-Forwarded-For` is attacker-controlled unless something trustworthy sets it.
+`TRUST_PROXY` is therefore honoured in exactly two places and nowhere else: the
+Fastify adapter (which is what makes `request.ip` derive from the header) and
+`ThrottlerBehindProxyGuard`. With `TRUST_PROXY=false` the header is ignored
+outright, so a client cannot mint itself fresh rate-limit budgets — or a clean
+suspicious-login history — by inventing one. Set it to `true` only when every
+request genuinely arrives through a proxy you control (ALB, CloudFront) that
+overwrites the header; if clients can reach the API directly, leave it off.
+
 ## Real-time notifications
 
 Domain events — a new-device login, a password change, a subscription
