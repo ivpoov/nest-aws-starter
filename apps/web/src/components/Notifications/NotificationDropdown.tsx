@@ -1,5 +1,6 @@
 import type { NotificationResponseInterface } from '@nest-aws-starter/shared';
 import type { ReactElement } from 'react';
+import { useNotificationSocketContext } from '../../contexts/NotificationSocketContext';
 import { useNotificationList } from '../../hooks/notifications/useNotificationList';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
@@ -14,6 +15,7 @@ interface NotificationDropdownPropsInterface {
 export function NotificationDropdown({
   onItemOpened,
 }: NotificationDropdownPropsInterface): ReactElement {
+  const { isConnected } = useNotificationSocketContext();
   const { items, isLoading, isLoadingMore, hasMore, error, loadMore, markRead, markAllRead } =
     useNotificationList();
   const hasUnread: boolean = items.some(
@@ -34,6 +36,15 @@ export function NotificationDropdown({
           </button>
         ) : null}
       </div>
+      {!isConnected ? (
+        <p
+          role="status"
+          className="mb-3 rounded-md border border-edge bg-surface px-2 py-1.5 text-xs text-content-muted"
+        >
+          Live updates are currently unavailable — the badge refreshes periodically and this list
+          refreshes when reopened.
+        </p>
+      ) : null}
       {isLoading ? <Loader /> : null}
       {!isLoading && error ? <ErrorMessage error={error} /> : null}
       {!isLoading && items.length === 0 ? <EmptyState message="No notifications yet" /> : null}
