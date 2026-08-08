@@ -99,6 +99,16 @@ export class NotificationGateway
     await this.joinRooms(client, user);
     this.sockets.add(client);
 
+    // A client that dropped during the async verify/join windows has already
+    // fired handleDisconnect (against a set it was never in) — without this
+    // re-check its dead socket would sit in the set forever, paying one
+    // token verify + Redis hit per sweep.
+    if (!client.connected) {
+      this.sockets.delete(client);
+
+      return;
+    }
+
     this.logger.debug(`WS connected: user=${user.id} socket=${client.id}`);
   }
 
@@ -158,6 +168,14 @@ export class NotificationGateway
   }
 
   private async revalidateOne(client: AuthenticatedSocketType): Promise<void> {
+    // Belt and braces for the handshake-window race above: a socket that is
+    // already dead needs no re-verify, only eviction from the set.
+    if (!client.connected) {
+      this.sockets.delete(client);
+
+      return;
+    }
+
     try {
       await this.tokenService.verifyAccessToken(client.data.token);
     } catch (error) {
