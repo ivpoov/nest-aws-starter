@@ -8,10 +8,12 @@
 //
 // Coverage: a module's `paths` cover apps/api, both frontends and
 // packages/shared, so the recipes list every file a removal touches. The
-// *verification* only extends to the frontends for modules flagged
-// `frontendFenced` — the rest still need their apps/web / apps/admin /
-// packages/shared cross-references converted from `manualSteps` into real
-// fence markers. Those modules print a COVERAGE GAP line when they run.
+// *verification* extends to the frontends for modules flagged
+// `frontendFenced` — every module carries that flag today, so each removal is
+// type-checked and unit-tested across apps/api, apps/web and apps/admin. A
+// module that still needs its apps/web / apps/admin / packages/shared
+// cross-references converted from `manualSteps` into real fence markers
+// prints a COVERAGE GAP line when it runs.
 //
 // Usage:
 //   node scripts/subtraction-test.mjs                  # run every module
@@ -1094,31 +1096,41 @@ ${removableList}
 
 ## Coverage: what is proven vs. documented
 
-Each recipe has two kinds of cross-reference. **Fence-marked** ones carry a
-\`// <module:x>\` comment, are stripped mechanically by the script, and are therefore
-*proven*: the subtracted tree is type-checked and unit-tested. **Not-yet-fence-marked**
-ones are listed in each recipe for a human to apply, and are *not* proven.
+Each recipe splits its cross-references three ways. **Fence-marked** ones carry a
+\`// <module:x>\` comment (or \`{/* <module:x> */}\` inside JSX), are stripped
+mechanically by the script, and are therefore *proven*: the subtracted tree is
+type-checked and unit-tested. **Not-yet-fence-marked** ones are listed for a human to
+apply and are *not* proven — every one of them is a hole in the proof. **Optional
+tidy-up** entries are proven harmless: the subtracted tree passes with them left in
+place, so they are only listed so a reader can clean up.
 
-Every module's \`apps/api\` half is fully fenced and therefore fully proven. The modules
-with no frontend or \`packages/shared\` surface at all (\`cloudfront\` and the three
-\`oauth-*\` providers) additionally get \`apps/web\` and \`apps/admin\` type-checked and
-unit-tested after the subtraction, so they are proven end to end.
-
-The remaining modules do own frontend and shared files. Those files are listed in the
-recipes and the script deletes the ones it safely can, but their cross-references are not
-fenced, so the frontend result is **not** verified — the runner prints a \`COVERAGE GAP\`
-line for each. Modules in that state:
+Every module is fully fenced across \`apps/api\`, \`apps/web\`, \`apps/admin\` and
+\`packages/shared\`, so every recipe is proven end to end: the runner deletes the module,
+strips its fences, and then type-checks and unit-tests all three packages. Modules still
+missing frontend fences — the runner prints a \`COVERAGE GAP\` line for each:
 
 ${gapList}
 
-Closing a gap means moving that module's frontend entries out of \`manualSteps\` and into
-real fence markers — including the \`{/* <module:x> */}\` form for references that sit
-inside JSX — then setting \`frontendFenced: true\` on the module, which switches on
-\`tsc --noEmit\` + \`vitest\` for both frontends in the subtracted worktree. The
-coupling is not always mechanical: \`NOTIFICATION_TYPE_LABELS\` in both apps is a total
-\`Record\` over \`NotificationTypeEnum\`, so removing \`payment\` or \`contact-us\` must drop
-enum members and their label entries together; and removing \`statistic\` breaks
-\`apps/admin\`'s \`/dashboard\` redirects at runtime without any type error.
+Closing a gap means moving a module's frontend entries out of \`manualSteps\` and into
+real fence markers, then setting \`frontendFenced: true\`, which switches on
+\`tsc --noEmit\` + \`vitest\` for both frontends in the subtracted worktree.
+\`assertFrontendFencedClaims()\` refuses to run a module that claims the flag while still
+listing a hand-edit under \`apps/web\`, \`apps/admin\` or \`packages/shared\`, so the flag
+cannot outrun the fences.
+
+Two couplings were not mechanical and are worth knowing before adding a module:
+
+- \`apps/web\`'s \`NOTIFICATION_TYPE_LABELS\` is a total \`Record\` over
+  \`NotificationTypeEnum\`, so a payment- or contact-us-shaped enum member cannot be
+  fenced out on its own. Those members stay by design: \`apps/api\`'s notification
+  dispatcher keeps the matching builders and handlers, which compile against the core
+  event bus and simply never fire. What is fenced instead is the *link target* — a
+  notification pointing at \`/settings/billing\` after that route is gone would be a real
+  dead end.
+- Removing \`statistic\` used to break \`apps/admin\`'s post-login and catch-all redirects
+  at runtime with no type error to catch it. \`ADMIN_HOME_ROUTE\` now derives from the
+  first surviving \`ADMIN_NAV_ITEMS\` entry, so fencing the Dashboard nav entry out moves
+  both redirects onto \`/users\` on its own.
 
 ## Scope note: v0.1 providers
 
