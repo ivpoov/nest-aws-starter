@@ -22,6 +22,39 @@ of the app still type-checks and passes its unit tests — see
 - [`payment`](./payment.md) — Plans, subscriptions, payment transactions, webhook events, and the Stripe provider (schema + core module + Stripe implementation).
 - [`notification`](./notification.md) — Notification/receipt/preference schema, WS gateway, the persist-first dispatcher (IN_APP + the per-type/per-channel EMAIL gate, PR 5), the history API (list/unread-count/mark-read/read-all), and the preferences API (GET/PUT matrix).
 
+## Coverage: what is proven vs. documented
+
+Each recipe has two kinds of cross-reference. **Fence-marked** ones carry a
+`// <module:x>` comment, are stripped mechanically by the script, and are therefore
+*proven*: the subtracted tree is type-checked and unit-tested. **Not-yet-fence-marked**
+ones are listed in each recipe for a human to apply, and are *not* proven.
+
+Every module's `apps/api` half is fully fenced and therefore fully proven. The modules
+with no frontend or `packages/shared` surface at all (`cloudfront` and the three
+`oauth-*` providers) additionally get `apps/web` and `apps/admin` type-checked and
+unit-tested after the subtraction, so they are proven end to end.
+
+The remaining modules do own frontend and shared files. Those files are listed in the
+recipes and the script deletes the ones it safely can, but their cross-references are not
+fenced, so the frontend result is **not** verified — the runner prints a `COVERAGE GAP`
+line for each. Modules in that state:
+
+- `contact-us`
+- `statistic`
+- `api-key`
+- `file`
+- `payment`
+- `notification`
+
+Closing a gap means moving that module's frontend entries out of `manualSteps` and into
+real fence markers — including the `{/* <module:x> */}` form for references that sit
+inside JSX — then setting `frontendFenced: true` on the module, which switches on
+`tsc --noEmit` + `vitest` for both frontends in the subtracted worktree. The
+coupling is not always mechanical: `NOTIFICATION_TYPE_LABELS` in both apps is a total
+`Record` over `NotificationTypeEnum`, so removing `payment` or `contact-us` must drop
+enum members and their label entries together; and removing `statistic` breaks
+`apps/admin`'s `/dashboard` redirects at runtime without any type error.
+
 ## Scope note: v0.1 providers
 
 Only `cloudfront` is exercised this round. S3/SQS/SNS/SES(mail)/Lambda are also optional,
