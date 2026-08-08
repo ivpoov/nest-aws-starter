@@ -23,7 +23,7 @@ codebase.
 - `apps/admin/src/tests/ContactMessageDrawer.spec.tsx` (delete)
 - `apps/admin/src/tests/InboxPage.spec.tsx` (delete)
 - `apps/admin/src/tests/useContactMessages.spec.tsx` (delete)
-- `packages/shared/src/contact` (delete **by hand** — see the note under section 2)
+- `packages/shared/src/contact` (delete)
 
 ## 2. Strip cross-module references
 
@@ -39,6 +39,29 @@ and the markers themselves.
   - line 82: `ContactUsModule, // <module:contact-us>`
 - `apps/api/prisma/schema.prisma`
   - lines 164-187 (block)
+- `apps/web/src/App.tsx`
+  - line 9: `import { ContactPage } from './pages/ContactPage'; // <module:contact-us>`
+  - lines 32-34 (block)
+- `apps/web/src/components/Layout/AppLayout.tsx`
+  - lines 56-62 (block)
+- `apps/web/src/pages/LoginPage.tsx`
+  - lines 70-75 (block)
+- `apps/web/src/pages/RegisterPage.tsx`
+  - lines 68-73 (block)
+- `apps/admin/src/App.tsx`
+  - line 8: `import { InboxPage } from './pages/InboxPage'; // <module:contact-us>`
+  - lines 34-36 (block)
+- `apps/admin/src/constants/admin-nav-items.constants.ts`
+  - line 14: `{ to: '/inbox', label: 'Inbox' }, // <module:contact-us>`
+- `apps/admin/src/tests/NotificationHistoryPage.spec.tsx`
+  - lines 46-48 (block)
+  - lines 63-82 (block)
+- `apps/admin/src/tests/resolveNotificationLink.spec.ts`
+  - lines 23-39 (block)
+  - lines 77-85 (block)
+- `apps/admin/src/utils/resolveNotificationLink.ts`
+  - lines 17-19 (block)
+  - lines 37-41 (block)
 - `packages/shared/src/index.ts`
   - line 33: `export * from './contact/enums/contact-message-status.enum.js'; // <module:contact-us>`
   - line 34: `export * from './contact/interfaces/contact-message-list-response.interface.js'; // <module:contact-us>`
@@ -55,21 +78,14 @@ hand" in section 1 belongs here too: the script leaves it in place because
 deleting the folder on its own would break `build shared`. Delete the folder and those
 export lines together. Work through the list by hand:
 
-- `apps/web/src/App.tsx` — the ContactPage import and the /contact route
-- `apps/web/src/components/Layout/AppLayout.tsx` — the "Contact us" footer link (the <footer> is then empty)
-- `apps/web/src/pages/LoginPage.tsx + RegisterPage.tsx` — the "Contact" links
-- `apps/admin/src/App.tsx` — the InboxPage import and the /inbox route
-- `apps/admin/src/components/Layout/AdminLayout.tsx` — the Inbox nav entry
-- `apps/admin/src/utils/resolveNotificationLink.ts` — CONTACT_MESSAGE is its only branch — the function reduces to `return null`
-- `packages/shared/src/index.ts` — the `export * from './contact/...'` lines
-- `packages/shared/src/notifications/enums/notification-type.enum.ts` — the CONTACT_MESSAGE member — coupled with both apps' NOTIFICATION_TYPE_LABELS entries, which are total Records over this enum
+_None — every cross-module reference for this module is fence-marked._
 
 ### Optional tidy-up (proven harmless to skip)
 
 The subtracted tree type-checks and passes its tests with these left in place —
 they are cosmetic leftovers, not build breaks:
 
-_None — the subtraction leaves nothing behind worth tidying._
+- `packages/shared/src/notifications/enums/notification-type.enum.ts` — the CONTACT_MESSAGE member stays on purpose, for the same reason as payment's types: apps/api's notification dispatcher keeps its contact-message builder and handler, which compile against the core event bus and simply never fire once nothing emits contact.message.created. Keeping the member keeps apps/web's NOTIFICATION_TYPE_LABELS (a total Record over the enum) valid. Dropping it means dropping the member, the label line, USER_NOTIFICATION_TYPES and the dispatcher handler together
 
 ## 3. Drop `.env` variables
 
@@ -102,8 +118,5 @@ pnpm --dir apps/web run build && pnpm --dir apps/web run test
 pnpm --dir apps/admin run build && pnpm --dir apps/admin run test
 ```
 
-`scripts/subtraction-test.mjs --module contact-us` proves the `apps/api` half of this
-recipe nightly, in an isolated worktree. It deletes the frontend and
-`packages/shared` paths in section 1 too, but it cannot yet *verify* them, because
-the cross-references under "not yet fence-marked" above have no fence markers to
-strip — so run the last two commands yourself after following section 2.
+`scripts/subtraction-test.mjs --module contact-us` proves this whole recipe nightly, in
+an isolated worktree — API, both frontends and `packages/shared`.

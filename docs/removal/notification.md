@@ -101,9 +101,9 @@ and the markers themselves.
 - `apps/web/src/App.tsx`
   - line 5: `import { NotificationSocketProvider } from './contexts/NotificationSocketContext'; // <module:notification>`
   - line 14: `import { NotificationPreferencesPage } from './pages/NotificationPreferencesPage'; // <module:notification>`
-  - lines 39-41 (block)
-  - lines 50-52 (block)
-  - lines 54-56 (block)
+  - lines 41-43 (block)
+  - lines 52-54 (block)
+  - lines 56-58 (block)
 - `apps/web/src/components/Layout/AppLayout.tsx`
   - line 5: `import { NotificationBell } from '../Notifications/NotificationBell'; // <module:notification>`
   - line 15: `{ to: '/settings/notifications', label: 'Notifications' }, // <module:notification>`
@@ -111,15 +111,16 @@ and the markers themselves.
 - `apps/web/src/tests/AppLayout.spec.tsx`
   - lines 7-16 (block)
 - `apps/admin/src/App.tsx`
-  - line 5: `import { NotificationSocketProvider } from './contexts/NotificationSocketContext'; // <module:notification>`
-  - line 9: `import { NotificationHistoryPage } from './pages/NotificationHistoryPage'; // <module:notification>`
-  - lines 20-22 (block)
-  - lines 32-34 (block)
-  - lines 36-38 (block)
+  - line 6: `import { NotificationSocketProvider } from './contexts/NotificationSocketContext'; // <module:notification>`
+  - line 10: `import { NotificationHistoryPage } from './pages/NotificationHistoryPage'; // <module:notification>`
+  - lines 21-23 (block)
+  - lines 37-39 (block)
+  - lines 41-43 (block)
 - `apps/admin/src/components/Layout/AdminLayout.tsx`
-  - line 5: `import { NotificationBell } from '../Notifications/NotificationBell'; // <module:notification>`
+  - line 6: `import { NotificationBell } from '../Notifications/NotificationBell'; // <module:notification>`
+  - lines 51-53 (block)
+- `apps/admin/src/constants/admin-nav-items.constants.ts`
   - line 15: `{ to: '/notifications', label: 'Notifications' }, // <module:notification>`
-  - lines 60-62 (block)
 - `packages/shared/src/index.ts`
   - line 53: `export * from './notifications/enums/notification-audience.enum.js'; // <module:notification>`
   - line 54: `export * from './notifications/enums/notification-channel.enum.js'; // <module:notification>`

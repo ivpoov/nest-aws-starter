@@ -39,9 +39,6 @@ recipes and the script deletes the ones it safely can, but their cross-reference
 fenced, so the frontend result is **not** verified — the runner prints a `COVERAGE GAP`
 line for each. Modules in that state:
 
-- `contact-us`
-- `statistic`
-- `api-key`
 - `file`
 
 Closing a gap means moving that module's frontend entries out of `manualSteps` and into

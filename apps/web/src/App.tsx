@@ -6,7 +6,7 @@ import { NotificationSocketProvider } from './contexts/NotificationSocketContext
 import { BillingCanceledPage } from './pages/BillingCanceledPage'; // <module:payment>
 import { BillingPage } from './pages/BillingPage'; // <module:payment>
 import { BillingSuccessPage } from './pages/BillingSuccessPage'; // <module:payment>
-import { ContactPage } from './pages/ContactPage';
+import { ContactPage } from './pages/ContactPage'; // <module:contact-us>
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { MethodsPage } from './pages/MethodsPage';
@@ -29,7 +29,9 @@ export function App(): ReactElement {
       <Route path="/email/verify" element={<VerifyEmailPage />} />
       <Route path="/password/forgot" element={<ForgotPasswordPage />} />
       <Route path="/password/reset" element={<ResetPasswordPage />} />
+      {/* <module:contact-us> */}
       <Route path="/contact" element={<ContactPage />} />
+      {/* </module:contact-us> */}
       {/* <module:payment> */}
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/billing/success" element={<BillingSuccessPage />} />

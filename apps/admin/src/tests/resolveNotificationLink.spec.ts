@@ -20,6 +20,7 @@ function buildNotification(
 }
 
 describe('resolveNotificationLink', () => {
+  // <module:contact-us>
   it('links CONTACT_MESSAGE to the inbox item carried in meta.contactMessageId', () => {
     const notification = buildNotification(NotificationTypeEnum.CONTACT_MESSAGE, {
       contactMessageId: 'msg-123',
@@ -34,6 +35,8 @@ describe('resolveNotificationLink', () => {
 
     expect(resolveNotificationLink(notification)).toBeNull();
   });
+
+  // </module:contact-us>
 
   it('does not link WEBHOOK_FAILED — meta has an id but no admin view can receive it', () => {
     const notification = buildNotification(NotificationTypeEnum.WEBHOOK_FAILED, {
@@ -71,6 +74,7 @@ describe('resolveNotificationLink', () => {
     ).toBeNull();
   });
 
+  // <module:contact-us>
   it('encodes an id that is not URL-safe', () => {
     const notification = buildNotification(NotificationTypeEnum.CONTACT_MESSAGE, {
       contactMessageId: 'a b&c=d',
@@ -78,6 +82,7 @@ describe('resolveNotificationLink', () => {
 
     expect(resolveNotificationLink(notification)).toBe('/inbox?messageId=a%20b%26c%3Dd');
   });
+  // </module:contact-us>
 
   // meta is scope/value only (an email OR an ip), never a userId, so there is
   // no user to open — but the activity log records the events themselves

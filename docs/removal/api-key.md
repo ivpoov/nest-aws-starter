@@ -10,7 +10,7 @@ codebase.
 ## 1. Delete
 
 - `apps/api/src/modules/api-key` (delete)
-- `packages/shared/src/api-keys` (delete **by hand** — see the note under section 2)
+- `packages/shared/src/api-keys` (delete)
 
 ## 2. Strip cross-module references
 
@@ -45,15 +45,14 @@ hand" in section 1 belongs here too: the script leaves it in place because
 deleting the folder on its own would break `build shared`. Delete the folder and those
 export lines together. Work through the list by hand:
 
-- `packages/shared/src/index.ts` — the `export * from './api-keys/...'` lines
-- `apps/web, apps/admin` — nothing — this module has no frontend surface
+_None — every cross-module reference for this module is fence-marked._
 
 ### Optional tidy-up (proven harmless to skip)
 
 The subtracted tree type-checks and passes its tests with these left in place —
 they are cosmetic leftovers, not build breaks:
 
-_None — the subtraction leaves nothing behind worth tidying._
+- `apps/web, apps/admin` — nothing — this module has no frontend surface at all
 
 ## 3. Drop `.env` variables
 
@@ -86,8 +85,5 @@ pnpm --dir apps/web run build && pnpm --dir apps/web run test
 pnpm --dir apps/admin run build && pnpm --dir apps/admin run test
 ```
 
-`scripts/subtraction-test.mjs --module api-key` proves the `apps/api` half of this
-recipe nightly, in an isolated worktree. It deletes the frontend and
-`packages/shared` paths in section 1 too, but it cannot yet *verify* them, because
-the cross-references under "not yet fence-marked" above have no fence markers to
-strip — so run the last two commands yourself after following section 2.
+`scripts/subtraction-test.mjs --module api-key` proves this whole recipe nightly, in
+an isolated worktree — API, both frontends and `packages/shared`.

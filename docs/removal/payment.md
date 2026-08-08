@@ -139,24 +139,24 @@ and the markers themselves.
   - line 7: `import { BillingPage } from './pages/BillingPage'; // <module:payment>`
   - line 8: `import { BillingSuccessPage } from './pages/BillingSuccessPage'; // <module:payment>`
   - line 16: `import { PricingPage } from './pages/PricingPage'; // <module:payment>`
-  - lines 33-37 (block)
-  - lines 47-49 (block)
+  - lines 35-39 (block)
+  - lines 49-51 (block)
 - `apps/web/src/components/Layout/AppLayout.tsx`
   - line 14: `{ to: '/settings/billing', label: 'Billing' }, // <module:payment>`
 - `apps/web/src/pages/LoginPage.tsx`
-  - lines 65-70 (block)
+  - lines 64-69 (block)
 - `apps/web/src/pages/RegisterPage.tsx`
-  - lines 63-68 (block)
+  - lines 62-67 (block)
 - `apps/web/src/tests/resolveNotificationLink.spec.ts`
   - lines 13-18 (block)
   - lines 39-52 (block)
 - `apps/web/src/utils/resolveNotificationLink.ts`
   - lines 10-15 (block)
 - `apps/admin/src/App.tsx`
-  - line 10: `import { PlansPage } from './pages/PlansPage'; // <module:payment>`
-  - line 12: `import { TransactionsPage } from './pages/TransactionsPage'; // <module:payment>`
-  - lines 26-29 (block)
-- `apps/admin/src/components/Layout/AdminLayout.tsx`
+  - line 11: `import { PlansPage } from './pages/PlansPage'; // <module:payment>`
+  - line 13: `import { TransactionsPage } from './pages/TransactionsPage'; // <module:payment>`
+  - lines 29-32 (block)
+- `apps/admin/src/constants/admin-nav-items.constants.ts`
   - line 11: `{ to: '/plans', label: 'Plans' }, // <module:payment>`
   - line 12: `{ to: '/transactions', label: 'Transactions' }, // <module:payment>`
 - `apps/admin/src/pages/StatisticsPage.tsx`

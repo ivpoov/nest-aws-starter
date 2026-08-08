@@ -1,19 +1,10 @@
 import type { ReactElement } from 'react';
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router';
+import { ADMIN_NAV_ITEMS } from '../../constants/admin-nav-items.constants';
 import { useLogout } from '../../hooks/auth/useLogout';
 import { NotificationBell } from '../Notifications/NotificationBell'; // <module:notification>
 import { ThemeToggle } from '../ui/ThemeToggle';
-
-const NAV_ITEMS: ReadonlyArray<{ readonly to: string; readonly label: string }> = [
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/users', label: 'Users' },
-  { to: '/plans', label: 'Plans' }, // <module:payment>
-  { to: '/transactions', label: 'Transactions' }, // <module:payment>
-  { to: '/activities', label: 'Activity' },
-  { to: '/inbox', label: 'Inbox' },
-  { to: '/notifications', label: 'Notifications' }, // <module:notification>
-];
 
 export function AdminLayout(): ReactElement {
   const { logout } = useLogout();
@@ -30,7 +21,7 @@ export function AdminLayout(): ReactElement {
       >
         <p className="mb-6 text-sm font-semibold">Starter Admin</p>
         <nav className="flex flex-col gap-2 text-sm">
-          {NAV_ITEMS.map((item) => (
+          {ADMIN_NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

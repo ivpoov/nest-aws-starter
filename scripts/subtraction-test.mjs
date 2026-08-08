@@ -102,26 +102,15 @@ const MODULES = [
       'apps/admin/src/tests/ContactMessageDrawer.spec.tsx',
       'apps/admin/src/tests/InboxPage.spec.tsx',
       'apps/admin/src/tests/useContactMessages.spec.tsx',
+      'packages/shared/src/contact',
     ],
     envVars: [],
-    manualPaths: ['packages/shared/src/contact'],
-    manualSteps: [
-      ['apps/web/src/App.tsx', 'the ContactPage import and the /contact route'],
-      [
-        'apps/web/src/components/Layout/AppLayout.tsx',
-        'the "Contact us" footer link (the <footer> is then empty)',
-      ],
-      ['apps/web/src/pages/LoginPage.tsx + RegisterPage.tsx', 'the "Contact" links'],
-      ['apps/admin/src/App.tsx', 'the InboxPage import and the /inbox route'],
-      ['apps/admin/src/components/Layout/AdminLayout.tsx', 'the Inbox nav entry'],
-      [
-        'apps/admin/src/utils/resolveNotificationLink.ts',
-        'CONTACT_MESSAGE is its only branch — the function reduces to `return null`',
-      ],
-      ['packages/shared/src/index.ts', "the `export * from './contact/...'` lines"],
+    frontendFenced: true,
+    manualSteps: [],
+    cosmeticSteps: [
       [
         'packages/shared/src/notifications/enums/notification-type.enum.ts',
-        "the CONTACT_MESSAGE member — coupled with both apps' NOTIFICATION_TYPE_LABELS entries, which are total Records over this enum",
+        "the CONTACT_MESSAGE member stays on purpose, for the same reason as payment's types: apps/api's notification dispatcher keeps its contact-message builder and handler, which compile against the core event bus and simply never fire once nothing emits contact.message.created. Keeping the member keeps apps/web's NOTIFICATION_TYPE_LABELS (a total Record over the enum) valid. Dropping it means dropping the member, the label line, USER_NOTIFICATION_TYPES and the dispatcher handler together",
       ],
     ],
   },
@@ -151,31 +140,27 @@ const MODULES = [
       'apps/admin/src/tests/useChartColors.spec.tsx',
       'apps/admin/src/tests/useStatisticsOverview.spec.tsx',
       'apps/admin/src/tests/useStatisticsSeries.spec.tsx',
+      'packages/shared/src/statistics',
     ],
     envVars: [],
-    manualPaths: ['packages/shared/src/statistics'],
-    manualSteps: [
+    frontendFenced: true,
+    manualSteps: [],
+    cosmeticSteps: [
       [
-        'apps/admin/src/App.tsx',
-        'the StatisticsPage import and the /dashboard route — AND repoint the catch-all <Navigate to="/dashboard">, which is a RUNTIME break, not a type error',
+        'apps/admin/src/App.tsx + pages/LoginPage.tsx',
+        'nothing to repoint. Both redirects read ADMIN_HOME_ROUTE, which is derived from the first surviving ADMIN_NAV_ITEMS entry — fencing the Dashboard entry out moves them onto /users automatically. This used to be the one runtime break in the set that no type-check or unit test could catch',
       ],
-      [
-        'apps/admin/src/pages/LoginPage.tsx',
-        'repoint the post-login navigate away from /dashboard — also runtime-only',
-      ],
-      ['apps/admin/src/components/Layout/AdminLayout.tsx', 'the Dashboard nav entry'],
-      ['packages/shared/src/index.ts', "the `export * from './statistics/...'` lines"],
     ],
   },
   {
     id: 'api-key',
     summary: 'Long-lived API key issuance, guard, and admin management.',
-    paths: ['apps/api/src/modules/api-key'],
-    manualPaths: ['packages/shared/src/api-keys'],
+    paths: ['apps/api/src/modules/api-key', 'packages/shared/src/api-keys'],
     envVars: [],
-    manualSteps: [
-      ['packages/shared/src/index.ts', "the `export * from './api-keys/...'` lines"],
-      ['apps/web, apps/admin', 'nothing — this module has no frontend surface'],
+    frontendFenced: true,
+    manualSteps: [],
+    cosmeticSteps: [
+      ['apps/web, apps/admin', 'nothing — this module has no frontend surface at all'],
     ],
   },
   {

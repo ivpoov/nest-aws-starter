@@ -43,7 +43,9 @@ function renderPage(): ReturnType<typeof render> {
     <MemoryRouter initialEntries={['/notifications']}>
       <Routes>
         <Route path="/notifications" element={<NotificationHistoryPage />} />
+        {/* <module:contact-us> */}
         <Route path="/inbox" element={<p>Inbox page</p>} />
+        {/* </module:contact-us> */}
         <Route path="/users" element={<p>Users page</p>} />
         <Route path="/activities" element={<p>Activities page</p>} />
       </Routes>
@@ -58,6 +60,7 @@ describe('NotificationHistoryPage', () => {
     vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue(undefined);
   });
 
+  // <module:contact-us>
   it('marks read and navigates to the inbox item when a CONTACT_MESSAGE row is clicked', async () => {
     vi.mocked(notificationsApi.fetchNotifications).mockResolvedValue({
       items: [
@@ -75,6 +78,8 @@ describe('NotificationHistoryPage', () => {
     expect(await screen.findByText('Inbox page')).toBeInTheDocument();
     expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('n-1');
   });
+
+  // </module:contact-us>
 
   it('marks a WEBHOOK_FAILED row read but does not navigate — no admin view exists for it', async () => {
     vi.mocked(notificationsApi.fetchNotifications).mockResolvedValue({

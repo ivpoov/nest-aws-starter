@@ -14,7 +14,9 @@ import {
 // The four ADMIN-audience types, against the meta their builders actually
 // produce:
 //
+// <module:contact-us>
 // - CONTACT_MESSAGE: meta.contactMessageId -> the inbox drawer.
+// </module:contact-us>
 // - USER_BLOCKED: meta.userId (the *blocked* user; the notification row
 //   itself has no userId because it addresses the admin cohort) ->
 //   UserDetailDrawer, which fetches by id, so a cold navigation works.
@@ -32,9 +34,11 @@ import {
 export function resolveNotificationLink(
   notification: NotificationResponseInterface,
 ): string | null {
+  // <module:contact-us>
   if (notification.type === NotificationTypeEnum.CONTACT_MESSAGE) {
     return buildIdLink('/inbox', 'messageId', notification.meta, 'contactMessageId');
   }
+  // </module:contact-us>
 
   if (notification.type === NotificationTypeEnum.USER_BLOCKED) {
     return buildIdLink('/users', 'userId', notification.meta, 'userId');

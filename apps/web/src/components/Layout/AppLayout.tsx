@@ -53,11 +53,13 @@ export function AppLayout(): ReactElement {
       <main className="mx-auto max-w-3xl px-6 py-8">
         <Outlet />
       </main>
+      {/* <module:contact-us> */}
       <footer className="border-t border-edge px-6 py-4 text-center text-sm text-content-muted">
         <Link to="/contact" className="hover:text-content">
           Contact us
         </Link>
       </footer>
+      {/* </module:contact-us> */}
     </div>
   );
 }

@@ -31,7 +31,7 @@ codebase.
 - `apps/admin/src/tests/useChartColors.spec.tsx` (delete)
 - `apps/admin/src/tests/useStatisticsOverview.spec.tsx` (delete)
 - `apps/admin/src/tests/useStatisticsSeries.spec.tsx` (delete)
-- `packages/shared/src/statistics` (delete **by hand** — see the note under section 2)
+- `packages/shared/src/statistics` (delete)
 
 ## 2. Strip cross-module references
 
@@ -45,6 +45,11 @@ and the markers themselves.
 - `apps/api/src/app.module.ts`
   - line 22: `import { StatisticModule } from '@modules/statistic/statistic.module.js'; // <module:statistic>`
   - line 81: `StatisticModule, // <module:statistic>`
+- `apps/admin/src/App.tsx`
+  - line 12: `import { StatisticsPage } from './pages/StatisticsPage'; // <module:statistic>`
+  - lines 25-27 (block)
+- `apps/admin/src/constants/admin-nav-items.constants.ts`
+  - line 9: `{ to: '/dashboard', label: 'Dashboard' }, // <module:statistic>`
 - `packages/shared/src/index.ts`
   - line 84: `export * from './statistics/enums/statistics-metric.enum.js'; // <module:statistic>`
   - line 85: `export * from './statistics/interfaces/statistics-count-breakdown.interface.js'; // <module:statistic>`
@@ -63,17 +68,14 @@ hand" in section 1 belongs here too: the script leaves it in place because
 deleting the folder on its own would break `build shared`. Delete the folder and those
 export lines together. Work through the list by hand:
 
-- `apps/admin/src/App.tsx` — the StatisticsPage import and the /dashboard route — AND repoint the catch-all <Navigate to="/dashboard">, which is a RUNTIME break, not a type error
-- `apps/admin/src/pages/LoginPage.tsx` — repoint the post-login navigate away from /dashboard — also runtime-only
-- `apps/admin/src/components/Layout/AdminLayout.tsx` — the Dashboard nav entry
-- `packages/shared/src/index.ts` — the `export * from './statistics/...'` lines
+_None — every cross-module reference for this module is fence-marked._
 
 ### Optional tidy-up (proven harmless to skip)
 
 The subtracted tree type-checks and passes its tests with these left in place —
 they are cosmetic leftovers, not build breaks:
 
-_None — the subtraction leaves nothing behind worth tidying._
+- `apps/admin/src/App.tsx + pages/LoginPage.tsx` — nothing to repoint. Both redirects read ADMIN_HOME_ROUTE, which is derived from the first surviving ADMIN_NAV_ITEMS entry — fencing the Dashboard entry out moves them onto /users automatically. This used to be the one runtime break in the set that no type-check or unit test could catch
 
 ## 3. Drop `.env` variables
 
@@ -93,8 +95,5 @@ pnpm --dir apps/web run build && pnpm --dir apps/web run test
 pnpm --dir apps/admin run build && pnpm --dir apps/admin run test
 ```
 
-`scripts/subtraction-test.mjs --module statistic` proves the `apps/api` half of this
-recipe nightly, in an isolated worktree. It deletes the frontend and
-`packages/shared` paths in section 1 too, but it cannot yet *verify* them, because
-the cross-references under "not yet fence-marked" above have no fence markers to
-strip — so run the last two commands yourself after following section 2.
+`scripts/subtraction-test.mjs --module statistic` proves this whole recipe nightly, in
+an isolated worktree — API, both frontends and `packages/shared`.
