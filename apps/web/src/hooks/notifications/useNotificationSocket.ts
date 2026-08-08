@@ -200,7 +200,9 @@ function handleServerDisconnect(
 
   const delayMs: number = MANUAL_RECONNECT_BASE_DELAY_MS * 2 ** (attemptsRef.current - 1);
 
-  reconnectTimerRef.current = setTimeout((): void => socket.connect(), delayMs);
+  reconnectTimerRef.current = setTimeout((): void => {
+    socket.connect();
+  }, delayMs);
 }
 
 function clearTimerRef(timerRef: RefObject<ReturnType<typeof setTimeout> | null>): void {
