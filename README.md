@@ -106,6 +106,36 @@ docker compose --profile init up minio-init    # create the S3 bucket once
 docker compose --profile cluster up -d         # 4-node Redis cluster on 7000-7003
 ```
 
+## Going to production
+
+Every value in `apps/api/.env.example` works out of the box on a laptop, and
+several of them would be a breach on a server. With `NODE_ENV=production` the
+API therefore refuses to start — at boot, before it listens, not on first use —
+while any of the following holds:
+
+| Refusal | What trips it |
+|---|---|
+| `PRODUCTION_DEVELOPMENT_DEFAULT` | A credential, endpoint or redirect target still equals the value shipped in `.env.example`: `AUTH_JWT_SECRET`, `DATABASE_URL`, `REDIS_URL`, the `AWS_*` and `S3_*` keys and endpoints, `WEB_APP_BASE_URL`, `MAIL_FROM_ADDRESS`, and the payment module's queue and return URLs. |
+| `PRODUCTION_WEAK_JWT_SECRET` | `AUTH_JWT_SECRET` carries under 32 bytes (256 bits) of entropy. Length is not entropy — 64 repeated characters score zero. Generate one with `openssl rand -hex 48`. |
+| `PRODUCTION_UNSAFE_CORS_ORIGIN` | `CORS_ORIGINS` is unset, contains `*`, or lists a loopback address. |
+| `PRODUCTION_UNAUTHENTICATED_SWAGGER` | `SWAGGER_ENABLED=true` without `SWAGGER_USER` and `SWAGGER_PASSWORD`. |
+
+Every violation is reported in the same startup failure, each naming the
+variable and the fix, so a misconfigured deploy costs one round trip rather
+than one per mistake. Nothing changes outside production: the shipped defaults
+still boot for local development, tests and CI.
+
+**On the entropy check.** Entropy belongs to the process that generated a
+secret, not to the string, so no static check can measure it — what the guard
+computes is an upper bound from the secret's own composition: the shortest
+block whose repetition rebuilds it, times the bits per character its alphabet
+allows, dropped to the observed Shannon rate when the character distribution is
+lopsided. `openssl rand -hex 32` scores exactly 256 and passes; `openssl rand
+-hex 48` scores 384. A 44-character `openssl rand -base64 32` is a genuine
+32-byte secret but cannot *demonstrate* 256 bits in 44 characters, so it is
+turned away — the guard prints a generator that always passes rather than
+lowering the bar.
+
 ## Real-time notifications
 
 Domain events — a new-device login, a password change, a subscription
