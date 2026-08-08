@@ -1,4 +1,7 @@
-import type { NotificationResponseInterface } from '@nest-aws-starter/shared';
+import type {
+  NotificationResponseInterface,
+  UnreadCountResponseInterface,
+} from '@nest-aws-starter/shared';
 import type { Dispatch, RefObject } from 'react';
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { io, type Socket } from 'socket.io-client';
@@ -43,7 +46,7 @@ export function useNotificationSocket(): UseNotificationSocketResultInterface {
 
   const refreshUnreadCount = useCallback(async (): Promise<void> => {
     try {
-      const result = await fetchUnreadCount();
+      const result: UnreadCountResponseInterface = await fetchUnreadCount();
 
       dispatch({ kind: 'unread-count-set', count: result.count });
     } catch (caught: unknown) {
