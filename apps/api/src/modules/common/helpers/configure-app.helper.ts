@@ -1,11 +1,14 @@
 import type { AppConfig } from '@configs/app.config.js';
+import { registerSecurityHeaders } from '@helpers/register-security-headers.helper.js';
 import { AllExceptionsFilter } from '@modules/common/filters/all-exceptions.filter.js';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 
-export function configureApp(app: NestFastifyApplication): void {
+export async function configureApp(app: NestFastifyApplication): Promise<void> {
   const config: AppConfig = app.get(ConfigService).getOrThrow<AppConfig>('app');
+
+  await registerSecurityHeaders(app);
 
   app.enableCors({
     origin: config.corsOrigins,

@@ -42,7 +42,7 @@ async function createDemoTestApp(): Promise<NestFastifyApplication> {
     new FastifyAdapter({ trustProxy: process.env.TRUST_PROXY === 'true' }),
   );
 
-  configureApp(app);
+  await configureApp(app);
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 
