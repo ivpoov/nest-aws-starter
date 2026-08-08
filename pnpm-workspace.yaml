@@ -13,6 +13,13 @@ overrides:
   find-my-way: ">=9.7.0"
   "@fastify/static": ">=10.1.2"
   js-yaml: ">=4.3.1"
+  # helmet is what actually writes the security headers; @fastify/helmet is a
+  # thin wrapper over it. Its own `^8.0.0` range would float onto releases
+  # younger than the 30-day soak this repo applies to direct dependencies
+  # (renovate.json: minimumReleaseAge), so the soak is applied here instead.
+  # Raise this pin the same way renovate raises everything else: once the
+  # newer helmet has been out for 30 days.
+  helmet: "8.2.0"
   # GHSA-2v37-7h3g-55p8 (CVSS 8.2). nanoid reaches the tree through postcss,
   # the build-time CSS pipeline behind the web and admin Vite builds.
   # postcss asks for ^3.3.11; 3.3.17 is the fix on that line.

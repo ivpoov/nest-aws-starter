@@ -59,7 +59,7 @@ async function bootstrap(): Promise<void> {
 
   app.useLogger(new CustomLoggerService('App'));
   app.enableShutdownHooks();
-  configureApp(app);
+  await configureApp(app);
 
   setupSwagger(app);
 

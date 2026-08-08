@@ -629,6 +629,28 @@ one greppable thread, across services, repositories, and providers.
   and basic auth.
 - **No app-level compression:** gzip/brotli belong to CloudFront/ALB. App CPU serves
   requests, not encoding.
+- **Security headers are transport config, set once at bootstrap** —
+  `registerSecurityHeaders` (`@fastify/helmet`), never per controller. The CSP is a
+  JSON-API CSP (`default-src 'none'` + an explicit `frame-ancestors 'none'`, which
+  does not fall back to `default-src`); HSTS is production-only, because sending it
+  over `http://localhost` pins the developer's whole localhost origin to https.
+  Exactly one route deviates — Swagger's, which is a real HTML document and gets its
+  own same-origin policy in `setup-swagger.helper.ts`, mounted only where the docs
+  are mounted. A route needing different headers gets them at that hook, with the
+  reason written down; controllers never set security headers.
+- **CORS is an exact-match allowlist and `credentials: false` — permanently.** This
+  API is bearer-only: tokens travel in the `Authorization` header, in request bodies,
+  and in the Socket.IO handshake payload. Nothing sets or reads a cookie, so there is
+  no ambient credential for a browser to attach and
+  `Access-Control-Allow-Credentials` would buy nothing while coupling the allowlist
+  to a CSRF exposure. A failing browser call is fixed in `CORS_ORIGINS` or the
+  allowed-header list, never by flipping that flag; flipping it is only correct as
+  part of a deliberate move to cookie auth, with the CSRF defences that implies.
+- **`X-Forwarded-For` is trusted only under `TRUST_PROXY`.** The flag is read in two
+  places — the Fastify adapter (`request.ip`) and `ThrottlerBehindProxyGuard` — and
+  they must agree. Any new per-ip logic reads `request.ip`; a second place that
+  parses the header on its own would reopen the spoofing hole for whichever budget
+  it guards.
 
 ## 10b. Caching
 

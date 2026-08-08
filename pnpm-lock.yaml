@@ -8,6 +8,7 @@ overrides:
   find-my-way: '>=9.7.0'
   '@fastify/static': '>=10.1.2'
   js-yaml: '>=4.3.1'
+  helmet: 8.2.0
   nanoid: 3.3.17
   shell-quote: 1.9.0
   '@prisma/dev': 0.24.17
@@ -119,6 +120,9 @@ importers:
       '@casl/ability':
         specifier: 7.0.0
         version: 7.0.0
+      '@fastify/helmet':
+        specifier: 13.1.0
+        version: 13.1.0
       '@fastify/static':
         specifier: '>=10.1.2'
         version: 10.1.2
@@ -865,6 +869,9 @@ packages:
 
   '@fastify/forwarded@3.0.2':
     resolution: {integrity: sha512-NE8HgKLgYejV9lDpqkEFaDKMLYelJBVfHekhB0UKvX0ghagXRJqg68feg8er1NPXxG4N9i6vPxzt8E+3wHfcmA==}
+
+  '@fastify/helmet@13.1.0':
+    resolution: {integrity: sha512-SvVOU0IrzYJW1BvSkfq9G1WUdW3dnaRUvg6m0BtgGMBmML62No0VmSu087jecH58SFbicbREgZTPJ89mAguupA==}
 
   '@fastify/merge-json-schemas@0.2.1':
     resolution: {integrity: sha512-OA3KGBCy6KtIvLf8DINC5880o5iBlDX4SxzLQS8HorJAbqluzLRn80UXU0bxZn7UOFhFgpRJDasfwn9nG4FG4A==}
@@ -2929,6 +2936,10 @@ packages:
   hasown@2.0.4:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
+
+  helmet@8.2.0:
+    resolution: {integrity: sha512-DRgTIUgnWcJ62KyarxxziuqYxKGnR6Rgg19BlbucN/dpmJbl1XOit6qvoOX0ZT+HhWe5OUVhU/a1zpGyc1xA0Q==}
+    engines: {node: '>=18.0.0'}
 
   html-encoding-sniffer@6.0.0:
     resolution: {integrity: sha512-CV9TW3Y3f8/wT0BRFc1/KAVQ3TUHiXmaAb6VW9vtiMFf7SLoMd1PdAc4W3KFOFETBJUb90KatHqlsZMWV+R9Gg==}
@@ -5025,6 +5036,11 @@ snapshots:
 
   '@fastify/forwarded@3.0.2': {}
 
+  '@fastify/helmet@13.1.0':
+    dependencies:
+      fastify-plugin: 6.0.0
+      helmet: 8.2.0
+
   '@fastify/merge-json-schemas@0.2.1':
     dependencies:
       dequal: 2.0.3
@@ -6964,6 +6980,8 @@ snapshots:
   hasown@2.0.4:
     dependencies:
       function-bind: 1.1.2
+
+  helmet@8.2.0: {}
 
   html-encoding-sniffer@6.0.0(@noble/hashes@1.8.0):
     dependencies:
