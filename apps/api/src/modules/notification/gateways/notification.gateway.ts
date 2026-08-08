@@ -20,22 +20,19 @@ import {
 } from '@nestjs/websockets';
 import type { Server } from 'socket.io';
 
-// Gateway decorator options are evaluated at class-definition time, before
-// Nest's DI container exists — CORS origins are read from the env directly
-// (mirrors app.config.ts's own parsing) rather than injected.
-const corsOrigins: string[] = (
-  process.env.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:5174'
-)
-  .split(',')
-  .map((origin: string): string => origin.trim())
-  .filter((origin: string): boolean => origin.length > 0);
-
 // Default namespace/path (`/socket.io`). Handshake carries the access token
 // in `auth.token` (no cookies — same contract as the HTTP bearer header),
 // validated exactly like HTTP via TokenService.verifyAccessToken (signature
 // + Redis allowlist). Room-naming contract PR 3's dispatcher depends on
 // lives in constants/notification-rooms.constants.ts.
-@WebSocketGateway({ cors: { origin: corsOrigins } })
+//
+// Deliberately no `cors` here: decorator options evaluate at module-import
+// time, before .env is loaded and before DI exists — an env read here once
+// silently diverged from HTTP CORS. The origins are injected at bootstrap
+// by RedisIoAdapter.createIOServer from the same AppConfig.corsOrigins the
+// HTTP layer uses (backend.md §11b: transport options that need config are
+// an adapter concern, never decorator options).
+@WebSocketGateway()
 @Injectable()
 export class NotificationGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
@@ -102,6 +99,16 @@ export class NotificationGateway
     await this.joinRooms(client, user);
     this.sockets.add(client);
 
+    // A client that dropped during the async verify/join windows has already
+    // fired handleDisconnect (against a set it was never in) — without this
+    // re-check its dead socket would sit in the set forever, paying one
+    // token verify + Redis hit per sweep.
+    if (!client.connected) {
+      this.sockets.delete(client);
+
+      return;
+    }
+
     this.logger.debug(`WS connected: user=${user.id} socket=${client.id}`);
   }
 
@@ -161,6 +168,14 @@ export class NotificationGateway
   }
 
   private async revalidateOne(client: AuthenticatedSocketType): Promise<void> {
+    // Belt and braces for the handshake-window race above: a socket that is
+    // already dead needs no re-verify, only eviction from the set.
+    if (!client.connected) {
+      this.sockets.delete(client);
+
+      return;
+    }
+
     try {
       await this.tokenService.verifyAccessToken(client.data.token);
     } catch (error) {

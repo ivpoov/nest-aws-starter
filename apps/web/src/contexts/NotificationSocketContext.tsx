@@ -1,24 +1,24 @@
-import { createContext, type ReactElement, type ReactNode, useContext } from 'react';
+import { createContext, type ReactElement, useContext } from 'react';
+import { Outlet } from 'react-router';
 import { useNotificationSocket } from '../hooks/notifications/useNotificationSocket';
 import type { UseNotificationSocketResultInterface } from '../interfaces/use-notification-socket-result.interface';
 
 const NotificationSocketContext = createContext<UseNotificationSocketResultInterface | null>(null);
 
-interface NotificationSocketProviderPropsInterface {
-  readonly children: ReactNode;
-}
-
 // One socket per tab: mounted once around the authenticated shell
 // (AppLayout) so the bell and the dropdown list read the same live state
 // instead of each opening their own connection.
-export function NotificationSocketProvider({
-  children,
-}: NotificationSocketProviderPropsInterface): ReactElement {
+//
+// A pathless layout route rather than a `children` wrapper: it renders
+// <Outlet /> so App.tsx can nest it as a plain <Route>, which is what lets the
+// whole module be fenced out of App.tsx by deleting two self-contained lines
+// (see docs/removal/notification.md) instead of unwrapping JSX by hand.
+export function NotificationSocketProvider(): ReactElement {
   const value: UseNotificationSocketResultInterface = useNotificationSocket();
 
   return (
     <NotificationSocketContext.Provider value={value}>
-      {children}
+      <Outlet />
     </NotificationSocketContext.Provider>
   );
 }

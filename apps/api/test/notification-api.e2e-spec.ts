@@ -69,12 +69,15 @@ describe('notification history API (e2e)', () => {
     return { id: user.id, token: login.body.accessToken };
   }
 
-  async function seedUserNotification(userId: string): Promise<NotificationModel> {
+  async function seedUserNotification(
+    userId: string,
+    type: string = 'NEW_DEVICE_LOGIN',
+  ): Promise<NotificationModel> {
     return prisma.notification.create({
       data: {
         audience: 'USER',
         userId,
-        type: 'NEW_DEVICE_LOGIN',
+        type,
         title: 'title',
         body: 'body',
         meta: {},
@@ -83,10 +86,52 @@ describe('notification history API (e2e)', () => {
     });
   }
 
-  async function seedAdminNotification(): Promise<NotificationModel> {
+  async function seedAdminNotification(id?: string): Promise<NotificationModel> {
     return prisma.notification.create({
-      data: { audience: 'ADMIN', userId: null, type: 'USER_BLOCKED', title: 'title', body: 'body' },
+      data: {
+        ...(id && { id }),
+        audience: 'ADMIN',
+        userId: null,
+        type: 'USER_BLOCKED',
+        title: 'title',
+        body: 'body',
+      },
     });
+  }
+
+  function idsOf(items: NotificationBodyInterface[]): string[] {
+    return items.map((item: NotificationBodyInterface): string => item.id);
+  }
+
+  // Walks every cursor page of a listing, so a test asserts the whole feed
+  // rather than whatever happened to land on page 1.
+  async function collectPages(
+    token: string,
+    query: string,
+    limit: number,
+  ): Promise<NotificationBodyInterface[]> {
+    const collected: NotificationBodyInterface[] = [];
+    let cursor: string | null = null;
+    let pages: number = 0;
+
+    do {
+      const filters: string = query ? `${query}&` : '';
+      const url: string = `/api/v1/notifications?${filters}limit=${limit}${
+        cursor ? `&cursor=${cursor}` : ''
+      }`;
+      const response = await request(app.getHttpServer())
+        .get(url)
+        .set('authorization', `Bearer ${token}`)
+        .expect(200);
+
+      collected.push(...(response.body.items as NotificationBodyInterface[]));
+      cursor = response.body.nextCursor;
+      pages += 1;
+
+      if (pages > 10) throw new Error('Cursor paging did not terminate');
+    } while (cursor);
+
+    return collected;
   }
 
   beforeAll(async () => {
@@ -259,6 +304,31 @@ describe('notification history API (e2e)', () => {
     expect(count.body.count).toBe(0);
   });
 
+  // `Boolean('false')` is true, so the DTO used to coerce ?unreadOnly=false
+  // into an unread-only listing: the filter could be turned on but never off.
+  it('treats unreadOnly=false as off, and a missing unreadOnly as off', async () => {
+    const owner = await registerUser();
+    const readRow = await seedUserNotification(owner.id);
+    const unreadRow = await seedUserNotification(owner.id);
+
+    await request(app.getHttpServer())
+      .patch(`/api/v1/notifications/${readRow.id}/read`)
+      .set('authorization', `Bearer ${owner.token}`)
+      .expect(204);
+
+    for (const query of ['?unreadOnly=false', '']) {
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/notifications${query}`)
+        .set('authorization', `Bearer ${owner.token}`)
+        .expect(200);
+      const ids: string[] = (response.body.items as NotificationBodyInterface[]).map(
+        (item: NotificationBodyInterface): string => item.id,
+      );
+
+      expect(ids).toEqual([unreadRow.id, readRow.id]);
+    }
+  });
+
   it('an admin sees a merged USER+ADMIN feed; a plain user never sees ADMIN rows', async () => {
     const admin = await registerAdmin();
     const plainUser = await registerUser();
@@ -293,6 +363,215 @@ describe('notification history API (e2e)', () => {
       .expect(403);
 
     expect(forbidden.body.code).toBe('NOTIFICATION_ACCESS_DENIED');
+  });
+
+  // A UUIDv7 whose 2023 timestamp prefix is fixed and whose node bits are
+  // random (the suite shares a long-lived database, so a hard-coded id would
+  // collide with the previous run): both notification ids and user ids are
+  // UUIDv7, so this row is unambiguously older than any account this suite
+  // registers, whatever order the tests run in.
+  function preAccountNotificationId(): string {
+    return `01890a5d-ac96-774b-bcce-${randomUUID().replaceAll('-', '').slice(-12)}`;
+  }
+
+  // Plan Task 1: "unread count for admins = notifications newer than the
+  // admin's account minus their receipts". Without the bound, a newly created
+  // or promoted admin inherits the entire historical ADMIN backlog as unread
+  // (badge in the thousands on first login) and every 60s badge poll
+  // anti-joins the whole table.
+  it('starts a fresh admin at zero ADMIN backlog, with the badge equal to the feed', async () => {
+    const preAccount = await seedAdminNotification(preAccountNotificationId());
+    const admin = await registerAdmin();
+    const fresh = await seedAdminNotification();
+
+    const list = await request(app.getHttpServer())
+      .get('/api/v1/notifications?limit=100')
+      .set('authorization', `Bearer ${admin.token}`)
+      .expect(200);
+    const items = list.body.items as NotificationBodyInterface[];
+    const ids: string[] = items.map((item: NotificationBodyInterface): string => item.id);
+
+    // The whole visible feed fits in one page — with the backlog included it
+    // would fill the page and hand back a cursor.
+    expect(list.body.nextCursor).toBeNull();
+    expect(ids).toContain(fresh.id);
+    expect(ids).not.toContain(preAccount.id);
+
+    const count = await request(app.getHttpServer())
+      .get('/api/v1/notifications/unread-count')
+      .set('authorization', `Bearer ${admin.token}`)
+      .expect(200);
+    const unreadInFeed: number = items.filter(
+      (item: NotificationBodyInterface): boolean => item.readAt === null,
+    ).length;
+
+    expect(count.body.count).toBe(unreadInFeed);
+  });
+
+  // Server-side type/audience filters (the admin history page used to filter
+  // fetched pages in memory, so a filtered view showed an arbitrary subset of
+  // one page and "load more" could append nothing while staying enabled).
+  describe('server-side list filters', () => {
+    it('pages a type-filtered feed across multiple cursor pages, newest first', async () => {
+      const owner = await registerUser();
+      const paymentRows: NotificationModel[] = [];
+
+      for (let index = 0; index < 5; index += 1) {
+        paymentRows.push(await seedUserNotification(owner.id, 'PAYMENT_FAILED'));
+      }
+
+      // Newest row overall, and of the excluded type — an unfiltered or
+      // page-local filter would surface it (or lose a PAYMENT_FAILED row to
+      // it) on the first page.
+      const excluded = await seedUserNotification(owner.id, 'NEW_DEVICE_LOGIN');
+
+      const items: NotificationBodyInterface[] = await collectPages(
+        owner.token,
+        'type=PAYMENT_FAILED',
+        2,
+      );
+      const ids: string[] = items.map((item: NotificationBodyInterface): string => item.id);
+
+      expect(ids).toEqual(
+        [...paymentRows].reverse().map((row: NotificationModel): string => row.id),
+      );
+      expect(ids).not.toContain(excluded.id);
+      expect(
+        items.every((item: NotificationBodyInterface): boolean => item.type === 'PAYMENT_FAILED'),
+      ).toBe(true);
+    });
+
+    // Both rows below are the newest of their audience, so the first page is
+    // enough to prove which branch of the merged scope each filter keeps.
+    async function fetchFirstPageIds(token: string, query: string): Promise<string[]> {
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/notifications?${query}&limit=20`)
+        .set('authorization', `Bearer ${token}`)
+        .expect(200);
+
+      return (response.body.items as NotificationBodyInterface[]).map(
+        (item: NotificationBodyInterface): string => item.id,
+      );
+    }
+
+    it('narrows an admin’s merged feed to one audience without widening anyone’s scope', async () => {
+      const admin = await registerAdmin();
+      const ownRow = await seedUserNotification(admin.id);
+      const adminRow = await seedAdminNotification();
+
+      const adminOnlyIds: string[] = await fetchFirstPageIds(admin.token, 'audience=ADMIN');
+
+      expect(adminOnlyIds).toContain(adminRow.id);
+      expect(adminOnlyIds).not.toContain(ownRow.id);
+
+      const userOnlyIds: string[] = await fetchFirstPageIds(admin.token, 'audience=USER');
+
+      expect(userOnlyIds).toContain(ownRow.id);
+      expect(userOnlyIds).not.toContain(adminRow.id);
+
+      // A plain user asking for ADMIN rows gets nothing — the filter narrows,
+      // it never grants.
+      const plainUser = await registerUser();
+
+      await seedUserNotification(plainUser.id);
+
+      const forbiddenScope = await request(app.getHttpServer())
+        .get('/api/v1/notifications?audience=ADMIN')
+        .set('authorization', `Bearer ${plainUser.token}`)
+        .expect(200);
+
+      expect(forbiddenScope.body.items).toEqual([]);
+      expect(forbiddenScope.body.nextCursor).toBeNull();
+    });
+
+    it('rejects an unknown type or audience with a 400', async () => {
+      const owner = await registerUser();
+
+      await request(app.getHttpServer())
+        .get('/api/v1/notifications?type=NOT_A_TYPE')
+        .set('authorization', `Bearer ${owner.token}`)
+        .expect(400);
+
+      await request(app.getHttpServer())
+        .get('/api/v1/notifications?audience=EVERYONE')
+        .set('authorization', `Bearer ${owner.token}`)
+        .expect(400);
+    });
+  });
+
+  // Paging used Prisma's `cursor` + `skip: 1`, which offsets past exactly one
+  // row on the assumption that the cursor row is still the first match. A
+  // filter over mutable state breaks that assumption: once the cursor row has
+  // been marked read, `unreadOnly` already excludes it and the offset ate the
+  // next legitimate row instead — silently, and only for filtered feeds.
+  describe('cursor pagination', () => {
+    it('keeps the row after a cursor whose own row stopped matching the filter', async () => {
+      const owner = await registerUser();
+      const oldest: NotificationModel = await seedUserNotification(owner.id);
+      const middle: NotificationModel = await seedUserNotification(owner.id);
+      const newest: NotificationModel = await seedUserNotification(owner.id);
+
+      const firstPage = await request(app.getHttpServer())
+        .get('/api/v1/notifications?unreadOnly=true&limit=1')
+        .set('authorization', `Bearer ${owner.token}`)
+        .expect(200);
+
+      expect(idsOf(firstPage.body.items as NotificationBodyInterface[])).toEqual([newest.id]);
+      expect(firstPage.body.nextCursor).toBe(newest.id);
+
+      // The cursor row leaves the filtered set between the two requests —
+      // exactly what opening a notification from the dropdown does.
+      await request(app.getHttpServer())
+        .patch(`/api/v1/notifications/${newest.id}/read`)
+        .set('authorization', `Bearer ${owner.token}`)
+        .expect(204);
+
+      const secondPage = await request(app.getHttpServer())
+        .get(`/api/v1/notifications?unreadOnly=true&limit=1&cursor=${newest.id}`)
+        .set('authorization', `Bearer ${owner.token}`)
+        .expect(200);
+
+      expect(idsOf(secondPage.body.items as NotificationBodyInterface[])).toEqual([middle.id]);
+
+      const thirdPage = await request(app.getHttpServer())
+        .get(`/api/v1/notifications?unreadOnly=true&limit=1&cursor=${middle.id}`)
+        .set('authorization', `Bearer ${owner.token}`)
+        .expect(200);
+
+      expect(idsOf(thirdPage.body.items as NotificationBodyInterface[])).toEqual([oldest.id]);
+    });
+
+    it('walks an unfiltered feed page by page without dropping or repeating a row', async () => {
+      const owner = await registerUser();
+      const rows: NotificationModel[] = [];
+
+      for (let index = 0; index < 5; index += 1) {
+        rows.push(await seedUserNotification(owner.id));
+      }
+
+      const items: NotificationBodyInterface[] = await collectPages(owner.token, '', 2);
+      const ids: string[] = idsOf(items);
+
+      expect(ids).toEqual([...rows].reverse().map((row: NotificationModel): string => row.id));
+      expect(new Set(ids).size).toBe(ids.length);
+    });
+  });
+
+  // The FK/cascade added in 20260808175249_notification_user_fk_cascade: the
+  // starter had three userId columns in one migration and only the
+  // preference one was constrained, so whoever adds account deletion first
+  // would inherit orphaned notification and receipt rows while the
+  // preference rows cascaded away.
+  it('cascades a user’s notifications and receipts away when the user row is deleted', async () => {
+    const owner = await registerUser();
+    const row = await seedUserNotification(owner.id);
+
+    expect(await prisma.notificationReceipt.count({ where: { notificationId: row.id } })).toBe(1);
+
+    await prisma.user.delete({ where: { id: owner.id } });
+
+    expect(await prisma.notification.count({ where: { id: row.id } })).toBe(0);
+    expect(await prisma.notificationReceipt.count({ where: { notificationId: row.id } })).toBe(0);
   });
 
   it('lazily creates the admin’s own reader receipt on first mark-read of an ADMIN-audience row', async () => {

@@ -19,8 +19,11 @@ import { toApiError } from '../../utils/toApiError';
 // reconciles its own item list, and reports read-state changes up to the
 // socket context so the bell badge stays in sync (the API never pushes a
 // fresh unread-count on a read — see notification-fan-out.service.ts).
+// A successful mutation also triggers an authoritative refetch of the count
+// rather than trusting the optimistic delta alone, so a second tab's reads
+// stop drifting the badge for the rest of the session.
 export function useNotificationList(): UseNotificationListResultInterface {
-  const { unreadCount, adjustUnreadCount } = useNotificationSocketContext();
+  const { unreadCount, adjustUnreadCount, refreshUnreadCount } = useNotificationSocketContext();
   const [items, setItems] = useState<NotificationResponseInterface[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -81,13 +84,14 @@ export function useNotificationList(): UseNotificationListResultInterface {
 
       try {
         await markNotificationRead(id);
+        void refreshUnreadCount();
       } catch (caught) {
         setItems((previous: NotificationResponseInterface[]) => setReadAt(previous, id, null));
         adjustUnreadCount(1);
         setError(toApiError(caught));
       }
     },
-    [items, adjustUnreadCount],
+    [items, adjustUnreadCount, refreshUnreadCount],
   );
 
   const markAllRead = useCallback(async (): Promise<void> => {
@@ -104,12 +108,13 @@ export function useNotificationList(): UseNotificationListResultInterface {
 
     try {
       await markAllNotificationsRead();
+      void refreshUnreadCount();
     } catch (caught) {
       setItems(previousItems);
       adjustUnreadCount(previousUnreadCount);
       setError(toApiError(caught));
     }
-  }, [items, unreadCount, adjustUnreadCount]);
+  }, [items, unreadCount, adjustUnreadCount, refreshUnreadCount]);
 
   useEffect(() => {
     void load();

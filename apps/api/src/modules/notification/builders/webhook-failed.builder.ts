@@ -3,7 +3,7 @@ import type { WebhookFailedPayloadInterface } from '@modules/notification/interf
 
 // Error messages are internal diagnostics (provider SDK / dispatch failures),
 // never user input — capped only to keep the denormalized meta blob bounded.
-const MAX_LAST_ERROR_LENGTH = 300;
+const MAX_LAST_ERROR_LENGTH: number = 300;
 
 // ADMIN audience — the row addresses the admin cohort, not a specific user.
 export function buildWebhookFailedContent(

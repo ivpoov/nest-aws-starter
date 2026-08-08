@@ -11,6 +11,7 @@ import {
 import type { NotificationInterface } from '@modules/notification/interfaces/notification.interface.js';
 import type { NotificationListInterface } from '@modules/notification/interfaces/notification-list.interface.js';
 import type { NotificationListItemInterface } from '@modules/notification/interfaces/notification-list-item.interface.js';
+import type { NotificationListQueryInterface } from '@modules/notification/interfaces/notification-list-query.interface.js';
 import type { NotificationRepositoryInterface } from '@modules/notification/interfaces/notification-repository.interface.js';
 import type { NotificationScopeFiltersInterface } from '@modules/notification/interfaces/notification-scope-filters.interface.js';
 import type { NotificationUnreadCountInterface } from '@modules/notification/interfaces/notification-unread-count.interface.js';
@@ -32,11 +33,11 @@ export class NotificationService {
   public async findMany(
     user: CurrentUserInterface,
     pagination: CursorPaginationInterface,
-    unreadOnly: boolean,
+    query: NotificationListQueryInterface,
   ): Promise<NotificationListInterface> {
     const items: NotificationListItemInterface[] = await this.notificationRepository.findManyAfter(
       pagination,
-      { ...this.toScope(user), unreadOnly },
+      { ...this.toScope(user), ...query },
     );
     const lastItem: NotificationListItemInterface | undefined = items[items.length - 1];
     const nextCursor: string | null =

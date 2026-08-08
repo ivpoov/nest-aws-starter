@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { TransactionStatus } from '@generated/prisma/enums.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import request from 'supertest';
@@ -38,7 +39,7 @@ describe('transactions', () => {
 
   function seedTransaction(overrides: {
     userId: string;
-    status?: string;
+    status?: TransactionStatus;
     amountCents?: number;
     createdAt?: Date;
   }): Promise<{ id: string }> {

@@ -71,7 +71,11 @@ describe('NotificationService', () => {
       const findManyAfter = vi.fn().mockResolvedValue([item]);
       const { service } = createService({ findManyAfter });
 
-      const page = await service.findMany(owner, { cursor: null, limit: 20 }, false);
+      const page = await service.findMany(
+        owner,
+        { cursor: null, limit: 20 },
+        { unreadOnly: false },
+      );
 
       expect(findManyAfter).toHaveBeenCalledWith(
         { cursor: null, limit: 20 },
@@ -85,11 +89,37 @@ describe('NotificationService', () => {
       const findManyAfter = vi.fn().mockResolvedValue([]);
       const { service } = createService({ findManyAfter });
 
-      await service.findMany(admin, { cursor: null, limit: 20 }, true);
+      await service.findMany(admin, { cursor: null, limit: 20 }, { unreadOnly: true });
 
       expect(findManyAfter).toHaveBeenCalledWith(
         { cursor: null, limit: 20 },
         { userId: adminId, includeAdmin: true, unreadOnly: true },
+      );
+    });
+
+    it('forwards the server-side type/audience filters into the repository query', async () => {
+      const findManyAfter = vi.fn().mockResolvedValue([]);
+      const { service } = createService({ findManyAfter });
+
+      await service.findMany(
+        admin,
+        { cursor: null, limit: 20 },
+        {
+          unreadOnly: false,
+          type: NotificationTypeEnum.CONTACT_MESSAGE,
+          audience: NotificationAudienceEnum.ADMIN,
+        },
+      );
+
+      expect(findManyAfter).toHaveBeenCalledWith(
+        { cursor: null, limit: 20 },
+        {
+          userId: adminId,
+          includeAdmin: true,
+          unreadOnly: false,
+          type: NotificationTypeEnum.CONTACT_MESSAGE,
+          audience: NotificationAudienceEnum.ADMIN,
+        },
       );
     });
 
@@ -100,14 +130,22 @@ describe('NotificationService', () => {
       ];
       const { service } = createService({ findManyAfter: vi.fn().mockResolvedValue(items) });
 
-      const fullPage = await service.findMany(owner, { cursor: null, limit: 2 }, false);
+      const fullPage = await service.findMany(
+        owner,
+        { cursor: null, limit: 2 },
+        { unreadOnly: false },
+      );
 
       expect(fullPage.nextCursor).toBe('b');
 
       const { service: shortService } = createService({
         findManyAfter: vi.fn().mockResolvedValue([items[0]]),
       });
-      const shortPage = await shortService.findMany(owner, { cursor: null, limit: 2 }, false);
+      const shortPage = await shortService.findMany(
+        owner,
+        { cursor: null, limit: 2 },
+        { unreadOnly: false },
+      );
 
       expect(shortPage.nextCursor).toBeNull();
     });

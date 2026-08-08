@@ -26,6 +26,7 @@ const OVERVIEW: Record<string, unknown> = {
   revenueByPlan: [],
 };
 
+// <module:payment>
 // Payment present — revenue/mrr are real numbers, and RevenueChart's
 // switcher is only rendered in this state (isAvailable derives from
 // totals.revenue !== null, mirroring KpiTiles).
@@ -33,6 +34,7 @@ const OVERVIEW_WITH_REVENUE: Record<string, unknown> = {
   ...OVERVIEW,
   totals: { ...(OVERVIEW.totals as Record<string, unknown>), revenue: 12_500, mrrCents: 4_900 },
 };
+// </module:payment>
 
 describe('StatisticsPage', () => {
   beforeEach(() => {
@@ -97,6 +99,7 @@ describe('StatisticsPage', () => {
     });
   });
 
+  // <module:payment>
   it('fetches and refetches the revenue series independently of the registrations series', async () => {
     vi.mocked(statisticsApi.fetchStatisticsOverview).mockResolvedValue(
       OVERVIEW_WITH_REVENUE as never,
@@ -138,4 +141,5 @@ describe('StatisticsPage', () => {
 
     expect(switchers).toHaveLength(1);
   });
+  // </module:payment>
 });

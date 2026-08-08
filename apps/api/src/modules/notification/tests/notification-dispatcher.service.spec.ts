@@ -1,3 +1,4 @@
+import type { WebsocketConfig } from '@configs/websocket.config.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { NOTIFICATION_EVENT } from '@modules/notification/constants/notification-events.constants.js';
 import { ADMIN_ROOM } from '@modules/notification/constants/notification-rooms.constants.js';
@@ -35,7 +36,12 @@ function createFakeNotification(
   };
 }
 
-function createDispatcher(callOrder: string[] = []): {
+const enabledWebsocketConfig: WebsocketConfig = { isEnabled: true, heartbeatIntervalMs: 60_000 };
+
+function createDispatcher(
+  callOrder: string[] = [],
+  websocket: WebsocketConfig = enabledWebsocketConfig,
+): {
   dispatcher: NotificationDispatcherService;
   create: ReturnType<typeof vi.fn>;
   countUnread: ReturnType<typeof vi.fn>;
@@ -74,6 +80,7 @@ function createDispatcher(callOrder: string[] = []): {
   // wired with the same leaf mocks (PR 5 code review's extraction) — the
   // mocking pattern below is unchanged, only which constructor it feeds.
   const fanOutService = new NotificationFanOutService(
+    websocket,
     notificationRepository,
     gateway,
     emailService,
@@ -355,6 +362,7 @@ describe('NotificationDispatcherService', () => {
         sendIfEnabled: vi.fn(),
       } as unknown as NotificationEmailService;
       const fanOutService = new NotificationFanOutService(
+        enabledWebsocketConfig,
         notificationRepository,
         gateway,
         emailService,
@@ -389,6 +397,7 @@ describe('NotificationDispatcherService', () => {
         sendIfEnabled: vi.fn(),
       } as unknown as NotificationEmailService;
       const fanOutService = new NotificationFanOutService(
+        enabledWebsocketConfig,
         notificationRepository,
         gateway,
         emailService,
@@ -408,6 +417,26 @@ describe('NotificationDispatcherService', () => {
       expect(warnSpy).toHaveBeenCalledTimes(2);
       expect(errorSpy).not.toHaveBeenCalled();
       expect(emailService.sendIfEnabled).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('WEBSOCKET_ENABLED=false (off means off)', () => {
+    it('skips both socket channels outright but still persists and attempts EMAIL', async () => {
+      const callOrder: string[] = [];
+      const { dispatcher, to, emit, countUnread, create, sendIfEnabled } = createDispatcher(
+        callOrder,
+        { isEnabled: false, heartbeatIntervalMs: 60_000 },
+      );
+
+      await dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });
+
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(to).not.toHaveBeenCalled();
+      expect(emit).not.toHaveBeenCalled();
+      // No unread-count query either — the push it feeds cannot happen.
+      expect(countUnread).not.toHaveBeenCalled();
+      expect(sendIfEnabled).toHaveBeenCalledTimes(1);
+      expect(callOrder).toEqual(['persist', 'email']);
     });
   });
 

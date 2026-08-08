@@ -73,27 +73,87 @@ describe('useNotificationList', () => {
     );
   });
 
-  it('applies type/audience filters to each fetched page client-side', async () => {
+  it('sends type/audience/unreadOnly as query params instead of filtering fetched pages', async () => {
     vi.mocked(notificationsApi.fetchNotifications).mockResolvedValueOnce({
       items: [
-        buildItem(
-          'n-1',
-          null,
-          NotificationTypeEnum.PASSWORD_CHANGED,
-          NotificationAudienceEnum.USER,
-        ),
         buildItem('n-2', null, NotificationTypeEnum.WEBHOOK_FAILED, NotificationAudienceEnum.ADMIN),
       ],
       nextCursor: null,
     });
 
     const { result } = renderHook(() =>
-      useNotificationList({ type: NotificationTypeEnum.WEBHOOK_FAILED, audience: null }),
+      useNotificationList({
+        type: NotificationTypeEnum.WEBHOOK_FAILED,
+        audience: NotificationAudienceEnum.ADMIN,
+        unreadOnly: true,
+      }),
     );
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
+    expect(notificationsApi.fetchNotifications).toHaveBeenCalledWith({
+      limit: NOTIFICATION_HISTORY_PAGE_SIZE,
+      type: NotificationTypeEnum.WEBHOOK_FAILED,
+      audience: NotificationAudienceEnum.ADMIN,
+      unreadOnly: true,
+    });
     expect(result.current.items.map((item) => item.id)).toEqual(['n-2']);
+  });
+
+  it('omits every filter left on "All" rather than sending null/false', async () => {
+    vi.mocked(notificationsApi.fetchNotifications).mockResolvedValueOnce({
+      items: [],
+      nextCursor: null,
+    });
+
+    const { result } = renderHook(() =>
+      useNotificationList({ type: null, audience: null, unreadOnly: false }),
+    );
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(notificationsApi.fetchNotifications).toHaveBeenCalledWith({
+      limit: NOTIFICATION_HISTORY_PAGE_SIZE,
+    });
+  });
+
+  // The bug this replaced: a filtered view paginated on the *unfiltered*
+  // cursor, so page two came back unfiltered and `hasMore` described a result
+  // set the user was not looking at — a rare-type filter rendered "No
+  // notifications match" right next to a live "Load more" button.
+  it('carries the active filters into loadMore so a filtered view paginates on its own cursor', async () => {
+    const filters: NotificationHistoryFiltersInterface = {
+      type: NotificationTypeEnum.WEBHOOK_FAILED,
+      audience: null,
+      unreadOnly: false,
+    };
+
+    vi.mocked(notificationsApi.fetchNotifications).mockResolvedValueOnce({
+      items: [buildItem('n-1', null, NotificationTypeEnum.WEBHOOK_FAILED)],
+      nextCursor: 'n-1',
+    });
+
+    const { result } = renderHook(() => useNotificationList(filters));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.hasMore).toBe(true);
+
+    vi.mocked(notificationsApi.fetchNotifications).mockResolvedValueOnce({
+      items: [buildItem('n-2', null, NotificationTypeEnum.WEBHOOK_FAILED)],
+      nextCursor: null,
+    });
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    expect(notificationsApi.fetchNotifications).toHaveBeenLastCalledWith({
+      cursor: 'n-1',
+      limit: NOTIFICATION_HISTORY_PAGE_SIZE,
+      type: NotificationTypeEnum.WEBHOOK_FAILED,
+    });
+    expect(result.current.items.map((item) => item.id)).toEqual(['n-1', 'n-2']);
+    expect(result.current.hasMore).toBe(false);
   });
 
   it('resets pagination — refetches page one and replaces items — when filters change', async () => {
@@ -121,12 +181,21 @@ describe('useNotificationList', () => {
       nextCursor: null,
     });
 
-    rerender({ filters: { type: NotificationTypeEnum.WEBHOOK_FAILED, audience: null } });
+    rerender({
+      filters: {
+        type: NotificationTypeEnum.WEBHOOK_FAILED,
+        audience: null,
+        unreadOnly: false,
+      },
+    });
 
     await waitFor(() => expect(result.current.items.map((item) => item.id)).toEqual(['n-2']));
     expect(result.current.hasMore).toBe(false);
+    // No `cursor` — the previous page's cursor belonged to the unfiltered
+    // result set and must not be reused for the newly filtered one.
     expect(notificationsApi.fetchNotifications).toHaveBeenLastCalledWith({
       limit: NOTIFICATION_HISTORY_PAGE_SIZE,
+      type: NotificationTypeEnum.WEBHOOK_FAILED,
     });
   });
 

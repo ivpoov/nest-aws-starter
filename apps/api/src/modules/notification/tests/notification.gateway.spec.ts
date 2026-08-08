@@ -19,10 +19,17 @@ function createSocket(auth: Record<string, unknown> = {}): AuthenticatedSocketTy
     id: `socket-${Math.random()}`,
     handshake: { auth },
     data: undefined,
+    connected: true,
     disconnect: vi.fn(),
     emit: vi.fn(),
     join: vi.fn().mockResolvedValue(undefined),
   } as unknown as AuthenticatedSocketType;
+}
+
+// socket.io flips `connected` itself when the transport dies; tests drive it
+// directly to reproduce the interleavings that flag is there to catch.
+function setConnected(client: AuthenticatedSocketType, connected: boolean): void {
+  (client as unknown as { connected: boolean }).connected = connected;
 }
 
 describe('NotificationGateway', () => {
@@ -162,6 +169,70 @@ describe('NotificationGateway', () => {
       gateway.handleDisconnect(client);
       tokenService.verifyAccessToken.mockClear();
 
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(tokenService.verifyAccessToken).not.toHaveBeenCalled();
+    });
+
+    // The tracked-socket set is private by design, so both cases below prove
+    // eviction the way the leak would actually hurt: a retained entry costs
+    // one token verify + Redis allowlist hit on every tick, forever. Reviving
+    // `connected` after the first tick distinguishes "evicted" from merely
+    // "skipped this time" — a set that still held the socket would verify it
+    // again the moment it looked alive.
+    it('does not retain a socket that dropped during the handshake window', async () => {
+      const user: CurrentUserInterface = createUser();
+      const gateway: NotificationGateway = createGateway(
+        createConfig({ heartbeatIntervalMs: 1_000 }),
+      );
+      const client: AuthenticatedSocketType = createSocket({ token: 'good' });
+
+      // Real interleaving: engine.io fires disconnect while handleConnection
+      // is still awaiting the verify, so handleDisconnect deletes from a set
+      // the socket has not been added to yet.
+      tokenService.verifyAccessToken.mockImplementation(async (): Promise<CurrentUserInterface> => {
+        setConnected(client, false);
+        gateway.handleDisconnect(client);
+
+        return user;
+      });
+
+      gateway.afterInit();
+      await gateway.handleConnection(client);
+
+      tokenService.verifyAccessToken.mockReset();
+      tokenService.verifyAccessToken.mockResolvedValue(user);
+
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(tokenService.verifyAccessToken).not.toHaveBeenCalled();
+
+      setConnected(client, true);
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(tokenService.verifyAccessToken).not.toHaveBeenCalled();
+    });
+
+    it('evicts a tracked socket whose transport died without a disconnect event', async () => {
+      const user: CurrentUserInterface = createUser();
+
+      tokenService.verifyAccessToken.mockResolvedValue(user);
+
+      const gateway: NotificationGateway = createGateway(
+        createConfig({ heartbeatIntervalMs: 1_000 }),
+      );
+      const client: AuthenticatedSocketType = createSocket({ token: 'good' });
+
+      gateway.afterInit();
+      await gateway.handleConnection(client);
+      setConnected(client, false);
+      tokenService.verifyAccessToken.mockClear();
+
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(tokenService.verifyAccessToken).not.toHaveBeenCalled();
+
+      setConnected(client, true);
       await vi.advanceTimersByTimeAsync(1_000);
 
       expect(tokenService.verifyAccessToken).not.toHaveBeenCalled();

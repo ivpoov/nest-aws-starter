@@ -6,6 +6,7 @@ import type { UseNotificationHistoryFiltersResultInterface } from '../../interfa
 const EMPTY_FILTERS: NotificationHistoryFiltersInterface = {
   type: null,
   audience: null,
+  unreadOnly: false,
 };
 
 export function useNotificationHistoryFilters(): UseNotificationHistoryFiltersResultInterface {
@@ -47,5 +48,31 @@ export function useNotificationHistoryFilters(): UseNotificationHistoryFiltersRe
     );
   }, []);
 
-  return { filters, toggleType, clearType, toggleAudience, clearAudience };
+  const toggleUnreadOnly = useCallback((): void => {
+    setFilters(
+      (current: NotificationHistoryFiltersInterface): NotificationHistoryFiltersInterface => ({
+        ...current,
+        unreadOnly: !current.unreadOnly,
+      }),
+    );
+  }, []);
+
+  const clearUnreadOnly = useCallback((): void => {
+    setFilters(
+      (current: NotificationHistoryFiltersInterface): NotificationHistoryFiltersInterface => ({
+        ...current,
+        unreadOnly: false,
+      }),
+    );
+  }, []);
+
+  return {
+    filters,
+    toggleType,
+    clearType,
+    toggleAudience,
+    clearAudience,
+    toggleUnreadOnly,
+    clearUnreadOnly,
+  };
 }

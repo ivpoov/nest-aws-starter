@@ -48,7 +48,7 @@ export class NotificationController {
     return this.notificationService.findMany(
       user,
       { cursor: query.cursor, limit: query.limit },
-      query.unreadOnly ?? false,
+      { unreadOnly: query.unreadOnly, type: query.type, audience: query.audience },
     );
   }
 

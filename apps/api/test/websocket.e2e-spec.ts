@@ -13,9 +13,17 @@ import request from 'supertest';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp } from './app.factory.js';
 
+// Deliberately not the localhost default the gateway used to hard-code as
+// its fallback: CORS_ORIGINS is set here before the app is built so a socket
+// endpoint reading its own env at import time (which happens before
+// loadEnv()) would visibly disagree with the HTTP layer.
+const CONFIGURED_ORIGIN: string = 'https://ws-cors-pin.example';
+const OTHER_CONFIGURED_ORIGIN: string = 'https://ws-cors-pin-admin.example';
+
 describe('websocket notification gateway', () => {
   let app: NestFastifyApplication;
   let baseUrl: string;
+  let originalCorsOrigins: string | undefined;
   const openSockets: Socket[] = [];
 
   function uniqueIp(): string {
@@ -100,6 +108,9 @@ describe('websocket notification gateway', () => {
   }
 
   beforeAll(async () => {
+    originalCorsOrigins = process.env.CORS_ORIGINS;
+    process.env.CORS_ORIGINS = `${CONFIGURED_ORIGIN},${OTHER_CONFIGURED_ORIGIN}`;
+
     app = await createTestApp();
     await app.listen({ port: 0, host: '127.0.0.1' });
 
@@ -111,6 +122,9 @@ describe('websocket notification gateway', () => {
 
   afterAll(async () => {
     await app.close();
+
+    if (originalCorsOrigins === undefined) delete process.env.CORS_ORIGINS;
+    else process.env.CORS_ORIGINS = originalCorsOrigins;
   });
 
   afterEach(() => {
@@ -162,6 +176,55 @@ describe('websocket notification gateway', () => {
     await disconnected;
   });
 
+  // One parse, one source: the socket endpoint and the HTTP app must answer
+  // an origin question identically, because both read AppConfig.corsOrigins.
+  // Asserting the two answers against each other (not against a literal) is
+  // what makes them impossible to drift apart again.
+  describe('socket CORS shares one source with HTTP CORS', () => {
+    async function httpAllowOrigin(origin: string): Promise<string | undefined> {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/auth/providers')
+        .set('origin', origin)
+        .expect(200);
+
+      return response.headers['access-control-allow-origin'];
+    }
+
+    // engine.io's polling handshake is the socket transport's own CORS-bearing
+    // response — the same endpoint a browser preflights before upgrading.
+    async function socketAllowOrigin(origin: string): Promise<string | undefined> {
+      const response = await request(app.getHttpServer())
+        .get('/socket.io/?EIO=4&transport=polling')
+        .set('origin', origin)
+        .expect(200);
+
+      return response.headers['access-control-allow-origin'];
+    }
+
+    it('allows every configured origin on both transports', async () => {
+      for (const origin of [CONFIGURED_ORIGIN, OTHER_CONFIGURED_ORIGIN]) {
+        const fromHttp: string | undefined = await httpAllowOrigin(origin);
+        const fromSocket: string | undefined = await socketAllowOrigin(origin);
+
+        expect(fromHttp).toBe(origin);
+        expect(fromSocket).toBe(fromHttp);
+      }
+    });
+
+    it('rejects an unconfigured origin on both transports', async () => {
+      const fromHttp: string | undefined = await httpAllowOrigin('https://evil.example');
+      const fromSocket: string | undefined = await socketAllowOrigin('https://evil.example');
+
+      expect(fromHttp).toBeUndefined();
+      expect(fromSocket).toBe(fromHttp);
+    });
+
+    it('never allows the gateway’s former hard-coded localhost fallback', async () => {
+      expect(await socketAllowOrigin('http://localhost:5173')).toBeUndefined();
+      expect(await httpAllowOrigin('http://localhost:5173')).toBeUndefined();
+    });
+  });
+
   it('disconnects a live socket once its session is revoked (heartbeat re-check)', async () => {
     const user = await registerUser();
     const socket: Socket = connect(user.accessToken);
@@ -183,5 +246,74 @@ describe('websocket notification gateway', () => {
       .expect(204);
 
     await disconnected;
+  });
+});
+
+// backend.md §12's "no third state" for the socket transport. The e2e env
+// pins WEBSOCKET_ENABLED=true for every other suite, so this one builds its
+// own app with the flag off — the whole point is that bootstrap, not the
+// gateway, is what turns the transport off.
+describe('websocket notification gateway (WEBSOCKET_ENABLED=false)', () => {
+  let app: NestFastifyApplication;
+  let baseUrl: string;
+  let originalFlag: string | undefined;
+
+  beforeAll(async () => {
+    originalFlag = process.env.WEBSOCKET_ENABLED;
+    process.env.WEBSOCKET_ENABLED = 'false';
+
+    app = await createTestApp();
+    await app.listen({ port: 0, host: '127.0.0.1' });
+
+    const address: string | AddressInfo | null = app.getHttpServer().address();
+    const port: number = typeof address === 'object' && address !== null ? address.port : 0;
+
+    baseUrl = `http://127.0.0.1:${port}`;
+  });
+
+  afterAll(async () => {
+    await app.close();
+
+    if (originalFlag === undefined) delete process.env.WEBSOCKET_ENABLED;
+    else process.env.WEBSOCKET_ENABLED = originalFlag;
+  });
+
+  it('exposes no socket endpoint on the API port', async () => {
+    // A 404 (not an engine.io open packet) is the observable proof that no
+    // Socket.IO server is attached to the HTTP server at all.
+    await request(app.getHttpServer()).get('/socket.io/?EIO=4&transport=polling').expect(404);
+  });
+
+  it('refuses a handshake outright instead of accepting then dropping it', async () => {
+    const email: string = `ws-off-e2e-${randomUUID()}@example.com`;
+    const registered = await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .set('x-forwarded-for', `10.${Math.floor(Math.random() * 255)}.9.9`)
+      .send({ displayName: 'WS Off E2E', email, password: 'correct-horse-battery' })
+      .expect(201);
+
+    const socket: Socket = io(baseUrl, {
+      auth: { token: registered.body.accessToken },
+      transports: ['websocket'],
+      forceNew: true,
+      reconnection: false,
+    });
+
+    try {
+      const outcome: string = await new Promise((resolve) => {
+        socket.once('connect', () => resolve('connected'));
+        socket.once('connect_error', () => resolve('refused'));
+      });
+
+      // "connected" here would mean the accept-then-disconnect reconnect-loop
+      // behaviour the disabled adapter exists to prevent.
+      expect(outcome).toBe('refused');
+    } finally {
+      socket.disconnect();
+    }
+  });
+
+  it('still serves HTTP, so the flag scopes to the socket transport only', async () => {
+    await request(app.getHttpServer()).get('/api/v1/auth/providers').expect(200);
   });
 });

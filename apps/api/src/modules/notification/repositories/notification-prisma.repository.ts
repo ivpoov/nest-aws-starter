@@ -53,18 +53,29 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
   // scope (see NotificationScopeFiltersInterface). `readAt` is resolved
   // from the caller's own receipt via a filtered include, never a second
   // query.
+  //
+  // Keyset pagination, not Prisma's `cursor` + `skip: 1`: this feed's `where`
+  // carries filters over mutable state (unreadOnly), so the cursor row can
+  // stop matching between two page requests. `skip: 1` exists only to drop
+  // the cursor row, and once the filter has already dropped it the offset
+  // eats the next legitimate row instead — the reader silently never sees
+  // it. Comparing ids in the `where` is correct for every filter
+  // combination because it does not depend on the cursor row surviving.
   public async findManyAfter(
     pagination: CursorPaginationInterface,
     filters: NotificationListFiltersInterface,
   ): Promise<NotificationListItemInterface[]> {
     const notifications: NotificationWithOwnReceipt[] = await this.prisma.notification.findMany({
       where: {
-        ...this.buildScopeWhere(filters),
+        ...this.buildScopeWhere(filters, filters.audience),
+        ...(filters.type && { type: filters.type }),
         ...(filters.unreadOnly && this.buildUnreadWhere(filters.userId)),
+        // Strictly older than the previous page's last id — UUIDv7 ids are
+        // time-ordered, so `lt` under `id: 'desc'` is "the next page".
+        ...(pagination.cursor && { id: { lt: pagination.cursor } }),
       },
       include: { receipts: { where: { userId: filters.userId } } },
       take: pagination.limit,
-      ...(pagination.cursor && { cursor: { id: pagination.cursor }, skip: 1 }),
       // UUIDv7 ids are time-ordered — id order IS creation order.
       orderBy: { id: 'desc' },
     });
@@ -117,9 +128,16 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
 
   // Lazy admin receipts: every ADMIN-audience row this admin has never seen
   // gets a reader receipt, created already-read (read-all's whole point).
+  // Bounded to the admin's visible scope (rows newer than their account, the
+  // same id cursor buildScopeWhere uses) — rows outside the feed need no
+  // receipt, so this stops materializing every ADMIN row ever written.
   private async createMissingAdminReceipts(adminId: string): Promise<void> {
     const unseen: { id: string }[] = await this.prisma.notification.findMany({
-      where: { audience: NotificationAudience.ADMIN, receipts: { none: { userId: adminId } } },
+      where: {
+        audience: NotificationAudience.ADMIN,
+        id: { gt: adminId },
+        receipts: { none: { userId: adminId } },
+      },
       select: { id: true },
     });
 
@@ -135,17 +153,30 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
     });
   }
 
-  // Own USER-audience rows, plus every ADMIN-audience row when the caller
-  // is an admin.
+  // Own USER-audience rows, plus ADMIN-audience rows when the caller is an
+  // admin. ADMIN rows are bounded to those newer than the admin's account:
+  // user ids and notification ids are both UUIDv7 (time-ordered), so the
+  // reader's own id doubles as the account-creation cursor. A fresh or newly
+  // promoted admin therefore starts at zero backlog instead of inheriting
+  // every ADMIN row ever written as unread, and the badge poll's anti-join
+  // becomes a range scan on @@index([audience, id]).
+  //
+  // The optional `audience` filter narrows the scope to one branch; it never
+  // widens it (a non-admin asking for ADMIN rows gets `OR: []` — no rows).
   private buildScopeWhere(
     filters: NotificationScopeFiltersInterface,
+    audience?: NotificationAudienceEnum,
   ): Prisma.NotificationWhereInput {
-    return {
-      OR: [
-        { audience: NotificationAudience.USER, userId: filters.userId },
-        ...(filters.includeAdmin ? [{ audience: NotificationAudience.ADMIN }] : []),
-      ],
-    };
+    const scopes: Prisma.NotificationWhereInput[] = [
+      ...(audience !== NotificationAudienceEnum.ADMIN
+        ? [{ audience: NotificationAudience.USER, userId: filters.userId }]
+        : []),
+      ...(filters.includeAdmin && audience !== NotificationAudienceEnum.USER
+        ? [{ audience: NotificationAudience.ADMIN, id: { gt: filters.userId } }]
+        : []),
+    ];
+
+    return { OR: scopes };
   }
 
   // Unread = the reader has no read receipt for the row yet, OR has one

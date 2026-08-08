@@ -1,24 +1,9 @@
-import type { NotificationResponseInterface } from '@nest-aws-starter/shared';
 import { describe, expect, it } from 'vitest';
 import {
   INITIAL_NOTIFICATION_SOCKET_STATE,
   notificationSocketReducer,
 } from '../hooks/notifications/notificationSocketReducer';
 import type { NotificationSocketStateInterface } from '../interfaces/notification-socket-state.interface';
-
-function buildNotification(id: string): NotificationResponseInterface {
-  return {
-    id,
-    audience: 'ADMIN' as NotificationResponseInterface['audience'],
-    userId: null,
-    type: 'WEBHOOK_FAILED' as NotificationResponseInterface['type'],
-    title: 'Title',
-    body: 'Body',
-    meta: {},
-    createdAt: '2026-08-01T00:00:00.000Z',
-    readAt: null,
-  };
-}
 
 describe('notificationSocketReducer', () => {
   it('sets isConnected on connected/disconnected', () => {
@@ -63,22 +48,19 @@ describe('notificationSocketReducer', () => {
     expect(flooredAtZero.unreadCount).toBe(0);
   });
 
-  it('prepends a received notification, caps the buffer, and bumps the unread count', () => {
+  it('bumps the badge once per arrival and keeps no other state', () => {
     let state: NotificationSocketStateInterface = INITIAL_NOTIFICATION_SOCKET_STATE;
 
     for (let index = 0; index < 25; index += 1) {
-      state = notificationSocketReducer(state, {
-        kind: 'notification-received',
-        notification: buildNotification(`n-${index}`),
-      });
+      state = notificationSocketReducer(state, { kind: 'notification-received' });
     }
 
-    expect(state.liveNotifications).toHaveLength(20);
-    expect(state.liveNotifications[0]?.id).toBe('n-24');
     // Admin trusts neither the socket's `unread-count` push (never even
     // wired up — see notification-events.constants.ts) nor the REST poll
     // to react instantly to a live arrival, so a received notification
-    // bumps the badge itself.
+    // bumps the badge itself — and that is the *only* thing it changes:
+    // the notification is not buffered anywhere.
     expect(state.unreadCount).toBe(25);
+    expect(Object.keys(state).sort()).toEqual(['isConnected', 'unreadCount']);
   });
 });

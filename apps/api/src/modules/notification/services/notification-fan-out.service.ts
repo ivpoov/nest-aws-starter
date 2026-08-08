@@ -1,3 +1,4 @@
+import { type WebsocketConfig, websocketConfig } from '@configs/websocket.config.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { NOTIFICATION_REPOSITORY } from '@modules/notification/constants/notification.constants.js';
 import {
@@ -30,6 +31,7 @@ export class NotificationFanOutService {
   private readonly logger = new CustomLoggerService(NotificationFanOutService.name);
 
   constructor(
+    @Inject(websocketConfig.KEY) private readonly config: WebsocketConfig,
     @Inject(NOTIFICATION_REPOSITORY)
     private readonly notificationRepository: NotificationRepositoryInterface,
     private readonly gateway: NotificationGateway,
@@ -37,9 +39,24 @@ export class NotificationFanOutService {
   ) {}
 
   // Channel failures log a warning and never roll back the already-persisted
-  // row (backend.md's binding "persist-first" rule). Each step below is
+  // row (backend.md §11a's binding "persist-first" rule). Each step below is
   // independently contained — a failure in one never prevents the next.
   public async fanOut(notification: NotificationInterface): Promise<void> {
+    this.emitToRoom(notification);
+
+    if (notification.audience === NotificationAudienceEnum.USER && notification.userId) {
+      await this.emitUnreadCount(notification.userId);
+      await this.sendEmail(notification);
+    }
+  }
+
+  // With WEBSOCKET_ENABLED=false no socket server is attached at all
+  // (DisabledIoAdapter) — the socket channels are skipped outright rather
+  // than emitting into a detached server, mirroring the EMAIL channel's own
+  // MAIL_ENABLED gate: off means off, in-app rows and email still flow.
+  private emitToRoom(notification: NotificationInterface): void {
+    if (!this.config.isEnabled) return;
+
     try {
       const room: string =
         notification.audience === NotificationAudienceEnum.ADMIN
@@ -52,16 +69,11 @@ export class NotificationFanOutService {
         `Notification channel delivery failed for ${notification.id}: ${this.describe(caught)}`,
       );
     }
-
-    if (notification.audience === NotificationAudienceEnum.USER && notification.userId) {
-      await this.emitUnreadCount(notification.userId);
-      await this.sendEmail(notification);
-    }
   }
 
   // EMAIL channel, independently contained like the socket pushes above —
   // a mail failure must never affect the persisted row or the IN_APP push
-  // (backend.md's "preferences gate channels, never persistence").
+  // (backend.md §11a's "preferences gate channels, never persistence").
   private async sendEmail(notification: NotificationInterface): Promise<void> {
     if (!notification.userId) return;
 
@@ -90,6 +102,8 @@ export class NotificationFanOutService {
   // (lazy receipts), so there is no single number to push to the whole
   // admins room.
   private async emitUnreadCount(userId: string): Promise<void> {
+    if (!this.config.isEnabled) return;
+
     try {
       const count: number = await this.notificationRepository.countUnread({
         userId,
