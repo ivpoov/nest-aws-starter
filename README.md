@@ -136,6 +136,30 @@ lopsided. `openssl rand -hex 32` scores exactly 256 and passes; `openssl rand
 turned away — the guard prints a generator that always passes rather than
 lowering the bar.
 
+### Response security headers
+
+`@fastify/helmet` runs for every route, configured in
+`src/modules/common/helpers/register-security-headers.helper.ts`. The values
+are tuned for a JSON API rather than for a rendered page:
+
+| Header | Value | Why |
+|---|---|---|
+| `Content-Security-Policy` | `default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` | A JSON API loads nothing, so the honest policy is the empty one. Its real job is to make any route that unexpectedly returns HTML inert rather than scriptable. `frame-ancestors` is listed explicitly because it does **not** fall back to `default-src`. |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains; preload` — **production only** | Sending it from a dev server on `http://localhost` pins the whole localhost origin to https in your browser, for every other project too, long after the process is gone. |
+| `X-Content-Type-Options` | `nosniff` | |
+| `X-Frame-Options` | `DENY` | The legacy pair of `frame-ancestors 'none'`; helmet's default is `SAMEORIGIN`, which this project has no use for. |
+| `Referrer-Policy` | `no-referrer` | A `Referer` carrying a path and an id has no legitimate reader on an API. |
+| `Cross-Origin-Resource-Policy` | `same-origin` (helmet default, kept) | Safe here because nothing this API returns is ever loaded as a no-cors subresource: downloads are presigned S3/CloudFront URLs, and the SPAs reach the API only through CORS-mode fetches, which CORP does not gate. |
+
+**Swagger is the exception, by construction.** `/docs` is the one route that is
+a real HTML document, and `default-src 'none'` would leave it blank. It is
+served under its own policy (`default-src 'self'`, scripts and styles from
+`'self'`, `'unsafe-inline'` for styles only, `frame-ancestors 'none'`), applied
+in `setup-swagger.helper.ts` and mounted only where the docs themselves are
+mounted — off in production unless `SWAGGER_ENABLED=true`, which the boot guard
+refuses without basic-auth credentials. If you add `customJs` or an inline
+script through `SwaggerCustomOptions`, widen `script-src` there deliberately.
+
 ## Real-time notifications
 
 Domain events — a new-device login, a password change, a subscription

@@ -630,6 +630,15 @@ one greppable thread, across services, repositories, and providers.
 - **No app-level compression:** gzip/brotli belong to CloudFront/ALB. App CPU serves
   requests, not encoding.
 
+- **Security headers are transport config, set once at bootstrap** —
+  `registerSecurityHeaders` (`@fastify/helmet`), never per controller. The CSP is a
+  JSON-API CSP (`default-src 'none'` + an explicit `frame-ancestors 'none'`, which
+  does not fall back to `default-src`); HSTS is production-only, because sending it
+  over `http://localhost` pins the developer's whole localhost origin to https.
+  Exactly one route deviates — Swagger's, which is a real HTML document and gets its
+  own same-origin policy in `setup-swagger.helper.ts`, mounted only where the docs
+  are mounted. A route needing different headers gets them at that hook, with the
+  reason written down; controllers never set security headers.
 ## 10b. Caching
 
 One agnostic `CacheService` facade in front of pluggable, contract-bound stores.
