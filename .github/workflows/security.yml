@@ -1,0 +1,70 @@
+name: security
+
+# Supply-chain gates that need no build and no pnpm install. They run on every
+# pull request and again weekly — a repository that was clean the day it was
+# merged does not stay clean on its own, and only a schedule catches that.
+#
+# No `push` trigger: the pull_request run already covers everything that
+# reaches a protected branch, and re-running on push would double the minutes
+# for no extra coverage.
+#
+# No `paths` filter either, deliberately. A leaked credential can land in any
+# file — a docs snippet, a Terraform sample, a Dockerfile — so narrowing the
+# secret scan by path is the same mistake as scanning a shallow clone.
+on:
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 is the entire point of this job. actions/checkout
+      # defaults to a depth-1 clone, and gitleaks over a depth-1 clone scans
+      # exactly one commit, finds nothing, and reports "no leaks found" — a
+      # green check that verified almost nothing. This repository is published
+      # with its history intact, so a key deleted at HEAD is still readable in
+      # the commit that added it; the history is what has to be clean.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      # Pinned to the published digest of the upstream v8.30.1 image rather
+      # than to a marketplace action: nothing is resolved at run time, the tag
+      # cannot be moved underneath us, and there is no licence key to hold
+      # (gitleaks-action requires one for organisation-owned repositories,
+      # which every fork of this starter into an org would trip over).
+      #
+      # --user matches the runner user so git does not reject the workspace
+      # for "dubious ownership"; the mount is read-only because a scanner has
+      # no business writing to the tree it is auditing.
+      #
+      # --log-opts=--all widens the scan past the checked-out ref to every
+      # branch and tag that fetch-depth: 0 brought down.
+      #
+      # --redact keeps any hit out of the log. On a public repository the CI
+      # log is public too, and printing a live credential into it is a second
+      # leak. The rule id, file, line and commit are still reported, which is
+      # everything needed to find it — re-run gitleaks locally to see the
+      # value itself.
+      - name: gitleaks (full history)
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --volume "${GITHUB_WORKSPACE}:/repo:ro" \
+            zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git /repo \
+              --config /repo/.gitleaks.toml \
+              --log-opts=--all \
+              --redact \
+              --no-banner \
+              --verbose
