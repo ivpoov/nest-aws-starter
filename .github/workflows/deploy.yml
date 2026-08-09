@@ -137,19 +137,46 @@ jobs:
           fi
           echo "started from ${REF}"
 
+      # fetch-depth: 0 because the next step has to prove the checked-out commit
+      # is an ancestor of the default branch, and a shallow clone cannot answer
+      # that. It is the whole history of a starter, so it costs seconds.
       - name: check out the commit being deployed
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.inputs.sha || github.sha }}
+          fetch-depth: 0
 
       # `git rev-parse HEAD` rather than github.sha, so a rollback dispatch and
       # a push produce the tag the same way and a short SHA typed into the
       # dispatch form still yields the full one.
-      - name: resolve the commit being deployed
+      #
+      # THE ANCESTRY CHECK IS THE POINT OF THIS STEP. `-f sha=` accepts any
+      # commit OBJECT the repository can reach, and that set is much larger than
+      # "commits on the default branch": every fork's pull request is fetchable
+      # as refs/pull/N/head from this repository, so without this check anyone
+      # who can dispatch could deploy an unreviewed fork's code from an approved
+      # branch, and the branch guard above would see nothing wrong because the
+      # RUN really did start from the default branch. `merge-base --is-ancestor`
+      # is the whole fix: a rollback target is by definition already on the
+      # default branch, and a fork's PR head is by definition not.
+      - name: resolve and verify the commit being deployed
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           sha="$(git rev-parse HEAD)"
-          echo "deploying ${sha}"
+
+          # Explicit, because `checkout` with `ref:` set to a raw SHA leaves no
+          # remote-tracking ref for the default branch to compare against.
+          git fetch --no-tags --quiet origin \
+            "+refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
+
+          if ! git merge-base --is-ancestor "$sha" "refs/remotes/origin/${DEFAULT_BRANCH}"; then
+            echo "::error::${sha} is not an ancestor of origin/${DEFAULT_BRANCH}. Nothing has been deployed. Only commits that have been merged into ${DEFAULT_BRANCH} can be deployed or rolled back to — a fork's pull-request head is reachable in this repository but has not been reviewed into ${DEFAULT_BRANCH}."
+            exit 1
+          fi
+
+          echo "deploying ${sha} (ancestor of origin/${DEFAULT_BRANCH})"
           echo "IMAGE_TAG=${sha}" >> "$GITHUB_ENV"
 
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
