@@ -88,7 +88,7 @@ const SKIP_DIR_NAMES = new Set(['node_modules', 'dist', 'generated', '.git']);
 // unverified, and the runner prints a COVERAGE GAP line for it.
 // assertFrontendFencedClaims() below enforces the assertion mechanically, so
 // the flag cannot drift away from what the entry actually says.
-const MODULES = [
+export const MODULES = [
   {
     // The demo feature the starter ships so a fresh clone has something to
     // run: CRUD notes behind auth, with the CASL ownership rules and cursor
@@ -775,7 +775,7 @@ function stripFencesInFile(filePath, moduleId, write) {
   return hits;
 }
 
-function scanFences(treeRoot, moduleId, write) {
+export function scanFences(treeRoot, moduleId, write) {
   const results = [];
 
   for (const filePath of fenceFilesUnder(treeRoot)) {
@@ -789,7 +789,7 @@ function scanFences(treeRoot, moduleId, write) {
   return results;
 }
 
-function deleteModulePaths(treeRoot, modulePaths) {
+export function deleteModulePaths(treeRoot, modulePaths) {
   for (const relPath of modulePaths) {
     rmSync(path.join(treeRoot, relPath), { recursive: true, force: true });
   }
@@ -1273,4 +1273,10 @@ function main() {
   }
 }
 
-main();
+// Only run when invoked as a script. `scripts/bootstrap.mjs --drop-demo`
+// imports MODULES/deleteModulePaths/scanFences from here so that a demo
+// removal is the *same* removal this test proves nightly, rather than a
+// second hand-written copy of it that can drift.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
+}
