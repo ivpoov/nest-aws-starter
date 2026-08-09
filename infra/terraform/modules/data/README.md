@@ -32,7 +32,8 @@ is charged. That is more than the rest of a demo stack put together, for a cache
 whose entire contents are regenerated on demand.
 
 So the small stack does not get one. Redis runs as a second container in the same
-ECS task (`redis:8-alpine`), reachable on `127.0.0.1` because `awsvpc` gives the
+ECS task (Redis 8 on Alpine, pinned by digest — see `var.cache_sidecar_image`),
+reachable on `127.0.0.1` because `awsvpc` gives the
 containers in a task one network namespace. It costs nothing beyond the task that
 was already running, and **no ElastiCache resource is created at all**.
 

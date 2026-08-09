@@ -242,9 +242,30 @@ variable "cache_sidecar_container_name" {
 }
 
 variable "cache_sidecar_image" {
-  description = "Image for the Redis sidecar. Pinned to a major tag on Alpine — a few megabytes, and the same major the local docker compose stack runs."
+  description = <<-EOT
+    Image for the Redis sidecar, pinned by digest.
+
+    Alpine, so it is a few megabytes, and the same major the local docker
+    compose stack runs. The digest is what makes it a pin: `redis:8-alpine` is a
+    tag the publisher repoints, so a task definition that names it can start a
+    different Redis on every task placement without a single Terraform diff to
+    show for it. Everything else this repository runs from a registry is pinned
+    the same way — every `uses:` in .github/workflows, and the Node base image in
+    apps/api/Dockerfile.
+
+    To upgrade: read the upstream release notes, resolve the new digest from the
+    registry (`docker buildx imagetools inspect redis:<version>-alpine`), and
+    move the tag and the digest together. A tag that disagrees with its digest is
+    worse than no tag, because the digest is what runs and the tag is what gets
+    read.
+  EOT
   type        = string
-  default     = "redis:8-alpine"
+  default     = "redis:8.10.0-alpine3.23@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241"
+
+  validation {
+    condition     = can(regex("@sha256:[0-9a-f]{64}$", var.cache_sidecar_image))
+    error_message = "cache_sidecar_image must be pinned by digest, as image:tag@sha256:<64 hex>. A floating tag means the sidecar can change under a task definition that did not."
+  }
 }
 
 variable "cache_sidecar_maxmemory" {
