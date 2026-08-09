@@ -415,18 +415,40 @@ describe('SessionService impersonation', () => {
 
   // Release-review fix (case c, regression guard): normal sessions keep the
   // sliding window exactly as before — every refresh re-grants the full TTL.
+  //
+  // The clock is pinned and stepped by hand rather than left to run. Both
+  // bounds are `Date.now() + refreshTtlSec * 1000` evaluated at their own
+  // moment, so a create and a refresh that land in the same millisecond —
+  // which is most of them, and reliably so under the parallel module runs of
+  // scripts/subtraction-test.mjs — produce equal bounds and fail a
+  // `toBeGreaterThan` on nothing but timing. Controlling the clock is also
+  // strictly the better test: the window must move by exactly the elapsed
+  // time, which "greater than" never checked.
   it('still extends activeUntil on every refresh for a normal (non-impersonated) session', async () => {
-    const { service, sessions } = createService();
-    const first = await service.createSession(user, context);
-    const originalActiveUntil: number =
-      (await sessions.findById('session-1'))?.activeUntil.getTime() ?? 0;
+    const createdAt: Date = new Date('2026-08-09T12:00:00.000Z');
+    const elapsedMs: number = 1_000;
 
-    await service.refresh(first.refreshToken);
+    vi.useFakeTimers();
+    vi.setSystemTime(createdAt);
 
-    const rotatedActiveUntil: number =
-      (await sessions.findById('session-1'))?.activeUntil.getTime() ?? 0;
+    try {
+      const { service, sessions } = createService();
+      const first = await service.createSession(user, context);
+      const originalActiveUntil: number =
+        (await sessions.findById('session-1'))?.activeUntil.getTime() ?? 0;
 
-    expect(rotatedActiveUntil).toBeGreaterThan(originalActiveUntil);
+      vi.setSystemTime(new Date(createdAt.getTime() + elapsedMs));
+
+      await service.refresh(first.refreshToken);
+
+      const rotatedActiveUntil: number =
+        (await sessions.findById('session-1'))?.activeUntil.getTime() ?? 0;
+
+      expect(originalActiveUntil).toBe(createdAt.getTime() + config.refreshTtlSec * 1_000);
+      expect(rotatedActiveUntil).toBe(originalActiveUntil + elapsedMs);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // The Critical fix under test: rotate()'s happy path must gate on
