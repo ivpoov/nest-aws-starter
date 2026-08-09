@@ -26,10 +26,12 @@ export class MemoryCacheStore implements CacheStoreInterface {
   public async set<T>(key: string, value: T, ttlMs: number): Promise<void> {
     this.entries.delete(key);
 
+    // `get` re-inserts on every hit, so Map iteration order is the recency
+    // order and its head is the least recently used entry.
     if (this.entries.size >= this.maxEntries) {
-      const oldestKey: string | undefined = this.entries.keys().next().value;
+      const leastRecentlyUsed: string | undefined = this.entries.keys().next().value;
 
-      if (oldestKey !== undefined) this.entries.delete(oldestKey);
+      if (leastRecentlyUsed !== undefined) this.entries.delete(leastRecentlyUsed);
     }
 
     this.entries.set(key, { value, expiresAt: Date.now() + ttlMs });
