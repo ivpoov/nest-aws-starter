@@ -1,5 +1,9 @@
-# Core inputs for the whole stack. Modules added by later PRs take their inputs
-# from locals.tf, not directly from these variables — see locals.tf for why.
+# Core inputs for the whole stack — the ones more than one module cares about.
+# Every other variable is declared in the root file that wires the module it
+# configures, so a variable and its only consumer stay together.
+#
+# No module reads these directly. They feed locals.tf, and the modules read
+# local.profile.<key> and local.names from there — see locals.tf for why.
 
 variable "project_name" {
   description = "Project slug. Prefixes every resource name and lands in the Project tag, so it must be DNS-safe (S3, ALB and ECR names all derive from it)."

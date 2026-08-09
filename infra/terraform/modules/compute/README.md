@@ -69,7 +69,7 @@ Two consequences worth stating out loud:
 
 | Setting | Value | Why |
 | --- | --- | --- |
-| `deregistration_delay` | 60 s | Not process exit time (~97 ms measured in PR 7) — the window in which in-flight requests and Socket.IO connections finish after the target stops receiving new ones. AWS defaults to 300 s, which adds five minutes to every deploy for no benefit here. |
+| `deregistration_delay` | 60 s | Not process exit time (~97 ms measured on an idle task) — the window in which in-flight requests and Socket.IO connections finish after the target stops receiving new ones. AWS defaults to 300 s, which adds five minutes to every deploy for no benefit here. |
 | `stopTimeout` | 30 s | SIGTERM to SIGKILL. Sized for the slowest in-flight request, not for the idle case. |
 | `health_check_grace_period` | 60 s | Nest bootstrap plus the first Prisma connection. Image pull is not included — it happens before the task reaches RUNNING. |
 | health check path | `/api/v1/health/ready` | Readiness, not liveness: the load balancer's question includes Postgres and Redis. A task that cannot reach its database should stop receiving traffic without being killed. |

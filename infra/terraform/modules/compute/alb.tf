@@ -97,8 +97,8 @@ resource "aws_lb_target_group" "api" {
   # ---------------------------------------------------------------------
   # Deregistration delay — 60 seconds.
   #
-  # This is not sized from process exit time. PR 7 measured the container's
-  # clean SIGTERM shutdown at ~97 ms on an idle task, and if that were the
+  # This is not sized from process exit time. The container's clean SIGTERM
+  # shutdown measures ~97 ms on an idle task, and if that were the
   # question the answer would be "1". It is not: deregistration delay is the
   # window in which the load balancer has stopped sending *new* requests to a
   # target but existing connections are still finishing. Stopping the task
