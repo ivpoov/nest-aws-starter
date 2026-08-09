@@ -21,7 +21,6 @@ codebase.
 - `apps/admin/src/interfaces/use-statistics-series-result.interface.ts` (delete)
 - `apps/admin/src/pages/StatisticsPage.tsx` (delete)
 - `apps/admin/src/utils/chartColors.ts` (delete)
-- `apps/admin/src/utils/formatMoney.ts` (delete)
 - `apps/admin/src/tests/AuthMethodBreakdown.spec.tsx` (delete)
 - `apps/admin/src/tests/KpiTiles.spec.tsx` (delete)
 - `apps/admin/src/tests/RegistrationsChart.spec.tsx` (delete)

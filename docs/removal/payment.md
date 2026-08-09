@@ -127,7 +127,7 @@ and the markers themselves.
 - `apps/api/test/statistics.e2e-spec.ts`
   - lines 40-80 (block)
   - lines 146-155 (block)
-  - lines 162-212 (block)
+  - lines 162-214 (block)
 - `apps/api/prisma/schema.prisma`
   - line 44: `subscriptions           Subscription[] // <module:payment>`
   - line 45: `paymentTransactions     PaymentTransaction[] // <module:payment>`
@@ -169,8 +169,8 @@ and the markers themselves.
   - line 18: `const revenue = useStatisticsSeries(StatisticsMetricEnum.REVENUE, revenueDays); // <module:payment>`
   - lines 36-52 (block)
 - `apps/admin/src/tests/StatisticsPage.spec.tsx`
-  - lines 29-37 (block)
-  - lines 102-144 (block)
+  - lines 29-41 (block)
+  - lines 106-148 (block)
 - `packages/shared/src/index.ts`
   - line 64: `export * from './payments/constants/payment-error-codes.constants.js'; // <module:payment>`
   - line 65: `export * from './payments/enums/subscription-status.enum.js'; // <module:payment>`
