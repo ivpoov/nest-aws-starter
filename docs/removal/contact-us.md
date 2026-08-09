@@ -40,6 +40,11 @@ and the markers themselves.
   - line 82: `ContactUsModule, // <module:contact-us>`
 - `apps/api/prisma/schema.prisma`
   - lines 164-187 (block)
+- `apps/api/prisma/seed.ts`
+  - lines 316-378 (block)
+  - lines 685-702 (block)
+  - lines 821-834 (block)
+  - lines 890-892 (block)
 - `apps/web/src/App.tsx`
   - line 9: `import { ContactPage } from './pages/ContactPage'; // <module:contact-us>`
   - lines 32-34 (block)

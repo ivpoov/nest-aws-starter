@@ -85,7 +85,7 @@ and the markers themselves.
   - line 33: `paymentConfig, // <module:payment>`
   - line 39: `stripeConfig, // <module:payment>`
 - `apps/api/src/modules/common/constants/development-defaults.constants.ts`
-  - lines 68-79 (block)
+  - lines 70-81 (block)
 - `apps/api/src/modules/statistic/interfaces/statistic-repository.interface.ts`
   - lines 3-5 (block)
   - lines 13-17 (block)
@@ -133,9 +133,10 @@ and the markers themselves.
   - line 45: `paymentTransactions     PaymentTransaction[] // <module:payment>`
   - lines 251-347 (block)
 - `apps/api/prisma/seed.ts`
-  - lines 15-40 (block)
-  - lines 48-64 (block)
-  - lines 70-74 (block)
+  - lines 380-571 (block)
+  - lines 667-684 (block)
+  - lines 795-820 (block)
+  - lines 893-895 (block)
 - `apps/web/src/App.tsx`
   - line 6: `import { BillingCanceledPage } from './pages/BillingCanceledPage'; // <module:payment>`
   - line 7: `import { BillingPage } from './pages/BillingPage'; // <module:payment>`
