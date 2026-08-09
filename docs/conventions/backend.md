@@ -5,6 +5,18 @@ NestJS — TypeScript — Prisma — PostgreSQL — Redis — Zod
 These rules are binding. Every module in `apps/api` follows them; the shipped `note`
 module is the living reference implementation. When in doubt, imitate the sample module.
 
+**Scope.** This file covers `apps/api` only. Its two siblings cover the rest of the
+repository, and a change that crosses the HTTP boundary is governed by all three:
+
+- [`frontend.md`](./frontend.md) — `apps/web` and `apps/admin`: layers, `apiClient`,
+  stores, the notification socket, theming, accessibility, Testing Library.
+- [`shared-contracts.md`](./shared-contracts.md) — `packages/shared`: what may be
+  shared, ISO date strings, integer money, the `implements` drift check, and why a
+  contract change is a breaking change for two consumers at once.
+
+Workflow rather than code — branch model, commit and PR shape, the local and CI
+gate — lives in [`CONTRIBUTING.md`](../../CONTRIBUTING.md), which is its only home.
+
 ---
 
 ## 1. The golden rule: depend on contracts, never on implementations
@@ -840,8 +852,11 @@ gateway's. Reference: `notification`'s `NotificationGateway` + adapters.
 ## 12. DTOs, entities, permissions, configs
 
 Wire shapes (request/response) are defined once in `packages/shared` and DTOs
-`implements` them — see `docs/conventions/shared-contracts.md`. Domain interfaces
-stay module-private; only wire contracts are shared.
+`implements` them — see [`shared-contracts.md`](./shared-contracts.md). Domain
+interfaces stay module-private; only wire contracts are shared. Enums whose values
+travel on the wire live in `packages/shared` too and are imported from there
+(`NoteStatusEnum`, `UserRoleEnum`); a module's `enums/` folder holds only the enums
+that never leave the API.
 
 **Request DTO** — decorator order per field: Swagger → class-validator → `@Type()`.
 Required fields use `@ApiProperty`, optional use `@ApiPropertyOptional` and are typed
