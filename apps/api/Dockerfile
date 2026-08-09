@@ -100,14 +100,21 @@ COPY apps/api apps/api
 # AUTH_JWT_SECRET in it, was copied into this stage. That is the stage the
 # deploy workflow pushes to ECR as the migration image, so a broken pattern has
 # to break the build rather than ship a readable secret in a layer. Cheap, runs
-# before the expensive compile, and fails loudly with the offending path.
+# before the expensive compile, and fails loudly with the offending paths.
+#
+# Searched rather than listed: naming the files this repository happens to have
+# today would miss the next one — .env.local, .env.production, a nested app —
+# which is the same "matches only what I thought of" mistake the bare
+# .dockerignore patterns made. node_modules is pruned because packages ship
+# their own .env fixtures and none of them is this repository's secret.
 RUN set -eu; \
-    for leaked in .env apps/api/.env packages/shared/.env; do \
-      if [ -e "$leaked" ]; then \
-        echo "SECRET LEAK: $leaked reached the build context — fix .dockerignore" >&2; \
-        exit 1; \
-      fi; \
-    done
+    leaked="$(find . -name node_modules -prune -o -type f \
+      \( -name '.env' -o -name '.env.*' \) ! -name '.env.example' -print)"; \
+    if [ -n "$leaked" ]; then \
+      echo "SECRET LEAK: these reached the build context — fix .dockerignore:" >&2; \
+      echo "$leaked" >&2; \
+      exit 1; \
+    fi
 
 # `pnpm run build` for the API is `prisma generate --sql && tsc --noEmit && swc`
 # — SWC, not `nest build`: @nestjs/cli is not a dependency of this repository.
