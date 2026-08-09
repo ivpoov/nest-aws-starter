@@ -6,18 +6,28 @@ commands you are expected to run before you push, and what CI will do to you if
 you don't.
 
 It deliberately does **not** restate the code rules. Those live in
-[`docs/conventions/backend.md`](./docs/conventions/backend.md) and that file is
-the single source of truth — read it before writing any backend code. Anything
-about running the project locally (prerequisites, env files, ports, compose
-profiles) lives in the [README](./README.md).
+`docs/conventions/`, one file per boundary, and those files are the single
+source of truth for what the code must look like:
+
+- [`backend.md`](./docs/conventions/backend.md) — `apps/api`.
+- [`frontend.md`](./docs/conventions/frontend.md) — `apps/web`, `apps/admin`.
+- [`shared-contracts.md`](./docs/conventions/shared-contracts.md) —
+  `packages/shared`.
+
+Read the one that covers what you are about to touch. This file is the only
+place the branch model, commit format and PR rules are written down, so nothing
+below is repeated there. Anything about running the project locally
+(prerequisites, env files, ports, compose profiles) lives in the
+[README](./README.md).
 
 ## Before you start
 
 - **Node 24** — pinned in [`.nvmrc`](./.nvmrc); `nvm use` picks it up.
 - **pnpm 11** via corepack — `corepack enable && corepack install`.
 - **Docker** with the compose plugin, for anything that touches the e2e suite.
-- Read [`docs/conventions/backend.md`](./docs/conventions/backend.md). It is the
-  law of this repository, and reviewers apply it literally.
+- Read the convention file for the workspace you are about to change (listed
+  above). They are the law of this repository, and reviewers apply them
+  literally.
 
 ## Branch model
 
@@ -206,7 +216,10 @@ where running it locally actually matters.
 
 A change is done when all of the following are true:
 
-- [ ] It follows [`docs/conventions/backend.md`](./docs/conventions/backend.md).
+- [ ] It follows the conventions for every workspace it touches —
+      [`backend.md`](./docs/conventions/backend.md),
+      [`frontend.md`](./docs/conventions/frontend.md),
+      [`shared-contracts.md`](./docs/conventions/shared-contracts.md).
 - [ ] Unit tests cover it, and e2e tests cover any new or changed endpoint — in
       this PR, not the next one.
 - [ ] `pnpm exec biome ci .`, `pnpm run build`, `pnpm run test`, the e2e
