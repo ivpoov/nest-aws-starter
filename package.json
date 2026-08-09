@@ -11,6 +11,7 @@
     "bootstrap": "node scripts/bootstrap.mjs",
     "build": "turbo run build",
     "docs:build": "turbo run docs:build",
+    "license-check": "node scripts/license-check.mjs",
     "lint": "turbo run lint",
     "test": "turbo run test && pnpm run test:scripts",
     "test:scripts": "node --test scripts/subtraction-test.spec.mjs",
