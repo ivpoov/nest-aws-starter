@@ -100,10 +100,9 @@ locals {
       cloudfront_logs_enabled = false
 
       # observability
-      log_retention_days        = 7
-      container_insights        = false
-      alarms_enabled            = false
-      synthetics_canary_enabled = false
+      log_retention_days = 7
+      container_insights = false
+      alarms_enabled     = false
 
       # lifecycle — demo is meant to be thrown away
       deletion_protection    = false
@@ -149,10 +148,9 @@ locals {
       cloudfront_logs_enabled = true
 
       # observability
-      log_retention_days        = 30
-      container_insights        = true
-      alarms_enabled            = true
-      synthetics_canary_enabled = false
+      log_retention_days = 30
+      container_insights = true
+      alarms_enabled     = true
 
       # lifecycle
       deletion_protection    = true
