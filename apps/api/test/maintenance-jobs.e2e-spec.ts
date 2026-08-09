@@ -51,7 +51,6 @@ describe('maintenance jobs (real postgres/redis/localstack)', () => {
     s3 = app.get<S3ProviderInterface>(S3_PROVIDER); // <module:file>
     sqs = app.get<SqsProviderInterface>(SQS_PROVIDER); // <module:payment>
     registry = app.get(ScheduledJobRegistryService);
-    await neutralizeStaleWebhookEventBacklog(); // <module:payment>
     await drainQueue(); // <module:payment>
     ownerId = await registerUserId();
   });
@@ -64,41 +63,27 @@ describe('maintenance jobs (real postgres/redis/localstack)', () => {
   // Both jobs' retry sweeps are global by design (every stale row, that's
   // the point of a sweep) against the SAME payment webhook queue that
   // webhook-consumer.e2e-spec / subscription-lifecycle.e2e-spec poll for
-  // their own freshly sent messages. A long-lived dev database/queue shared
-  // across many e2e runs accumulates real stale rows and never-deleted
-  // messages from unrelated earlier sessions — every WebhookRetryJob.run()
-  // re-enqueues that entire backlog, and SQS's ReceiveMessage tends to
-  // return the oldest visible messages first, so old undeleted noise can
-  // permanently crowd out a sibling spec's newer targeted message from ever
-  // appearing in a bounded 10-per-call poll. Clear both sides once, up
-  // front, using the same plain Prisma/SqsProviderInterface calls every
-  // e2e spec already uses — not a fixture any other passing spec depends
-  // on (each spec queries/consumes its own freshly created ids or
-  // messages), so this only removes noise.
-  async function neutralizeStaleWebhookEventBacklog(): Promise<void> {
-    const cutoff = new Date(Date.now() - TWO_HOURS_MS);
-
-    await prisma.webhookEvent.updateMany({
-      where: { status: WebhookEventStatusEnum.RECEIVED, createdAt: { lt: cutoff } },
-      data: { status: WebhookEventStatusEnum.SKIPPED, processedAt: new Date() },
-    });
-    await prisma.webhookEvent.updateMany({
-      where: {
-        status: WebhookEventStatusEnum.FAILED,
-        createdAt: { lt: cutoff },
-        attempts: { lt: 8 },
-      },
-      data: { attempts: 8 },
-    });
-  }
-
-  // Drains every currently-visible message from the shared payment webhook
-  // queue via the app's own SqsProviderInterface (receive + delete in a
-  // loop) — the DB-side neutralization above cannot retroactively clean up
-  // messages an earlier, already-run e2e pass already sent to SQS. Stops
-  // once two consecutive empty receives confirm nothing is left (accounts
-  // for messages that were mid-visibility-timeout during an earlier poll),
-  // capped so a misbehaving queue can't hang the suite.
+  // their own freshly sent messages. Every WebhookRetryJob.run() re-enqueues
+  // the whole stale backlog, and SQS's ReceiveMessage tends to return the
+  // oldest visible messages first, so undeleted noise from an earlier run
+  // can permanently crowd out a sibling spec's newer targeted message from
+  // ever appearing in a bounded 10-per-call poll.
+  //
+  // The database half of that backlog is gone: e2e-isolation.helper.ts
+  // empties the suite's own database before every run, so no webhook_events
+  // row here is ever older than this run (a `updateMany` neutralizer used to
+  // stand in for that and is no longer needed). LocalStack's queue has no
+  // equivalent — it is shared, long-lived and survives the suite — so the
+  // drain below stays.
+  //
+  // Drains every currently-visible message from the payment webhook queue
+  // via the app's own SqsProviderInterface (receive + delete in a loop),
+  // using the same plain calls every e2e spec already uses — not a fixture
+  // any other passing spec depends on (each consumes its own freshly sent
+  // messages), so this only removes noise. Stops once two consecutive empty
+  // receives confirm nothing is left (accounts for messages that were
+  // mid-visibility-timeout during an earlier poll), capped so a misbehaving
+  // queue can't hang the suite.
   async function drainQueue(): Promise<void> {
     let consecutiveEmpty = 0;
 
