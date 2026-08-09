@@ -64,8 +64,8 @@ import { Inject, Injectable } from '@nestjs/common';
 // the release plan's matrix line, not this module's brief, governs that
 // emit site; see task-3-report.md for the correction.
 @Injectable()
-export class NotificationDispatcherService {
-  private readonly logger = new CustomLoggerService(NotificationDispatcherService.name);
+export class NotificationEventSubscriberService {
+  private readonly logger = new CustomLoggerService(NotificationEventSubscriberService.name);
 
   constructor(
     @Inject(NOTIFICATION_REPOSITORY)

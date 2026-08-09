@@ -33,15 +33,15 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { createTestApp } from './app.factory.js';
 import { waitForActivity } from './helpers/wait-for-activity.helper.js';
 
-// Exercises the persist-first dispatcher end to end: a real domain event
+// Exercises the persist-first event subscriber end to end: a real domain event
 // through the real EventBus, against real Postgres (the row + its
 // denormalized content + the eager USER receipt) and real Redis-backed
 // Socket.IO (a connected client actually receiving the fan-out). Domain
 // events are emitted directly via EventBusService rather than through the
 // feature flow that would normally trigger them (login, admin block, ...)
-// — this suite owns the dispatcher, not those flows, matching the brief's
+// — this suite owns the event subscriber, not those flows, matching the brief's
 // "emit a real domain event through the real EventBus" instruction.
-describe('notification dispatcher (persist-first, e2e)', () => {
+describe('notification event subscriber (persist-first, e2e)', () => {
   let app: NestFastifyApplication;
   let baseUrl: string;
   let eventBus: EventBusService;
@@ -210,7 +210,7 @@ describe('notification dispatcher (persist-first, e2e)', () => {
     expect(rowCount).toBe(1);
   });
 
-  it('does not persist anything for a domain event outside the dispatcher matrix', async () => {
+  it('does not persist anything for a domain event outside the event subscriber matrix', async () => {
     const user = await registerUser();
 
     eventBus.emit(AUTH_LOGIN_EVENT, {
@@ -295,7 +295,7 @@ describe('notification dispatcher (persist-first, e2e)', () => {
   // backend.md §11a's persist-first rule, proven against the real database
   // rather than call counts on a mock: the delivery path is what gets broken
   // (the repository stays real), so a surviving row is the durable row the
-  // dispatcher actually wrote.
+  // event subscriber actually wrote.
   it('keeps the persisted row when the whole socket fan-out path throws', async () => {
     const user = await registerUser();
     const gateway: NotificationGateway = app.get(NotificationGateway);

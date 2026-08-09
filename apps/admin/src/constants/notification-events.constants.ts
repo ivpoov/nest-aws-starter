@@ -4,9 +4,9 @@
 export const NOTIFICATION_EVENT = 'notification';
 
 // Emitted by the gateway too, but deliberately not wired up in
-// useNotificationSocket: the dispatcher only computes this figure for a
+// useNotificationSocket: the event subscriber only computes this figure for a
 // USER-audience row (`countUnread({ includeAdmin: false })`, see
-// notification-dispatcher.service.ts) — for an admin it would understate
+// notification-event-subscriber.service.ts) — for an admin it would understate
 // the merged USER+ADMIN badge whenever an unread ADMIN-audience row exists.
 // The admin bell instead polls GET /notifications/unread-count (see
 // notification-unread-count-poll.constants.ts). Kept here for parity with

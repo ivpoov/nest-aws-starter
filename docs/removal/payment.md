@@ -120,10 +120,9 @@ and the markers themselves.
   - lines 30-32 (block)
   - line 43: `let sqs: SqsProviderInterface; // <module:payment>`
   - line 52: `sqs = app.get<SqsProviderInterface>(SQS_PROVIDER); // <module:payment>`
-  - line 54: `await neutralizeStaleWebhookEventBacklog(); // <module:payment>`
-  - line 55: `await drainQueue(); // <module:payment>`
-  - lines 63-119 (block)
-  - lines 249-357 (block)
+  - line 54: `await drainQueue(); // <module:payment>`
+  - lines 62-104 (block)
+  - lines 234-342 (block)
 - `apps/api/test/statistics.e2e-spec.ts`
   - lines 40-80 (block)
   - lines 146-155 (block)
@@ -133,10 +132,10 @@ and the markers themselves.
   - line 45: `paymentTransactions     PaymentTransaction[] // <module:payment>`
   - lines 254-350 (block)
 - `apps/api/prisma/seed.ts`
-  - lines 380-571 (block)
-  - lines 667-684 (block)
-  - lines 795-820 (block)
-  - lines 893-895 (block)
+  - lines 424-615 (block)
+  - lines 711-728 (block)
+  - lines 839-864 (block)
+  - lines 937-939 (block)
 - `apps/web/src/App.tsx`
   - line 7: `import { BillingCanceledPage } from './pages/BillingCanceledPage'; // <module:payment>`
   - line 8: `import { BillingPage } from './pages/BillingPage'; // <module:payment>`
@@ -207,7 +206,7 @@ _None — every cross-module reference for this module is fence-marked._
 The subtracted tree type-checks and passes its tests with these left in place —
 they are cosmetic leftovers, not build breaks:
 
-- `packages/shared/src/notifications/enums/notification-type.enum.ts` — the four payment notification types stay on purpose. apps/api's notification dispatcher keeps its payment builders and @OnDomainEvent handlers — they compile against the core event bus and simply never fire once nothing emits subscription.* — so the wire enum stays total, and apps/web's NOTIFICATION_TYPE_LABELS (a total Record over it) stays valid. The visible leftover is four rows in the preferences grid that can never be triggered; dropping them means dropping the enum members, the label lines, USER_NOTIFICATION_TYPES in apps/api and the dispatcher handlers together
+- `packages/shared/src/notifications/enums/notification-type.enum.ts` — the four payment notification types stay on purpose. apps/api's notification event subscriber keeps its payment builders and @OnDomainEvent handlers — they compile against the core event bus and simply never fire once nothing emits subscription.* — so the wire enum stays total, and apps/web's NOTIFICATION_TYPE_LABELS (a total Record over it) stays valid. The visible leftover is four rows in the preferences grid that can never be triggered; dropping them means dropping the enum members, the label lines, USER_NOTIFICATION_TYPES in apps/api and the event subscriber handlers together
 - `apps/admin/src/components/Statistics/KpiTiles.tsx` — no edit needed — it already renders a placeholder when revenue is null, and the revenue/mrrCents fields stay in the shared statistics contract as `number | null` for exactly this case
 
 ## 3. Drop `.env` variables

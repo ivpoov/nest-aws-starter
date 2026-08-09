@@ -4,7 +4,7 @@
 // emitted to it — see NotificationGateway.rejectHandshake).
 //
 // Reserved here, in the module that owns the transport, so PR 3's
-// dispatcher sends `NOTIFICATION_EVENT` (payload =
+// event subscriber sends `NOTIFICATION_EVENT` (payload =
 // `NotificationResponseInterface`) and `UNREAD_COUNT_EVENT` (payload =
 // `number`) without redefining the names itself.
 export const NOTIFICATION_EVENT = 'notification';

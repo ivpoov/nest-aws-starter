@@ -29,7 +29,7 @@ import { CacheFactoryService } from '@providers/cache/services/cache-factory.ser
 type EmailPreferenceMap = Partial<Record<NotificationTypeEnum, boolean>>;
 
 // Single owner of preference resolution: the GET matrix endpoint and the
-// dispatcher's EMAIL gate both go through this service, so "stored row
+// event subscriber's EMAIL gate both go through this service, so "stored row
 // overrides the default" is decided in exactly one place.
 @Injectable()
 export class NotificationPreferenceService {
@@ -63,9 +63,9 @@ export class NotificationPreferenceService {
     );
   }
 
-  // The dispatcher's EMAIL gate. ADMIN-audience types are not in
+  // The event subscriber's EMAIL gate. ADMIN-audience types are not in
   // USER_NOTIFICATION_TYPES (no per-user recipient) and always resolve to
-  // false here — the dispatcher never has a userId for them anyway.
+  // false here — the event subscriber never has a userId for them anyway.
   public async isEmailEnabled(userId: string, type: NotificationTypeEnum): Promise<boolean> {
     if (!USER_NOTIFICATION_TYPES.includes(type)) return false;
 

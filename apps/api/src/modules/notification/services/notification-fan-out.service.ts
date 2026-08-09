@@ -19,13 +19,13 @@ import {
 } from '@nest-aws-starter/shared';
 import { Inject, Injectable } from '@nestjs/common';
 
-// The dispatcher's fan-out orchestrator, extracted out of
-// NotificationDispatcherService (PR 5 code review) so a future channel
+// The event subscriber's fan-out orchestrator, extracted out of
+// NotificationEventSubscriberService (PR 5 code review) so a future channel
 // (e.g. PUSH) has one obvious place to add a step, rather than entangling
 // further with the event -> type mapping. Mechanical extraction: the three
 // channel steps and their independent containment are unchanged from PR 3/4/5
 // — only the constructor arguments moved (notificationRepository, gateway,
-// emailService instead of being reached through the dispatcher).
+// emailService instead of being reached through the event subscriber).
 @Injectable()
 export class NotificationFanOutService {
   private readonly logger = new CustomLoggerService(NotificationFanOutService.name);

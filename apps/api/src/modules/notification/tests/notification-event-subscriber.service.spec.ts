@@ -6,8 +6,8 @@ import type { NotificationGateway } from '@modules/notification/gateways/notific
 import type { CreateNotificationDataInterface } from '@modules/notification/interfaces/create-notification-data.interface.js';
 import type { NotificationInterface } from '@modules/notification/interfaces/notification.interface.js';
 import type { NotificationRepositoryInterface } from '@modules/notification/interfaces/notification-repository.interface.js';
-import { NotificationDispatcherService } from '@modules/notification/services/notification-dispatcher.service.js';
 import type { NotificationEmailService } from '@modules/notification/services/notification-email.service.js';
+import { NotificationEventSubscriberService } from '@modules/notification/services/notification-event-subscriber.service.js';
 import { NotificationFanOutService } from '@modules/notification/services/notification-fan-out.service.js';
 import {
   AuthMethodTypeEnum,
@@ -38,11 +38,11 @@ function createFakeNotification(
 
 const enabledWebsocketConfig: WebsocketConfig = { isEnabled: true, heartbeatIntervalMs: 60_000 };
 
-function createDispatcher(
+function createSubscriber(
   callOrder: string[] = [],
   websocket: WebsocketConfig = enabledWebsocketConfig,
 ): {
-  dispatcher: NotificationDispatcherService;
+  subscriber: NotificationEventSubscriberService;
   create: ReturnType<typeof vi.fn>;
   countUnread: ReturnType<typeof vi.fn>;
   to: ReturnType<typeof vi.fn>;
@@ -76,7 +76,7 @@ function createDispatcher(
   } as unknown as NotificationRepositoryInterface;
   const gateway = { server: { to } } as unknown as NotificationGateway;
   const emailService = { sendIfEnabled } as unknown as NotificationEmailService;
-  // The dispatcher delegates fan-out to a real NotificationFanOutService
+  // The subscriber delegates fan-out to a real NotificationFanOutService
   // wired with the same leaf mocks (PR 5 code review's extraction) — the
   // mocking pattern below is unchanged, only which constructor it feeds.
   const fanOutService = new NotificationFanOutService(
@@ -85,12 +85,12 @@ function createDispatcher(
     gateway,
     emailService,
   );
-  const dispatcher = new NotificationDispatcherService(notificationRepository, fanOutService);
+  const subscriber = new NotificationEventSubscriberService(notificationRepository, fanOutService);
 
-  return { dispatcher, create, countUnread, to, emit, sendIfEnabled };
+  return { subscriber, create, countUnread, to, emit, sendIfEnabled };
 }
 
-describe('NotificationDispatcherService', () => {
+describe('NotificationEventSubscriberService', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
   let errorSpy: ReturnType<typeof vi.spyOn>;
 
@@ -105,9 +105,9 @@ describe('NotificationDispatcherService', () => {
 
   describe('matrix rows — content, audience, and room', () => {
     it('auth.new-device -> NEW_DEVICE_LOGIN, USER audience, user room', async () => {
-      const { dispatcher, create, to } = createDispatcher();
+      const { subscriber, create, to } = createSubscriber();
 
-      await dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });
+      await subscriber.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });
 
       expect(create).toHaveBeenCalledWith({
         audience: NotificationAudienceEnum.USER,
@@ -121,9 +121,9 @@ describe('NotificationDispatcherService', () => {
     });
 
     it('auth.password-changed -> PASSWORD_CHANGED', async () => {
-      const { dispatcher, create } = createDispatcher();
+      const { subscriber, create } = createSubscriber();
 
-      await dispatcher.onAuthPasswordChanged({ userId, sessionId: 'session-1' });
+      await subscriber.onAuthPasswordChanged({ userId, sessionId: 'session-1' });
 
       expect(create).toHaveBeenCalledWith({
         audience: NotificationAudienceEnum.USER,
@@ -136,9 +136,9 @@ describe('NotificationDispatcherService', () => {
     });
 
     it('auth.method-linked -> AUTH_METHOD_CHANGED (linked)', async () => {
-      const { dispatcher, create } = createDispatcher();
+      const { subscriber, create } = createSubscriber();
 
-      await dispatcher.onAuthMethodLinked({ userId, type: AuthMethodTypeEnum.GOOGLE });
+      await subscriber.onAuthMethodLinked({ userId, type: AuthMethodTypeEnum.GOOGLE });
 
       expect(create).toHaveBeenCalledWith({
         audience: NotificationAudienceEnum.USER,
@@ -151,9 +151,9 @@ describe('NotificationDispatcherService', () => {
     });
 
     it('auth.method-unlinked -> AUTH_METHOD_CHANGED (unlinked)', async () => {
-      const { dispatcher, create } = createDispatcher();
+      const { subscriber, create } = createSubscriber();
 
-      await dispatcher.onAuthMethodUnlinked({ userId, type: AuthMethodTypeEnum.EMAIL });
+      await subscriber.onAuthMethodUnlinked({ userId, type: AuthMethodTypeEnum.EMAIL });
 
       expect(create).toHaveBeenCalledWith({
         audience: NotificationAudienceEnum.USER,
@@ -166,9 +166,9 @@ describe('NotificationDispatcherService', () => {
     });
 
     it('subscription.activated -> SUBSCRIPTION_ACTIVATED', async () => {
-      const { dispatcher, create } = createDispatcher();
+      const { subscriber, create } = createSubscriber();
 
-      await dispatcher.onSubscriptionActivated({
+      await subscriber.onSubscriptionActivated({
         userId,
         subscriptionId: 'sub-1',
         planId: 'plan-1',
@@ -185,9 +185,9 @@ describe('NotificationDispatcherService', () => {
     });
 
     it('subscription.renewed -> SUBSCRIPTION_RENEWED', async () => {
-      const { dispatcher, create } = createDispatcher();
+      const { subscriber, create } = createSubscriber();
 
-      await dispatcher.onSubscriptionRenewed({ userId, subscriptionId: 'sub-1' });
+      await subscriber.onSubscriptionRenewed({ userId, subscriptionId: 'sub-1' });
 
       expect(create).toHaveBeenCalledWith({
         audience: NotificationAudienceEnum.USER,
@@ -200,9 +200,9 @@ describe('NotificationDispatcherService', () => {
     });
 
     it('subscription.past-due -> PAYMENT_FAILED', async () => {
-      const { dispatcher, create } = createDispatcher();
+      const { subscriber, create } = createSubscriber();
 
-      await dispatcher.onSubscriptionPastDue({ userId, subscriptionId: 'sub-1' });
+      await subscriber.onSubscriptionPastDue({ userId, subscriptionId: 'sub-1' });
 
       expect(create).toHaveBeenCalledWith({
         audience: NotificationAudienceEnum.USER,
@@ -215,9 +215,9 @@ describe('NotificationDispatcherService', () => {
     });
 
     it('subscription.canceled -> SUBSCRIPTION_ENDED (canceled)', async () => {
-      const { dispatcher, create } = createDispatcher();
+      const { subscriber, create } = createSubscriber();
 
-      await dispatcher.onSubscriptionCanceled({ userId, subscriptionId: 'sub-1' });
+      await subscriber.onSubscriptionCanceled({ userId, subscriptionId: 'sub-1' });
 
       expect(create).toHaveBeenCalledWith({
         audience: NotificationAudienceEnum.USER,
@@ -230,9 +230,9 @@ describe('NotificationDispatcherService', () => {
     });
 
     it('subscription.expired -> SUBSCRIPTION_ENDED (expired)', async () => {
-      const { dispatcher, create } = createDispatcher();
+      const { subscriber, create } = createSubscriber();
 
-      await dispatcher.onSubscriptionExpired({ userId, subscriptionId: 'sub-1' });
+      await subscriber.onSubscriptionExpired({ userId, subscriptionId: 'sub-1' });
 
       expect(create).toHaveBeenCalledWith({
         audience: NotificationAudienceEnum.USER,
@@ -245,9 +245,9 @@ describe('NotificationDispatcherService', () => {
     });
 
     it('user.blocked -> USER_BLOCKED, ADMIN audience, admins room', async () => {
-      const { dispatcher, create, to } = createDispatcher();
+      const { subscriber, create, to } = createSubscriber();
 
-      await dispatcher.onUserBlocked({ userId, actorId: 'admin-1', reason: 'ToS violation' });
+      await subscriber.onUserBlocked({ userId, actorId: 'admin-1', reason: 'ToS violation' });
 
       expect(create).toHaveBeenCalledWith({
         audience: NotificationAudienceEnum.ADMIN,
@@ -261,9 +261,9 @@ describe('NotificationDispatcherService', () => {
     });
 
     it('auth.suspicious-login -> SUSPICIOUS_LOGIN, ADMIN audience', async () => {
-      const { dispatcher, create, to } = createDispatcher();
+      const { subscriber, create, to } = createSubscriber();
 
-      await dispatcher.onAuthSuspiciousLogin({ scope: LockoutScopeEnum.IP, value: '127.0.0.1' });
+      await subscriber.onAuthSuspiciousLogin({ scope: LockoutScopeEnum.IP, value: '127.0.0.1' });
 
       expect(create).toHaveBeenCalledWith({
         audience: NotificationAudienceEnum.ADMIN,
@@ -277,25 +277,25 @@ describe('NotificationDispatcherService', () => {
     });
 
     it('contact.received -> CONTACT_MESSAGE, ADMIN audience', async () => {
-      const { dispatcher, create, to } = createDispatcher();
+      const { subscriber, create, to } = createSubscriber();
 
-      await dispatcher.onContactReceived({ contactMessageId: 'contact-1', ip: '127.0.0.1' });
+      await subscriber.onContactReceived({ contactMessageId: 'contact-1', ip: '127.0.0.1' });
 
       expect(create).toHaveBeenCalledWith({
         audience: NotificationAudienceEnum.ADMIN,
         userId: null,
         type: NotificationTypeEnum.CONTACT_MESSAGE,
-        title: 'New contact message',
-        body: 'A new contact message was received.',
+        title: 'Contact form submission received',
+        body: 'Someone submitted the public contact form.',
         meta: { contactMessageId: 'contact-1', ip: '127.0.0.1' },
       });
       expect(to).toHaveBeenCalledWith(ADMIN_ROOM);
     });
 
     it('webhook.failed -> WEBHOOK_FAILED, ADMIN audience, admins room', async () => {
-      const { dispatcher, create, to } = createDispatcher();
+      const { subscriber, create, to } = createSubscriber();
 
-      await dispatcher.onWebhookFailed({
+      await subscriber.onWebhookFailed({
         webhookEventId: 'webhook-1',
         provider: 'STRIPE',
         type: 'PAYMENT_FAILED',
@@ -324,9 +324,9 @@ describe('NotificationDispatcherService', () => {
   describe('persist-first ordering and containment', () => {
     it('persists before fanning out to the gateway', async () => {
       const callOrder: string[] = [];
-      const { dispatcher } = createDispatcher(callOrder);
+      const { subscriber } = createSubscriber(callOrder);
 
-      await dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });
+      await subscriber.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });
 
       // Two emits for a USER-audience row: the notification push, then the
       // unread-count push — then the EMAIL channel, all strictly after the
@@ -335,9 +335,9 @@ describe('NotificationDispatcherService', () => {
     });
 
     it('emits the denormalized response shape into the room', async () => {
-      const { dispatcher, emit } = createDispatcher();
+      const { subscriber, emit } = createSubscriber();
 
-      await dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });
+      await subscriber.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });
 
       expect(emit).toHaveBeenCalledWith(
         NOTIFICATION_EVENT,
@@ -352,7 +352,7 @@ describe('NotificationDispatcherService', () => {
     });
 
     it('a persistence failure is swallowed, logged, and never reaches the gateway', async () => {
-      const { to } = createDispatcher();
+      const { to } = createSubscriber();
       const notificationRepository = {
         create: vi.fn().mockRejectedValue(new Error('db unavailable')),
         countUnread: vi.fn().mockResolvedValue(0),
@@ -367,13 +367,13 @@ describe('NotificationDispatcherService', () => {
         gateway,
         emailService,
       );
-      const failingDispatcher = new NotificationDispatcherService(
+      const failingSubscriber = new NotificationEventSubscriberService(
         notificationRepository,
         fanOutService,
       );
 
       await expect(
-        failingDispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome' }),
+        failingSubscriber.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome' }),
       ).resolves.toBeUndefined();
 
       expect(to).not.toHaveBeenCalled();
@@ -402,10 +402,13 @@ describe('NotificationDispatcherService', () => {
         gateway,
         emailService,
       );
-      const dispatcher = new NotificationDispatcherService(notificationRepository, fanOutService);
+      const subscriber = new NotificationEventSubscriberService(
+        notificationRepository,
+        fanOutService,
+      );
 
       await expect(
-        dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome' }),
+        subscriber.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome' }),
       ).resolves.toBeUndefined();
 
       // Both the notification emit and the unread-count emit go through the
@@ -423,12 +426,12 @@ describe('NotificationDispatcherService', () => {
   describe('WEBSOCKET_ENABLED=false (off means off)', () => {
     it('skips both socket channels outright but still persists and attempts EMAIL', async () => {
       const callOrder: string[] = [];
-      const { dispatcher, to, emit, countUnread, create, sendIfEnabled } = createDispatcher(
+      const { subscriber, to, emit, countUnread, create, sendIfEnabled } = createSubscriber(
         callOrder,
         { isEnabled: false, heartbeatIntervalMs: 60_000 },
       );
 
-      await dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });
+      await subscriber.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });
 
       expect(create).toHaveBeenCalledTimes(1);
       expect(to).not.toHaveBeenCalled();
@@ -442,9 +445,9 @@ describe('NotificationDispatcherService', () => {
 
   describe('EMAIL channel (independently contained)', () => {
     it('sends the EMAIL channel for a USER-audience notification with the persisted content', async () => {
-      const { dispatcher, sendIfEnabled } = createDispatcher();
+      const { subscriber, sendIfEnabled } = createSubscriber();
 
-      await dispatcher.onAuthPasswordChanged({ userId, sessionId: 'session-1' });
+      await subscriber.onAuthPasswordChanged({ userId, sessionId: 'session-1' });
 
       expect(sendIfEnabled).toHaveBeenCalledWith(
         userId,
@@ -455,20 +458,20 @@ describe('NotificationDispatcherService', () => {
     });
 
     it('never attempts EMAIL for an ADMIN-audience notification (no per-user recipient)', async () => {
-      const { dispatcher, sendIfEnabled } = createDispatcher();
+      const { subscriber, sendIfEnabled } = createSubscriber();
 
-      await dispatcher.onUserBlocked({ userId, actorId: 'admin-1', reason: 'ToS violation' });
+      await subscriber.onUserBlocked({ userId, actorId: 'admin-1', reason: 'ToS violation' });
 
       expect(sendIfEnabled).not.toHaveBeenCalled();
     });
 
     it('an EMAIL failure is swallowed and logged at warn — the row and socket push are unaffected', async () => {
-      const { dispatcher, create, emit, sendIfEnabled } = createDispatcher();
+      const { subscriber, create, emit, sendIfEnabled } = createSubscriber();
 
       sendIfEnabled.mockRejectedValueOnce(new Error('mail transport unavailable'));
 
       await expect(
-        dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' }),
+        subscriber.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' }),
       ).resolves.toBeUndefined();
 
       expect(create).toHaveBeenCalledTimes(1);
@@ -483,11 +486,11 @@ describe('NotificationDispatcherService', () => {
 
   describe('unread-count emission (USER-audience only)', () => {
     it('emits an updated unread count to the recipient after a USER-audience notification', async () => {
-      const { dispatcher, countUnread, to, emit } = createDispatcher();
+      const { subscriber, countUnread, to, emit } = createSubscriber();
 
       countUnread.mockResolvedValue(4);
 
-      await dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });
+      await subscriber.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });
 
       expect(countUnread).toHaveBeenCalledWith({ userId, includeAdmin: false });
       expect(to).toHaveBeenCalledWith(`user:${userId}`);
@@ -495,21 +498,21 @@ describe('NotificationDispatcherService', () => {
     });
 
     it('does not emit an unread count for an ADMIN-audience notification', async () => {
-      const { dispatcher, countUnread, emit } = createDispatcher();
+      const { subscriber, countUnread, emit } = createSubscriber();
 
-      await dispatcher.onUserBlocked({ userId, actorId: 'admin-1', reason: 'ToS violation' });
+      await subscriber.onUserBlocked({ userId, actorId: 'admin-1', reason: 'ToS violation' });
 
       expect(countUnread).not.toHaveBeenCalled();
       expect(emit).not.toHaveBeenCalledWith('unread-count', expect.anything());
     });
 
     it('a count-query failure is swallowed and logged at warn without affecting the notification emit', async () => {
-      const { dispatcher, countUnread, emit } = createDispatcher();
+      const { subscriber, countUnread, emit } = createSubscriber();
 
       countUnread.mockRejectedValue(new Error('db unavailable'));
 
       await expect(
-        dispatcher.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' }),
+        subscriber.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' }),
       ).resolves.toBeUndefined();
 
       expect(emit).toHaveBeenCalledWith(

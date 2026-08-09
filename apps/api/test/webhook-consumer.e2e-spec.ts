@@ -153,7 +153,7 @@ describe('webhook consumer (real postgres/redis/localstack, manual drive)', () =
 
     // <module:notification>
     // The FAILED ceiling emits WEBHOOK_FAILED_EVENT, which the notification
-    // module's dispatcher (a separate, subtractable module — see
+    // module's event subscriber (a separate, subtractable module — see
     // apps/api/src/modules/notification) turns into a single ADMIN-audience
     // row. Proven here rather than in the notification module's own e2e
     // suite because this is the one real emit site for that event.

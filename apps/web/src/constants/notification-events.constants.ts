@@ -4,9 +4,9 @@
 export const NOTIFICATION_EVENT = 'notification';
 
 // Emitted by the gateway too, but deliberately not wired up in
-// useNotificationSocket: the dispatcher computes this figure for a
+// useNotificationSocket: the event subscriber computes this figure for a
 // USER-audience row only (`countUnread({ includeAdmin: false })`, see
-// notification-dispatcher.service.ts) while GET /notifications/unread-count
+// notification-event-subscriber.service.ts) while GET /notifications/unread-count
 // merges ADMIN-audience rows for an ADMIN-role user — so for an admin using
 // this app the push would overwrite the merged badge with the smaller
 // USER-only figure. The bell instead polls the REST endpoint (see

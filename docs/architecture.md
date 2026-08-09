@@ -371,7 +371,7 @@ Reading the table:
 - **`activity` subscribes to almost everything.** That is the design: feature services never
   call `ActivityService`, they emit, and `ActivityListener` is the single place an event
   becomes an audit row.
-- **`notification` is the other broad subscriber.** `NotificationDispatcherService` persists a
+- **`notification` is the other broad subscriber.** `NotificationEventSubscriberService` persists a
   notification first, then fans out over WebSocket and (per user preference) email.
 - **`NOTE_CREATED_EVENT` has no subscribers.** It is not dead code by accident — the `note`
   module is the reference implementation, and it demonstrates the emit side of the pattern

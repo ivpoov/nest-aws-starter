@@ -41,10 +41,10 @@ and the markers themselves.
 - `apps/api/prisma/schema.prisma`
   - lines 167-190 (block)
 - `apps/api/prisma/seed.ts`
-  - lines 316-378 (block)
-  - lines 685-702 (block)
-  - lines 821-834 (block)
-  - lines 890-892 (block)
+  - lines 360-422 (block)
+  - lines 729-746 (block)
+  - lines 865-878 (block)
+  - lines 934-936 (block)
 - `apps/web/src/App.tsx`
   - line 10: `import { ContactPage } from './pages/ContactPage'; // <module:contact-us>`
   - lines 33-35 (block)
@@ -91,7 +91,7 @@ _None — every cross-module reference for this module is fence-marked._
 The subtracted tree type-checks and passes its tests with these left in place —
 they are cosmetic leftovers, not build breaks:
 
-- `packages/shared/src/notifications/enums/notification-type.enum.ts` — the CONTACT_MESSAGE member stays on purpose, for the same reason as payment's types: apps/api's notification dispatcher keeps its contact-message builder and handler, which compile against the core event bus and simply never fire once nothing emits contact.message.created. Keeping the member keeps apps/web's NOTIFICATION_TYPE_LABELS (a total Record over the enum) valid. Dropping it means dropping the member, the label line, USER_NOTIFICATION_TYPES and the dispatcher handler together
+- `packages/shared/src/notifications/enums/notification-type.enum.ts` — the CONTACT_MESSAGE member stays on purpose, for the same reason as payment's types: apps/api's notification event subscriber keeps its contact-message builder and handler, which compile against the core event bus and simply never fire once nothing emits contact.message.created. Keeping the member keeps apps/web's NOTIFICATION_TYPE_LABELS (a total Record over the enum) valid. Dropping it means dropping the member, the label line, USER_NOTIFICATION_TYPES and the event subscriber handler together
 
 ## 3. Drop `.env` variables
 

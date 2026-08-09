@@ -5,7 +5,7 @@ import {
 } from '@nest-aws-starter/shared';
 
 // Deep-links a notification into the page that shows the thing it is about,
-// built from `meta` (denormalized per type by the dispatcher's builders —
+// built from `meta` (denormalized per type by the event subscriber's builders —
 // see apps/api/src/modules/notification/builders/). Every id is read through
 // readStringMeta and encoded, so a row written by an older builder — missing
 // the field, or holding a number/null — resolves to null instead of

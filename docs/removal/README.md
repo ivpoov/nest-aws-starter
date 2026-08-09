@@ -21,7 +21,7 @@ of the app still type-checks and passes its unit tests — see
 - [`oauth-discord`](./oauth-discord.md) — Discord OAuth login/link provider.
 - [`cloudfront`](./cloudfront.md) — CloudFront signed download URLs (optional common provider).
 - [`payment`](./payment.md) — Plans, subscriptions, payment transactions, webhook events, and the Stripe provider (schema + core module + Stripe implementation).
-- [`notification`](./notification.md) — Notification/receipt/preference schema, WS gateway, the persist-first dispatcher (IN_APP + the per-type/per-channel EMAIL gate, PR 5), the history API (list/unread-count/mark-read/read-all), and the preferences API (GET/PUT matrix).
+- [`notification`](./notification.md) — Notification/receipt/preference schema, WS gateway, the persist-first event subscriber (IN_APP + the per-type/per-channel EMAIL gate, PR 5), the history API (list/unread-count/mark-read/read-all), and the preferences API (GET/PUT matrix).
 
 ## Coverage: what is proven vs. documented
 
@@ -61,7 +61,7 @@ Two couplings were not mechanical and are worth knowing before adding a module:
 - `apps/web`'s `NOTIFICATION_TYPE_LABELS` is a total `Record` over
   `NotificationTypeEnum`, so a payment- or contact-us-shaped enum member cannot be
   fenced out on its own. Those members stay by design: `apps/api`'s notification
-  dispatcher keeps the matching builders and handlers, which compile against the core
+  event subscriber keeps the matching builders and handlers, which compile against the core
   event bus and simply never fire. What is fenced instead is the *link target* — a
   notification pointing at `/settings/billing` after that route is gone would be a real
   dead end.

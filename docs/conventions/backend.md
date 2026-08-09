@@ -875,7 +875,7 @@ Cross-feature reactions (audit rows, notifications, digests) subscribe to the
 event bus with `@OnDomainEvent(EVENT_NAME)` — never by importing the emitting
 feature module. Event names are constants in the core `event` module; payloads
 are interfaces in the subscribing module. The reference implementation is
-`notification`'s `NotificationDispatcherService` (one subscriber per module: a
+`notification`'s `NotificationEventSubscriberService` (one subscriber per module: a
 thin event → content mapping that funnels every handler into one dispatch path);
 `ActivityListener.safeRecord` is the same pattern one size smaller.
 
