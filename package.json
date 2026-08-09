@@ -9,7 +9,8 @@
     "bootstrap": "node scripts/bootstrap.mjs",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "test": "turbo run test",
+    "test": "turbo run test && pnpm run test:scripts",
+    "test:scripts": "node --test scripts/subtraction-test.spec.mjs",
     "test:e2e": "turbo run test:e2e",
     "format": "biome format --write .",
     "prepare": "husky"

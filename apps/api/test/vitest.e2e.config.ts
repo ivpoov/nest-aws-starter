@@ -7,6 +7,7 @@ export default defineConfig({
     include: ['test/**/*.e2e-spec.ts'],
     environment: 'node',
     fileParallelism: false,
+    setupFiles: ['./test/reflect-metadata.setup.ts'],
     hookTimeout: 30000,
     testTimeout: 30000,
     // Runs once before any spec (not per-spec, unlike app.factory.ts) and

@@ -4,7 +4,7 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", "src/generated/**"],
-      "env": ["DATABASE_URL"]
+      "env": ["DATABASE_URL", "VITE_API_BASE_URL"]
     },
     "lint": {},
     "test": { "dependsOn": ["build"] },

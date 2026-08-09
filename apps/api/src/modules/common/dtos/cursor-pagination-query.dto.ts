@@ -1,3 +1,4 @@
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@constants/pagination.constants.js';
 import type { CursorPaginationInterface } from '@interfaces/cursor-pagination.interface.js';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -10,11 +11,16 @@ export class CursorPaginationQueryDto implements CursorPaginationInterface {
   @IsUUID('all')
   readonly cursor: string | null = null;
 
-  @ApiPropertyOptional({ type: Number, example: 20, minimum: 1, maximum: 100 })
+  @ApiPropertyOptional({
+    type: Number,
+    example: DEFAULT_PAGE_SIZE,
+    minimum: 1,
+    maximum: MAX_PAGE_SIZE,
+  })
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(MAX_PAGE_SIZE)
   @Type(() => Number)
-  readonly limit: number = 20;
+  readonly limit: number = DEFAULT_PAGE_SIZE;
 }

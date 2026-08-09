@@ -1,3 +1,4 @@
+import { MAX_PAGE_SIZE } from '@constants/pagination.constants.js';
 import {
   FAILED_LOGIN_WINDOW_SEC,
   LOCKOUT_TTL_SEC,
@@ -56,8 +57,12 @@ export class LockoutRedisRepository implements LockoutRepositoryInterface {
     await this.redis.del(this.lockKey(scope, value), this.counterKey(scope, value));
   }
 
+  // Capped: GET /admin/suspicious/lockouts takes no `limit`, and a
+  // distributed credential-stuffing run writes one key per source — the scan
+  // and the per-key TTL fan-out below both grow with the attack. The cap
+  // bounds them to the shared page-size budget.
   public async findAllLockouts(): Promise<LockoutRecordInterface[]> {
-    const keys: string[] = await this.scanKeys(`${LOCK_PREFIX}:*`);
+    const keys: string[] = await this.scanKeys(`${LOCK_PREFIX}:*`, MAX_PAGE_SIZE);
     const records: (LockoutRecordInterface | null)[] = await Promise.all(
       keys.map((key: string): Promise<LockoutRecordInterface | null> => this.toRecord(key)),
     );
@@ -67,9 +72,12 @@ export class LockoutRedisRepository implements LockoutRepositoryInterface {
     );
   }
 
-  private async scanKeys(pattern: string): Promise<string[]> {
+  // SCAN returns an unbounded number of keys across its cursor walk, so the
+  // limit is enforced inside the loop: stopping early leaves the remaining
+  // keys unread rather than materializing them and slicing afterwards.
+  private async scanKeys(pattern: string, limit: number): Promise<string[]> {
     const keys: string[] = [];
-    let cursor = '0';
+    let cursor: string = '0';
 
     do {
       const [nextCursor, batch]: [string, string[]] = await this.redis.scan(
@@ -82,9 +90,9 @@ export class LockoutRedisRepository implements LockoutRepositoryInterface {
 
       keys.push(...batch);
       cursor = nextCursor;
-    } while (cursor !== '0');
+    } while (cursor !== '0' && keys.length < limit);
 
-    return keys;
+    return keys.slice(0, limit);
   }
 
   private async toRecord(key: string): Promise<LockoutRecordInterface | null> {
