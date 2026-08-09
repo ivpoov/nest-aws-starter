@@ -46,6 +46,17 @@ locals {
       vpc_flow_logs_enabled = false
 
       # data
+      #
+      # managed_cache_enabled is its own key and not a function of the task
+      # count, deliberately. false means Redis runs as a container beside the
+      # API in the same task: free, per-task, and emptied by every deploy. true
+      # means an ElastiCache replication group at roughly $12/month, which is
+      # about 40% of what this whole profile costs — far too large a bill to
+      # arrive as a side effect of editing a capacity number.
+      #
+      # A per-task cache is correct exactly while there is one task, so this key
+      # and compute_max_capacity below move together. See the note there.
+      managed_cache_enabled          = false
       database_instance_class        = "db.t4g.micro"
       database_allocated_storage_gb  = 20
       database_multi_az              = false
@@ -55,6 +66,18 @@ locals {
       cache_replica_count            = 0
 
       # compute
+      #
+      # One task, and therefore a sidecar cache above. Two pieces of apps/api
+      # are no-ops at one task — the scheduler's Redis lock and the Socket.IO
+      # Redis adapter — so proving they work across instances needs BOTH keys
+      # raised together:
+      #
+      #   managed_cache_enabled = true   (shared cache, ~$12/month)
+      #   compute_min/max_capacity = 2   (second Fargate Spot task, ~$3/month)
+      #
+      # Raising the capacity alone gives two tasks with two private sidecars,
+      # which disagree about who is logged in. The check in datastores.tf is
+      # what says so on plan. README.md walks through the run and the cost.
       compute_use_fargate_spot = true
       compute_task_cpu         = 256
       compute_task_memory      = 512
@@ -90,6 +113,10 @@ locals {
       vpc_flow_logs_enabled = true
 
       # data
+      #
+      # A shared cache, because this profile runs more than one task and a
+      # per-task sidecar would sign users out every time a task was replaced.
+      managed_cache_enabled          = true
       database_instance_class        = "db.t4g.small"
       database_allocated_storage_gb  = 50
       database_multi_az              = true

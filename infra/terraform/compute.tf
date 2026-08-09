@@ -254,7 +254,8 @@ check "single_task_ceiling" {
     condition = local.profile.compute_max_capacity > 1
     error_message = join(" ", [
       "The selected cost profile caps the API at one task, so the scheduler's Redis lock and the Socket.IO Redis adapter are never exercised — both are no-ops at a single task.",
-      "Raising compute_max_capacity above one in local.profile_settings turns them on, and also switches Redis from a task-local sidecar to a shared ElastiCache replication group (~$12/month for cache.t4g.micro), because two tasks with two sidecars would disagree about who is logged in.",
+      "Exercising them takes two edits in local.profile_settings, not one: raise compute_min_capacity and compute_max_capacity to 2, AND set managed_cache_enabled = true.",
+      "The second is not optional and is not implied by the first — a Redis sidecar is per task, so two tasks would get two caches and disagree about who is logged in. The combination costs roughly $12/month for cache.t4g.micro plus about $3/month for a second Fargate Spot task.",
     ])
   }
 }
