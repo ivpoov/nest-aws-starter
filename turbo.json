@@ -8,6 +8,12 @@
     },
     "lint": {},
     "test": { "dependsOn": ["build"] },
+    // Deliberately not called `build`: the documentation site renders every
+    // markdown file in the repository and launches a browser to draw the
+    // Mermaid diagrams, which has no business running on a pull request that
+    // touched a service. `pnpm run build` therefore skips it, and the docs
+    // workflow — path-filtered to docs/** and apps/docs/** — runs it instead.
+    "docs:build": { "outputs": ["dist/**"] },
     "test:e2e": {
       "dependsOn": ["build"],
       "cache": false,
