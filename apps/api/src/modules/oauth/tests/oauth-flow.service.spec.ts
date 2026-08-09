@@ -149,7 +149,7 @@ async function runCallback(
 
 describe('OauthFlowService login matrix', () => {
   it('logs in an existing method and touches lastUsedAt', async () => {
-    const setup = createService();
+    const setup: TestSetupInterface = createService();
 
     setup.users.findMethodByProviderAccount.mockResolvedValue({
       id: 'method-1',
@@ -164,7 +164,7 @@ describe('OauthFlowService login matrix', () => {
   });
 
   it('rejects login when a verified provider email belongs to another account', async () => {
-    const setup = createService();
+    const setup: TestSetupInterface = createService();
 
     setup.users.findByAuthEmail.mockResolvedValue({
       ...user,
@@ -179,7 +179,7 @@ describe('OauthFlowService login matrix', () => {
   });
 
   it('ignores unverified provider emails when matching accounts', async () => {
-    const setup = createService();
+    const setup: TestSetupInterface = createService();
 
     setup.users.findByAuthEmail.mockResolvedValue({
       ...user,
@@ -199,7 +199,7 @@ describe('OauthFlowService login matrix', () => {
   });
 
   it('creates a user on first oauth login without collisions', async () => {
-    const setup = createService();
+    const setup: TestSetupInterface = createService();
 
     const url: string = await runCallback(setup, OauthIntentEnum.LOGIN, encodeProfile());
     const code: string = new URL(url).searchParams.get('code') ?? '';
@@ -212,7 +212,7 @@ describe('OauthFlowService login matrix', () => {
 
 describe('OauthFlowService link matrix', () => {
   it('rejects linking a provider account already owned by another user', async () => {
-    const setup = createService();
+    const setup: TestSetupInterface = createService();
 
     setup.users.findMethodByProviderAccount.mockResolvedValue({
       id: 'method-x',
@@ -225,7 +225,7 @@ describe('OauthFlowService link matrix', () => {
   });
 
   it('rejects linking when the verified email belongs to another account', async () => {
-    const setup = createService();
+    const setup: TestSetupInterface = createService();
 
     setup.users.findByAuthEmail.mockResolvedValue({
       ...user,
@@ -239,7 +239,7 @@ describe('OauthFlowService link matrix', () => {
   });
 
   it('rejects linking a second method of the same type', async () => {
-    const setup = createService();
+    const setup: TestSetupInterface = createService();
 
     setup.users.findByAuthEmail.mockResolvedValue({
       ...user,
@@ -253,7 +253,7 @@ describe('OauthFlowService link matrix', () => {
   });
 
   it('links happily and returns a LINK exchange payload', async () => {
-    const setup = createService();
+    const setup: TestSetupInterface = createService();
 
     const url: string = await runCallback(setup, OauthIntentEnum.LINK, encodeProfile());
     const code: string = new URL(url).searchParams.get('code') ?? '';
@@ -297,7 +297,7 @@ describe('OauthFlowService redirect allowlist', () => {
   });
 
   it('stores the canonical origin + path, dropping any smuggled query or fragment', async () => {
-    const setup = createService();
+    const setup: TestSetupInterface = createService();
 
     await setup.service.start(
       AuthMethodTypeEnum.GOOGLE,
@@ -325,7 +325,7 @@ describe('OauthFlowService plumbing', () => {
   });
 
   it('consumes states single-use', async () => {
-    const setup = createService();
+    const setup: TestSetupInterface = createService();
     const consentUrl: string = await setup.service.start(
       AuthMethodTypeEnum.GOOGLE,
       OauthIntentEnum.LOGIN,
@@ -345,7 +345,7 @@ describe('OauthFlowService plumbing', () => {
   });
 
   it('consumes exchange codes single-use', async () => {
-    const setup = createService();
+    const setup: TestSetupInterface = createService();
     const url: string = await runCallback(setup, OauthIntentEnum.LOGIN, encodeProfile());
     const code: string = new URL(url).searchParams.get('code') ?? '';
 
@@ -358,7 +358,7 @@ describe('OauthFlowService plumbing', () => {
   });
 
   it('mints a redeemable LOGIN exchange code for admin login-as tokens', async () => {
-    const setup = createService();
+    const setup: TestSetupInterface = createService();
     const tokens = { accessToken: 'imp-a', refreshToken: 'imp-r', expiresInSec: 900 };
 
     const code: string = await setup.service.mintExchangeCode(tokens);
