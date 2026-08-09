@@ -2,7 +2,7 @@ import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js'
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
-const scheme = z.discriminatedUnion('isEnabled', [
+const configSchema = z.discriminatedUnion('isEnabled', [
   z.object({ isEnabled: z.literal(false) }),
   z.object({
     isEnabled: z.literal(true),
@@ -13,7 +13,7 @@ const scheme = z.discriminatedUnion('isEnabled', [
   }),
 ]);
 
-export type CloudFrontConfig = z.infer<typeof scheme>;
+export type CloudFrontConfig = z.infer<typeof configSchema>;
 
 // Env files can't hold real newlines — CLOUDFRONT_PRIVATE_KEY commonly arrives
 // with literal "\n" sequences that need normalizing back into a real PEM.
@@ -25,7 +25,7 @@ export const cloudfrontConfig = registerAs('cloudfront', (): CloudFrontConfig =>
   const isEnabled: boolean = process.env.CLOUDFRONT_ENABLED === 'true';
 
   return validateConfigSchema(
-    scheme,
+    configSchema,
     isEnabled
       ? {
           isEnabled: true,

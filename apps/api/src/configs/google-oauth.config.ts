@@ -2,7 +2,7 @@ import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js'
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
-const scheme = z.discriminatedUnion('isEnabled', [
+const configSchema = z.discriminatedUnion('isEnabled', [
   z.object({ isEnabled: z.literal(false) }),
   z.object({
     isEnabled: z.literal(true),
@@ -12,13 +12,13 @@ const scheme = z.discriminatedUnion('isEnabled', [
   }),
 ]);
 
-export type GoogleOauthConfig = z.infer<typeof scheme>;
+export type GoogleOauthConfig = z.infer<typeof configSchema>;
 
 export const googleOauthConfig = registerAs('googleOauth', (): GoogleOauthConfig => {
   const isEnabled: boolean = process.env.GOOGLE_OAUTH_ENABLED === 'true';
 
   return validateConfigSchema(
-    scheme,
+    configSchema,
     isEnabled
       ? {
           isEnabled: true,

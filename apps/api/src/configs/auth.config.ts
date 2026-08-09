@@ -2,17 +2,17 @@ import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js'
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
-const scheme = z.object({
+const configSchema = z.object({
   jwtSecret: z.string().min(32),
   accessTtlSec: z.number().int().positive(),
   refreshTtlSec: z.number().int().positive(),
   refreshGraceSec: z.number().int().positive(),
 });
 
-export type AuthConfig = Required<z.infer<typeof scheme>>;
+export type AuthConfig = z.infer<typeof configSchema>;
 
 export const authConfig = registerAs('auth', (): AuthConfig => {
-  return validateConfigSchema(scheme, {
+  return validateConfigSchema(configSchema, {
     jwtSecret: process.env.AUTH_JWT_SECRET ?? '',
     accessTtlSec: Number(process.env.AUTH_ACCESS_TTL_SEC ?? 900),
     refreshTtlSec: Number(process.env.AUTH_REFRESH_TTL_SEC ?? 2_592_000),

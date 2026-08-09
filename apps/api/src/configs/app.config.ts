@@ -2,7 +2,7 @@ import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js'
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
-const scheme = z.object({
+const configSchema = z.object({
   port: z.number(),
   env: z.enum(['development', 'test', 'production']),
   apiPrefix: z.string(),
@@ -10,10 +10,10 @@ const scheme = z.object({
   corsOrigins: z.array(z.url()),
 });
 
-export type AppConfig = Required<z.infer<typeof scheme>>;
+export type AppConfig = z.infer<typeof configSchema>;
 
 export const appConfig = registerAs('app', (): AppConfig => {
-  return validateConfigSchema(scheme, {
+  return validateConfigSchema(configSchema, {
     port: Number(process.env.PORT ?? 3000),
     env: (process.env.NODE_ENV ?? 'development') as AppConfig['env'],
     apiPrefix: process.env.API_PREFIX ?? 'api',

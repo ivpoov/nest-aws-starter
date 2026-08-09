@@ -8,7 +8,7 @@ import { z } from 'zod';
 // would silently desync the runtime payloads from the types checking them.
 const STRIPE_API_VERSION = '2026-06-24.dahlia' as const;
 
-const scheme = z.discriminatedUnion('isEnabled', [
+const configSchema = z.discriminatedUnion('isEnabled', [
   z.object({ isEnabled: z.literal(false) }),
   z.object({
     isEnabled: z.literal(true),
@@ -21,13 +21,13 @@ const scheme = z.discriminatedUnion('isEnabled', [
   }),
 ]);
 
-export type StripeConfig = z.infer<typeof scheme>;
+export type StripeConfig = z.infer<typeof configSchema>;
 
 export const stripeConfig = registerAs('stripe', (): StripeConfig => {
   const isEnabled: boolean = process.env.STRIPE_ENABLED === 'true';
 
   return validateConfigSchema(
-    scheme,
+    configSchema,
     isEnabled
       ? {
           isEnabled: true,

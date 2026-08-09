@@ -2,7 +2,7 @@ import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js'
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
-const scheme = z.discriminatedUnion('isEnabled', [
+const configSchema = z.discriminatedUnion('isEnabled', [
   z.object({ isEnabled: z.literal(false) }),
   z.object({
     isEnabled: z.literal(true),
@@ -23,7 +23,7 @@ const scheme = z.discriminatedUnion('isEnabled', [
   }),
 ]);
 
-export type S3Config = z.infer<typeof scheme>;
+export type S3Config = z.infer<typeof configSchema>;
 
 export const s3Config = registerAs('s3', (): S3Config => {
   const isEnabled: boolean = process.env.S3_ENABLED === 'true';
@@ -33,7 +33,7 @@ export const s3Config = registerAs('s3', (): S3Config => {
   );
 
   return validateConfigSchema(
-    scheme,
+    configSchema,
     isEnabled
       ? {
           isEnabled: true,

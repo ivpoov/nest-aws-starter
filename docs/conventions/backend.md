@@ -1124,10 +1124,13 @@ imports: [CaslModule.forFeature({ permissions: notePermissions })],
 ```
 
 **Config** — Zod schema → inferred type → `registerAs` returning
-`validateConfigSchema(scheme, { … })`; consumed via
+`validateConfigSchema(configSchema, { … })`; consumed via
 `configService.getOrThrow<XConfig>('x')`. The validator returns the *parsed* value, so
 the factory never holds an unvalidated object: there is no separate `const config`
-to forget to check.
+to forget to check. The schema is always named `configSchema` — one file, one schema,
+so a qualifier would say nothing — and the exported type is a plain
+`z.infer<typeof configSchema>`: Zod already yields required keys, so wrapping it in
+`Required<>` claims a guarantee it is not adding.
 
 **Optional providers are enabled, never half-configured.** Every optional provider
 (S3, SQS, SNS, SES, Lambda, …) has an `<X>_ENABLED` flag, and its config is a Zod
@@ -1147,7 +1150,7 @@ import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js'
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
-const scheme = z.discriminatedUnion('isEnabled', [
+const configSchema = z.discriminatedUnion('isEnabled', [
   z.object({ isEnabled: z.literal(false) }),
   z.object({
     isEnabled: z.literal(true),
@@ -1156,13 +1159,13 @@ const scheme = z.discriminatedUnion('isEnabled', [
   }),
 ]);
 
-export type SqsConfig = z.infer<typeof scheme>;
+export type SqsConfig = z.infer<typeof configSchema>;
 
 export const sqsConfig = registerAs('sqs', (): SqsConfig => {
   const isEnabled: boolean = process.env.SQS_ENABLED === 'true';
 
   return validateConfigSchema(
-    scheme,
+    configSchema,
     isEnabled
       ? {
           isEnabled: true,
@@ -1196,7 +1199,7 @@ import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js'
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
-const scheme = z.object({
+const configSchema = z.object({
   port: z.number(),
   env: z.enum(['development', 'test', 'production']),
   apiPrefix: z.string(),
@@ -1204,10 +1207,10 @@ const scheme = z.object({
   corsOrigins: z.array(z.url()),
 });
 
-export type AppConfig = Required<z.infer<typeof scheme>>;
+export type AppConfig = z.infer<typeof configSchema>;
 
 export const appConfig = registerAs('app', (): AppConfig => {
-  return validateConfigSchema(scheme, {
+  return validateConfigSchema(configSchema, {
     port: Number(process.env.PORT ?? 3000),
     env: (process.env.NODE_ENV ?? 'development') as AppConfig['env'],
     apiPrefix: process.env.API_PREFIX ?? 'api',

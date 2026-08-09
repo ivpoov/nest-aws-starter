@@ -13,15 +13,15 @@ import { z } from 'zod';
 // long-poll loop defaults on everywhere except e2e, where suites drive
 // PaymentWebhookConsumerService.processMessage() directly for determinism
 // instead of racing the loop's own poll interval.
-const scheme = z.object({
+const configSchema = z.object({
   webhookQueueUrl: z.string(),
   consumerEnabled: z.boolean(),
 });
 
-export type PaymentConfig = z.infer<typeof scheme>;
+export type PaymentConfig = z.infer<typeof configSchema>;
 
 export const paymentConfig = registerAs('payment', (): PaymentConfig => {
-  return validateConfigSchema(scheme, {
+  return validateConfigSchema(configSchema, {
     webhookQueueUrl: process.env.SQS_PAYMENT_WEBHOOK_QUEUE_URL ?? '',
     consumerEnabled: process.env.PAYMENT_WEBHOOK_CONSUMER_ENABLED !== 'false',
   });
