@@ -114,10 +114,14 @@ export class StatisticTypedSqlRepository implements StatisticRepositoryInterface
 
   // The revenue queries aggregate into bigint (see revenueByDay.sql) because
   // int32 would make Postgres raise `integer out of range` past ~$21.5M per
-  // bucket. JSON has no bigint, so the wire contract stays `number` — safe up
+  // bucket. JSON has no bigint, so the wire contract stays `number` — exact up
   // to Number.MAX_SAFE_INTEGER cents (~$90T), four million times the int32
   // ceiling this replaced. Beyond that the value is clamped rather than
   // silently rounded, so a wrong number never reaches an admin unnoticed.
+  //
+  // Scope: this bounds one bucket. Totals summed across buckets are bounded
+  // separately, in StatisticService.sumRevenueCents — thirty clamped buckets
+  // can still exceed the ceiling between them.
   private toCents(value: bigint | null): number {
     if (value === null) return 0;
 
