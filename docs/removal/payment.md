@@ -95,7 +95,7 @@ and the markers themselves.
   - line 7: `revenueByPlan, // <module:payment>`
   - lines 12-14 (block)
   - lines 18-20 (block)
-  - lines 77-110 (block)
+  - lines 77-131 (block)
 - `apps/api/src/modules/statistic/services/statistic.service.ts`
   - lines 13-15 (block)
   - lines 44-46 (block)
@@ -104,7 +104,7 @@ and the markers themselves.
   - lines 150-154 (block)
 - `apps/api/src/modules/statistic/tests/statistic-typed-sql.repository.spec.ts`
   - lines 4-6 (block)
-  - lines 79-124 (block)
+  - lines 79-166 (block)
 - `apps/api/src/modules/statistic/tests/statistic.service.spec.ts`
   - line 44: `findRevenueByDay: vi.fn().mockResolvedValue(revenuePoints), // <module:payment>`
   - line 45: `findMrrCents: vi.fn().mockResolvedValue(4_900), // <module:payment>`
@@ -120,23 +120,22 @@ and the markers themselves.
   - lines 30-32 (block)
   - line 43: `let sqs: SqsProviderInterface; // <module:payment>`
   - line 52: `sqs = app.get<SqsProviderInterface>(SQS_PROVIDER); // <module:payment>`
-  - line 54: `await neutralizeStaleWebhookEventBacklog(); // <module:payment>`
-  - line 55: `await drainQueue(); // <module:payment>`
-  - lines 63-119 (block)
-  - lines 249-357 (block)
+  - line 54: `await drainQueue(); // <module:payment>`
+  - lines 62-104 (block)
+  - lines 234-342 (block)
 - `apps/api/test/statistics.e2e-spec.ts`
-  - lines 40-80 (block)
-  - lines 146-155 (block)
-  - lines 162-214 (block)
+  - lines 40-103 (block)
+  - lines 169-178 (block)
+  - lines 185-306 (block)
 - `apps/api/prisma/schema.prisma`
   - line 44: `subscriptions           Subscription[] // <module:payment>`
   - line 45: `paymentTransactions     PaymentTransaction[] // <module:payment>`
-  - lines 254-350 (block)
+  - lines 270-389 (block)
 - `apps/api/prisma/seed.ts`
-  - lines 380-571 (block)
-  - lines 667-684 (block)
-  - lines 795-820 (block)
-  - lines 893-895 (block)
+  - lines 424-615 (block)
+  - lines 711-728 (block)
+  - lines 839-864 (block)
+  - lines 937-939 (block)
 - `apps/web/src/App.tsx`
   - line 7: `import { BillingCanceledPage } from './pages/BillingCanceledPage'; // <module:payment>`
   - line 8: `import { BillingPage } from './pages/BillingPage'; // <module:payment>`
