@@ -1,5 +1,4 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -11,12 +10,8 @@ const scheme = z.object({
 export type RedisConfig = Required<z.infer<typeof scheme>>;
 
 export const redisConfig = registerAs('redis', (): RedisConfig => {
-  const config: RedisConfig = {
+  return validateConfigSchema(scheme, {
     url: process.env.REDIS_URL ?? 'redis://localhost:6390',
     isCluster: process.env.REDIS_IS_CLUSTER === 'true',
-  };
-
-  validateScheme(scheme, config, new Logger('RedisConfig'));
-
-  return config;
+  });
 });

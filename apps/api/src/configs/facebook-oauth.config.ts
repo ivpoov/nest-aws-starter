@@ -1,5 +1,4 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -18,16 +17,15 @@ export type FacebookOauthConfig = z.infer<typeof scheme>;
 export const facebookOauthConfig = registerAs('facebookOauth', (): FacebookOauthConfig => {
   const isEnabled: boolean = process.env.FACEBOOK_OAUTH_ENABLED === 'true';
 
-  const config: FacebookOauthConfig = isEnabled
-    ? {
-        isEnabled: true,
-        clientId: process.env.FACEBOOK_OAUTH_CLIENT_ID ?? '',
-        clientSecret: process.env.FACEBOOK_OAUTH_CLIENT_SECRET ?? '',
-        redirectUri: process.env.FACEBOOK_OAUTH_REDIRECT_URI ?? '',
-      }
-    : { isEnabled: false };
-
-  validateScheme(scheme, config, new Logger('FacebookOauthConfig'));
-
-  return config;
+  return validateConfigSchema(
+    scheme,
+    isEnabled
+      ? {
+          isEnabled: true,
+          clientId: process.env.FACEBOOK_OAUTH_CLIENT_ID ?? '',
+          clientSecret: process.env.FACEBOOK_OAUTH_CLIENT_SECRET ?? '',
+          redirectUri: process.env.FACEBOOK_OAUTH_REDIRECT_URI ?? '',
+        }
+      : { isEnabled: false },
+  );
 });

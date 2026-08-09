@@ -1,5 +1,4 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -33,22 +32,21 @@ export const s3Config = registerAs('s3', (): S3Config => {
     process.env.S3_ACCESS_KEY || process.env.S3_SECRET_KEY,
   );
 
-  const config: S3Config = isEnabled
-    ? {
-        isEnabled: true,
-        region: process.env.AWS_REGION ?? '',
-        bucketName: process.env.S3_BUCKET_NAME ?? '',
-        ...(hasStaticCredentials && {
-          credentials: {
-            accessKeyId: process.env.S3_ACCESS_KEY ?? '',
-            secretAccessKey: process.env.S3_SECRET_KEY ?? '',
-          },
-        }),
-        ...(process.env.S3_ENDPOINT && { endpoint: process.env.S3_ENDPOINT }),
-      }
-    : { isEnabled: false };
-
-  validateScheme(scheme, config, new Logger('S3Config'));
-
-  return config;
+  return validateConfigSchema(
+    scheme,
+    isEnabled
+      ? {
+          isEnabled: true,
+          region: process.env.AWS_REGION ?? '',
+          bucketName: process.env.S3_BUCKET_NAME ?? '',
+          ...(hasStaticCredentials && {
+            credentials: {
+              accessKeyId: process.env.S3_ACCESS_KEY ?? '',
+              secretAccessKey: process.env.S3_SECRET_KEY ?? '',
+            },
+          }),
+          ...(process.env.S3_ENDPOINT && { endpoint: process.env.S3_ENDPOINT }),
+        }
+      : { isEnabled: false },
+  );
 });

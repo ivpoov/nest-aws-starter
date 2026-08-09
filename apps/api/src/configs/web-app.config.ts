@@ -1,5 +1,4 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -10,11 +9,7 @@ const scheme = z.object({
 export type WebAppConfig = Required<z.infer<typeof scheme>>;
 
 export const webAppConfig = registerAs('webApp', (): WebAppConfig => {
-  const config: WebAppConfig = {
+  return validateConfigSchema(scheme, {
     baseUrl: process.env.WEB_APP_BASE_URL ?? 'http://localhost:5173',
-  };
-
-  validateScheme(scheme, config, new Logger('WebAppConfig'));
-
-  return config;
+  });
 });

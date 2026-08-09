@@ -1,5 +1,4 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -17,15 +16,14 @@ export type SnsConfig = z.infer<typeof scheme>;
 export const snsConfig = registerAs('sns', (): SnsConfig => {
   const isEnabled: boolean = process.env.SNS_ENABLED === 'true';
 
-  const config: SnsConfig = isEnabled
-    ? {
-        isEnabled: true,
-        region: process.env.AWS_REGION ?? '',
-        ...(process.env.AWS_ENDPOINT_URL && { endpoint: process.env.AWS_ENDPOINT_URL }),
-      }
-    : { isEnabled: false };
-
-  validateScheme(scheme, config, new Logger('SnsConfig'));
-
-  return config;
+  return validateConfigSchema(
+    scheme,
+    isEnabled
+      ? {
+          isEnabled: true,
+          region: process.env.AWS_REGION ?? '',
+          ...(process.env.AWS_ENDPOINT_URL && { endpoint: process.env.AWS_ENDPOINT_URL }),
+        }
+      : { isEnabled: false },
+  );
 });

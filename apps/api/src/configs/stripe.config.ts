@@ -1,5 +1,4 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -27,17 +26,16 @@ export type StripeConfig = z.infer<typeof scheme>;
 export const stripeConfig = registerAs('stripe', (): StripeConfig => {
   const isEnabled: boolean = process.env.STRIPE_ENABLED === 'true';
 
-  const config: StripeConfig = isEnabled
-    ? {
-        isEnabled: true,
-        secretKey: process.env.STRIPE_SECRET_KEY ?? '',
-        webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
-        apiVersion: STRIPE_API_VERSION,
-        portalReturnUrl: process.env.STRIPE_PORTAL_RETURN_URL ?? '',
-      }
-    : { isEnabled: false };
-
-  validateScheme(scheme, config, new Logger('StripeConfig'));
-
-  return config;
+  return validateConfigSchema(
+    scheme,
+    isEnabled
+      ? {
+          isEnabled: true,
+          secretKey: process.env.STRIPE_SECRET_KEY ?? '',
+          webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
+          apiVersion: STRIPE_API_VERSION,
+          portalReturnUrl: process.env.STRIPE_PORTAL_RETURN_URL ?? '',
+        }
+      : { isEnabled: false },
+  );
 });

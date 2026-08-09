@@ -1,5 +1,4 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -17,15 +16,14 @@ export type SqsConfig = z.infer<typeof scheme>;
 export const sqsConfig = registerAs('sqs', (): SqsConfig => {
   const isEnabled: boolean = process.env.SQS_ENABLED === 'true';
 
-  const config: SqsConfig = isEnabled
-    ? {
-        isEnabled: true,
-        region: process.env.AWS_REGION ?? '',
-        ...(process.env.AWS_ENDPOINT_URL && { endpoint: process.env.AWS_ENDPOINT_URL }),
-      }
-    : { isEnabled: false };
-
-  validateScheme(scheme, config, new Logger('SqsConfig'));
-
-  return config;
+  return validateConfigSchema(
+    scheme,
+    isEnabled
+      ? {
+          isEnabled: true,
+          region: process.env.AWS_REGION ?? '',
+          ...(process.env.AWS_ENDPOINT_URL && { endpoint: process.env.AWS_ENDPOINT_URL }),
+        }
+      : { isEnabled: false },
+  );
 });

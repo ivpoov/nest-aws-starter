@@ -1,5 +1,4 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -25,17 +24,16 @@ function normalizePrivateKey(value: string): string {
 export const cloudfrontConfig = registerAs('cloudfront', (): CloudFrontConfig => {
   const isEnabled: boolean = process.env.CLOUDFRONT_ENABLED === 'true';
 
-  const config: CloudFrontConfig = isEnabled
-    ? {
-        isEnabled: true,
-        domain: process.env.CLOUDFRONT_DOMAIN ?? '',
-        keyPairId: process.env.CLOUDFRONT_KEY_PAIR_ID ?? '',
-        privateKey: normalizePrivateKey(process.env.CLOUDFRONT_PRIVATE_KEY ?? ''),
-        urlTtlSec: Number(process.env.CLOUDFRONT_URL_TTL_SEC ?? 300),
-      }
-    : { isEnabled: false };
-
-  validateScheme(scheme, config, new Logger('CloudFrontConfig'));
-
-  return config;
+  return validateConfigSchema(
+    scheme,
+    isEnabled
+      ? {
+          isEnabled: true,
+          domain: process.env.CLOUDFRONT_DOMAIN ?? '',
+          keyPairId: process.env.CLOUDFRONT_KEY_PAIR_ID ?? '',
+          privateKey: normalizePrivateKey(process.env.CLOUDFRONT_PRIVATE_KEY ?? ''),
+          urlTtlSec: Number(process.env.CLOUDFRONT_URL_TTL_SEC ?? 300),
+        }
+      : { isEnabled: false },
+  );
 });

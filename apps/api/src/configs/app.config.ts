@@ -1,5 +1,4 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -14,7 +13,7 @@ const scheme = z.object({
 export type AppConfig = Required<z.infer<typeof scheme>>;
 
 export const appConfig = registerAs('app', (): AppConfig => {
-  const config: AppConfig = {
+  return validateConfigSchema(scheme, {
     port: Number(process.env.PORT ?? 3000),
     env: (process.env.NODE_ENV ?? 'development') as AppConfig['env'],
     apiPrefix: process.env.API_PREFIX ?? 'api',
@@ -23,9 +22,5 @@ export const appConfig = registerAs('app', (): AppConfig => {
       .split(',')
       .map((origin: string): string => origin.trim())
       .filter((origin: string): boolean => origin.length > 0),
-  };
-
-  validateScheme(scheme, config, new Logger('AppConfig'));
-
-  return config;
+  });
 });

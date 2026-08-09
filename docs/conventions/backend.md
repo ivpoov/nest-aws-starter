@@ -1123,8 +1123,11 @@ authorization lives in exactly one place per resource, never half in each.
 imports: [CaslModule.forFeature({ permissions: notePermissions })],
 ```
 
-**Config** — Zod schema → inferred type → `registerAs` with `validateScheme` at the
-end; consumed via `configService.getOrThrow<XConfig>('x')`.
+**Config** — Zod schema → inferred type → `registerAs` returning
+`validateConfigSchema(scheme, { … })`; consumed via
+`configService.getOrThrow<XConfig>('x')`. The validator returns the *parsed* value, so
+the factory never holds an unvalidated object: there is no separate `const config`
+to forget to check.
 
 **Optional providers are enabled, never half-configured.** Every optional provider
 (S3, SQS, SNS, SES, Lambda, …) has an `<X>_ENABLED` flag, and its config is a Zod
@@ -1140,8 +1143,7 @@ first `sendMessage` explodes") is forbidden.
 
 ```typescript
 // src/configs/sqs.config.ts
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -1159,25 +1161,25 @@ export type SqsConfig = z.infer<typeof scheme>;
 export const sqsConfig = registerAs('sqs', (): SqsConfig => {
   const isEnabled: boolean = process.env.SQS_ENABLED === 'true';
 
-  const config: SqsConfig = isEnabled
-    ? {
-        isEnabled: true,
-        region: process.env.AWS_REGION ?? '',
-        ...(process.env.AWS_ENDPOINT_URL && { endpoint: process.env.AWS_ENDPOINT_URL }),
-      }
-    : { isEnabled: false };
-
-  validateScheme(scheme, config, new Logger('SqsConfig'));
-
-  return config;
+  return validateConfigSchema(
+    scheme,
+    isEnabled
+      ? {
+          isEnabled: true,
+          region: process.env.AWS_REGION ?? '',
+          ...(process.env.AWS_ENDPOINT_URL && { endpoint: process.env.AWS_ENDPOINT_URL }),
+        }
+      : { isEnabled: false },
+  );
 });
 ```
 
-Config files take Nest's plain `Logger`, not `CustomLoggerService` — they are evaluated
-at module-registration time, before DI exists. This is also the one file kind where an
-exported `type` sits next to its `registerAs` (§2): `SqsConfig` is inferred from the
-schema and inseparable from it. Zod 4 spells URL validation `z.url()`, not
-`z.string().url()`.
+Config factories log nothing. They are evaluated at module-registration time, before DI
+or any logger transport exists, so a bad value throws out of `ConfigModule.forRoot()`
+and Nest prints the boot failure with the Zod issue list attached — one report, not a
+log line plus a throw. This is also the one file kind where an exported `type` sits next
+to its `registerAs` (§2): `SqsConfig` is inferred from the schema and inseparable from
+it. Zod 4 spells URL validation `z.url()`, not `z.string().url()`.
 
 When a provider is disabled, its module binds a `Disabled<X>Provider` implementing
 the same contract — every method throws a coded 500 (`"SQS provider is disabled —
@@ -1190,8 +1192,7 @@ no discriminated union, just a flat schema with defaults:
 
 ```typescript
 // src/configs/app.config.ts
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -1206,7 +1207,7 @@ const scheme = z.object({
 export type AppConfig = Required<z.infer<typeof scheme>>;
 
 export const appConfig = registerAs('app', (): AppConfig => {
-  const config: AppConfig = {
+  return validateConfigSchema(scheme, {
     port: Number(process.env.PORT ?? 3000),
     env: (process.env.NODE_ENV ?? 'development') as AppConfig['env'],
     apiPrefix: process.env.API_PREFIX ?? 'api',
@@ -1215,11 +1216,7 @@ export const appConfig = registerAs('app', (): AppConfig => {
       .split(',')
       .map((origin: string): string => origin.trim())
       .filter((origin: string): boolean => origin.length > 0),
-  };
-
-  validateScheme(scheme, config, new Logger('AppConfig'));
-
-  return config;
+  });
 });
 ```
 

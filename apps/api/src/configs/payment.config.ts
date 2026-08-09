@@ -1,5 +1,4 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -22,12 +21,8 @@ const scheme = z.object({
 export type PaymentConfig = z.infer<typeof scheme>;
 
 export const paymentConfig = registerAs('payment', (): PaymentConfig => {
-  const config: PaymentConfig = {
+  return validateConfigSchema(scheme, {
     webhookQueueUrl: process.env.SQS_PAYMENT_WEBHOOK_QUEUE_URL ?? '',
     consumerEnabled: process.env.PAYMENT_WEBHOOK_CONSUMER_ENABLED !== 'false',
-  };
-
-  validateScheme(scheme, config, new Logger('PaymentConfig'));
-
-  return config;
+  });
 });

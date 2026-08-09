@@ -1,5 +1,4 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -18,16 +17,15 @@ export type DiscordOauthConfig = z.infer<typeof scheme>;
 export const discordOauthConfig = registerAs('discordOauth', (): DiscordOauthConfig => {
   const isEnabled: boolean = process.env.DISCORD_OAUTH_ENABLED === 'true';
 
-  const config: DiscordOauthConfig = isEnabled
-    ? {
-        isEnabled: true,
-        clientId: process.env.DISCORD_OAUTH_CLIENT_ID ?? '',
-        clientSecret: process.env.DISCORD_OAUTH_CLIENT_SECRET ?? '',
-        redirectUri: process.env.DISCORD_OAUTH_REDIRECT_URI ?? '',
-      }
-    : { isEnabled: false };
-
-  validateScheme(scheme, config, new Logger('DiscordOauthConfig'));
-
-  return config;
+  return validateConfigSchema(
+    scheme,
+    isEnabled
+      ? {
+          isEnabled: true,
+          clientId: process.env.DISCORD_OAUTH_CLIENT_ID ?? '',
+          clientSecret: process.env.DISCORD_OAUTH_CLIENT_SECRET ?? '',
+          redirectUri: process.env.DISCORD_OAUTH_REDIRECT_URI ?? '',
+        }
+      : { isEnabled: false },
+  );
 });

@@ -1,5 +1,4 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -15,12 +14,8 @@ export type WebsocketConfig = Required<z.infer<typeof scheme>>;
 // heartbeatIntervalMs is a tuning knob, not a provider credential, so a flat
 // boolean + number is enough here — no discriminated union needed.
 export const websocketConfig = registerAs('websocket', (): WebsocketConfig => {
-  const config: WebsocketConfig = {
+  return validateConfigSchema(scheme, {
     isEnabled: process.env.WEBSOCKET_ENABLED !== 'false',
     heartbeatIntervalMs: Number(process.env.WEBSOCKET_HEARTBEAT_INTERVAL_MS ?? 60_000),
-  };
-
-  validateScheme(scheme, config, new Logger('WebsocketConfig'));
-
-  return config;
+  });
 });
