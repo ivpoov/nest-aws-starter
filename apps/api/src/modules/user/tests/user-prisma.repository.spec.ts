@@ -39,10 +39,7 @@ describe('UserPrismaRepository.findManyForAdmin', () => {
 
     expect(user.findMany).toHaveBeenCalledWith({
       where: {
-        OR: [
-          { displayName: { contains: 'ada', mode: 'insensitive' } },
-          { id: { in: ['user-9'] } },
-        ],
+        OR: [{ displayName: { contains: 'ada', mode: 'insensitive' } }, { id: { in: ['user-9'] } }],
         id: { lt: 'user-0' },
       },
       include: { authMethods: { select: { type: true, email: true } } },

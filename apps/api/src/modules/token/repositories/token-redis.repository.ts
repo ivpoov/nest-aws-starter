@@ -95,7 +95,8 @@ export class TokenRedisRepository implements TokenRepositoryInterface {
 
     if (!entry) return null;
     if (typeof entry.replacedDigest !== 'string') return null;
-    if (typeof entry.accessToken !== 'string' || typeof entry.refreshToken !== 'string') return null;
+    if (typeof entry.accessToken !== 'string' || typeof entry.refreshToken !== 'string')
+      return null;
     if (!this.equals(entry.replacedDigest, this.digest(token))) return null;
 
     return { accessToken: entry.accessToken, refreshToken: entry.refreshToken };
