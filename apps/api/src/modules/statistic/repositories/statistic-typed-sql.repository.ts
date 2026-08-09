@@ -82,7 +82,7 @@ export class StatisticTypedSqlRepository implements StatisticRepositoryInterface
 
     return rows.map(
       (row: revenueByDay.Result): StatisticsDayPointInterface =>
-        this.toDayPoint({ day: row.day, count: row.amountCents }),
+        this.toDayPoint({ day: row.day, count: this.toCents(row.amountCents) }),
     );
   }
 
@@ -91,7 +91,7 @@ export class StatisticTypedSqlRepository implements StatisticRepositoryInterface
       mrrCurrent(STATISTIC_REPORTING_CURRENCY),
     );
 
-    return Number(rows[0]?.mrrCents ?? 0n);
+    return this.toCents(rows[0]?.mrrCents ?? 0n);
   }
 
   public async findRevenueByPlan(days: number): Promise<StatisticsRevenueByPlanRowInterface[]> {
@@ -103,9 +103,26 @@ export class StatisticTypedSqlRepository implements StatisticRepositoryInterface
       (row: revenueByPlan.Result): StatisticsRevenueByPlanRowInterface => ({
         planId: row.planId,
         planName: row.planName,
-        amountCents: row.amountCents ?? 0,
+        amountCents: this.toCents(row.amountCents),
       }),
     );
+  }
+
+  // The revenue queries aggregate into bigint (see revenueByDay.sql) because
+  // int32 would make Postgres raise `integer out of range` past ~$21.5M per
+  // bucket. JSON has no bigint, so the wire contract stays `number` — safe up
+  // to Number.MAX_SAFE_INTEGER cents (~$90T), four million times the int32
+  // ceiling this replaced. Beyond that the value is clamped rather than
+  // silently rounded, so a wrong number never reaches an admin unnoticed.
+  private toCents(value: bigint | null): number {
+    if (value === null) return 0;
+
+    const ceiling: bigint = BigInt(Number.MAX_SAFE_INTEGER);
+
+    if (value > ceiling) return Number.MAX_SAFE_INTEGER;
+    if (value < -ceiling) return -Number.MAX_SAFE_INTEGER;
+
+    return Number(value);
   }
   // </module:payment>
 

@@ -3,7 +3,8 @@
 -- subscription belongs to (joined through subscriptions, per this starter's
 -- subscription-only payment model — a transaction with no subscription has
 -- no plan to attribute to and is excluded). Same single-currency ($2)
--- assumption as revenueByDay.sql.
+-- assumption as revenueByDay.sql. Bucket totals are bigint for the same
+-- int32-overflow reason spelled out in revenueByDay.sql.
 -- @param {Int} $1:days
 -- @param {String} $2:currency
 SELECT
@@ -12,7 +13,7 @@ SELECT
   (
     COALESCE(SUM(CASE WHEN t.status = 'SUCCEEDED' THEN t."amountCents" END), 0)
     - COALESCE(SUM(CASE WHEN t.status = 'REFUNDED' THEN t."amountCents" END), 0)
-  )::int AS "amountCents"
+  )::bigint AS "amountCents"
 FROM payment_transactions t
 JOIN subscriptions s ON s.id = t."subscriptionId"
 JOIN plans p ON p.id = s."planId"
