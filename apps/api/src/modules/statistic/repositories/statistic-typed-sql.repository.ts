@@ -99,10 +99,14 @@ export class StatisticTypedSqlRepository implements StatisticRepositoryInterface
       revenueByPlan(days, STATISTIC_REPORTING_CURRENCY),
     );
 
+    // TypedSQL infers the plan columns from the plans table, where they are
+    // NOT NULL, and does not account for the LEFT JOIN — so the generated
+    // type claims `string` while the unattributed row really carries nulls.
+    // Coerce rather than trust it.
     return rows.map(
       (row: revenueByPlan.Result): StatisticsRevenueByPlanRowInterface => ({
-        planId: row.planId,
-        planName: row.planName,
+        planId: (row.planId as string | null) ?? null,
+        planName: (row.planName as string | null) ?? null,
         amountCents: this.toCents(row.amountCents),
       }),
     );

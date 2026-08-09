@@ -209,7 +209,7 @@ describe('admin statistics', () => {
     expect(after.body.totals.mrrCents - before.body.totals.mrrCents).toBe(fixture.amountCents);
 
     const planRow = after.body.revenueByPlan.find(
-      (row: { planId: string }) => row.planId === fixture.planId,
+      (row: { planId: string | null }) => row.planId === fixture.planId,
     );
 
     expect(planRow).toEqual({
@@ -217,6 +217,44 @@ describe('admin statistics', () => {
       planName: expect.any(String),
       amountCents: fixture.amountCents,
     });
+  });
+
+  // The by-plan breakdown and the revenue total sit on one dashboard, so
+  // they have to add up. They used not to: the breakdown inner-joined
+  // subscriptions and silently dropped every transaction without one.
+  it('reconciles the by-plan breakdown against totals.revenueCents', async () => {
+    await prisma.paymentTransaction.create({
+      data: {
+        userId,
+        status: 'SUCCEEDED',
+        amountCents: 4_321,
+        currency: 'USD',
+        provider: 'FAKE',
+        providerRef: `txn_${randomUUID()}`,
+      },
+    });
+
+    await redis.del('statistic:overview');
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/admin/statistics/overview')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    const breakdownTotal: number = response.body.revenueByPlan.reduce(
+      (total: number, row: { amountCents: number }): number => total + row.amountCents,
+      0,
+    );
+
+    expect(breakdownTotal).toBe(response.body.totals.revenueCents);
+
+    const unattributed = response.body.revenueByPlan.find(
+      (row: { planId: string | null }) => row.planId === null,
+    );
+
+    expect(unattributed).toBeDefined();
+    expect(unattributed.planName).toBeNull();
+    expect(unattributed.amountCents).toBeGreaterThanOrEqual(4_321);
   });
 
   // The aggregates used to be cast back to int32: past 2_147_483_647 cents

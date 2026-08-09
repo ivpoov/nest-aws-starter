@@ -122,6 +122,19 @@ describe('StatisticTypedSqlRepository', () => {
     ]);
   });
 
+  // The LEFT JOIN in revenueByPlan.sql produces one row with no plan behind
+  // it; TypedSQL's generated type claims those columns are non-null, so the
+  // mapping has to normalize them itself.
+  it('maps the unattributed revenueByPlan row to null plan fields', async () => {
+    const { repository } = createRepository([
+      { planId: null, planName: null, amountCents: 259_000n },
+    ]);
+
+    const rows: StatisticsRevenueByPlanRowInterface[] = await repository.findRevenueByPlan(30);
+
+    expect(rows).toEqual([{ planId: null, planName: null, amountCents: 259_000 }]);
+  });
+
   // Regression guard for the int32 cast these queries used to carry: any
   // bucket past 2_147_483_647 cents (~$21.5M) made Postgres raise `integer
   // out of range` and 500 the whole endpoint. The aggregates are bigint now,
