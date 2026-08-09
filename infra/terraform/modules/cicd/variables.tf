@@ -76,6 +76,128 @@ variable "github_deploy_environment" {
   }
 }
 
+# ---------------------------------------------------------------------------
+# WHICH SPELLING of the subject GitHub mints for you
+#
+# GitHub has two default subject formats. The historical one names the
+# repository; the immutable one interpolates numeric ids that are never
+# reissued, and applies to repositories created after 2026-07-15 or renamed or
+# transferred after that date. Terraform cannot tell which applies to you, so
+# these three variables make it expressible instead of assumed. Guessing wrong
+# is AccessDenied — closed, not open. README.md has the `gh api` call that
+# reads the answer.
+# ---------------------------------------------------------------------------
+
+variable "github_subject_format" {
+  description = <<-EOT
+    Which default subject format GitHub mints for this repository.
+
+      mutable    repo:<owner>/<name>:environment:<env>
+                 Repositories created on or before 2026-07-15 and not renamed
+                 or transferred since.
+      immutable  repo:<owner>@<owner-id>/<name>@<repo-id>:environment:<env>
+                 Repositories created after that date, and any repository
+                 renamed or transferred after it. Requires
+                 github_repository_ids.
+      both       Trusts both strings. Still StringEquals — two literal values,
+                 an OR of exact matches, no wildcard — but it is a wider policy
+                 and it re-admits the name-squatting case the immutable format
+                 exists to close. Use it only to get unstuck, and narrow it once
+                 a run has told you which form you are actually issued.
+
+    `mutable` is the default because it is the form every pre-existing
+    repository uses and the one the customization endpoint reports for
+    repositories that have not migrated. It is a default, not a determination:
+    verify it before you rely on it.
+  EOT
+  type        = string
+  default     = "mutable"
+
+  validation {
+    condition     = contains(["mutable", "immutable", "both"], var.github_subject_format)
+    error_message = "github_subject_format must be one of: mutable, immutable, both."
+  }
+
+  validation {
+    condition     = var.github_subject_format == "mutable" || var.github_repository_ids != null
+    error_message = "github_subject_format is \"immutable\" or \"both\", which needs github_repository_ids — read them with: gh api repos/<owner>/<name> --jq '{owner: .owner.id, repository: .id}'."
+  }
+}
+
+variable "github_repository_ids" {
+  description = <<-EOT
+    The numeric owner and repository ids that the immutable subject format
+    interpolates. Null unless github_subject_format needs them.
+
+      gh api repos/<owner>/<name> --jq '{owner: .owner.id, repository: .id}'
+
+    These are ids, not names: they survive a rename or a transfer, which is the
+    entire reason the immutable format exists. Typed as numbers, so unlike the
+    string inputs they cannot carry an IAM wildcard at all.
+  EOT
+  type = object({
+    owner      = number
+    repository = number
+  })
+  default = null
+
+  validation {
+    condition = (
+      var.github_repository_ids == null
+      || (var.github_repository_ids.owner > 0 && var.github_repository_ids.repository > 0)
+    )
+    error_message = "github_repository_ids.owner and .repository must both be positive — a zero or negative id is not a GitHub id."
+  }
+
+  validation {
+    condition = (
+      var.github_repository_ids == null
+      || (
+        floor(var.github_repository_ids.owner) == var.github_repository_ids.owner
+        && floor(var.github_repository_ids.repository) == var.github_repository_ids.repository
+      )
+    )
+    error_message = "github_repository_ids must be whole numbers — a fractional value would render into the subject with a decimal point and match nothing."
+  }
+}
+
+variable "github_deploy_subject_override" {
+  description = <<-EOT
+    The complete `sub` claim to trust, replacing everything this module would
+    compute. Null by default, and the escape hatch of last resort.
+
+    Set it when neither default format describes your repository — most often
+    because the subject-claim template has been customised
+    (`PUT /repos/{owner}/{repo}/actions/oidc/customization/sub`), which changes
+    the shape entirely. Paste the string a run was actually issued; deploy.yml
+    prints it when the assume-role step fails.
+
+    It is still matched with StringEquals and is still validated against
+    wildcards, and it must contain `:environment:` — this role is only ever
+    presented an environment-scoped subject, so a `:pull_request` or
+    `:ref:refs/heads/...` value here would be a mistake that widens the policy
+    to something the workflow does not even produce.
+  EOT
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.github_deploy_subject_override == null || !can(regex("[*?[:space:]]", var.github_deploy_subject_override))
+    error_message = "github_deploy_subject_override must not contain a wildcard or whitespace. \"*\" and \"?\" are IAM's StringLike wildcards, and a stray space would silently never match."
+  }
+
+  validation {
+    condition = (
+      var.github_deploy_subject_override == null
+      || (
+        startswith(var.github_deploy_subject_override, "repo:")
+        && strcontains(var.github_deploy_subject_override, ":environment:")
+      )
+    )
+    error_message = "github_deploy_subject_override must start with \"repo:\" and contain \":environment:\" — the deploy job declares an environment, so that is the only subject it can ever present."
+  }
+}
+
 variable "github_deploy_ref" {
   description = <<-EOT
     The single branch deployments may run from, in full `refs/...` form.

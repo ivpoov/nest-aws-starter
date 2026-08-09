@@ -48,6 +48,27 @@ variable "github_deploy_environment" {
   default     = "production"
 }
 
+variable "github_subject_format" {
+  description = "Which default OIDC subject format GitHub mints for this repository: \"mutable\" (repo:owner/name:...), \"immutable\" (repo:owner@id/name@id:..., for repositories created after 2026-07-15 or renamed since), or \"both\". Terraform cannot detect it — see modules/cicd/README.md for the `gh api` call that reads it. Guessing wrong is AccessDenied, never a wider grant."
+  type        = string
+  default     = "mutable"
+}
+
+variable "github_repository_ids" {
+  description = "Numeric owner and repository ids the immutable subject format interpolates. Required when github_subject_format is \"immutable\" or \"both\". Read with: gh api repos/<owner>/<name> --jq '{owner: .owner.id, repository: .id}'."
+  type = object({
+    owner      = number
+    repository = number
+  })
+  default = null
+}
+
+variable "github_deploy_subject_override" {
+  description = "The complete `sub` claim to trust, replacing the computed one. The escape hatch for a customised subject-claim template. Still StringEquals, still wildcard-validated, and still required to contain \":environment:\"."
+  type        = string
+  default     = null
+}
+
 variable "github_deploy_ref" {
   description = "Full git ref deployments may run from. Not part of the trust policy — it is the branch to set as the environment's deployment branch rule, which GitHub enforces before the token is minted. The default branch is the default because it is the only ref that has been reviewed."
   type        = string
@@ -140,10 +161,13 @@ module "cicd" {
 
   names = local.cicd_names
 
-  github_repository         = var.github_repository
-  github_deploy_environment = var.github_deploy_environment
-  github_deploy_ref         = var.github_deploy_ref
-  create_oidc_provider      = var.create_github_oidc_provider
+  github_repository              = var.github_repository
+  github_deploy_environment      = var.github_deploy_environment
+  github_subject_format          = var.github_subject_format
+  github_repository_ids          = var.github_repository_ids
+  github_deploy_subject_override = var.github_deploy_subject_override
+  github_deploy_ref              = var.github_deploy_ref
+  create_oidc_provider           = var.create_github_oidc_provider
 
   # Everything below is an existing resource owned by another module. The cicd
   # module creates none of them; it only writes a policy that names them.
@@ -185,6 +209,15 @@ module "cicd" {
 
 # ---------------------------------------------------------------------------
 # Preflight warnings (soft — hard errors belong in variable validation)
+#
+# READ THIS BEFORE RELYING ON ANY OF THEM: a failing `check` emits a WARNING
+# during plan and apply. It does not stop either. Terraform evaluates checks
+# only at plan/apply time, never during `validate`, so CI's `terraform validate`
+# does not see them at all. That is deliberate — everything below is a "you
+# probably did not mean this", not a correctness invariant — but it means none
+# of these blocks a bad apply. Anything that must block belongs in a variable
+# `validation`, where the failures are hard, and that is where the trust
+# policy's own invariants live.
 # ---------------------------------------------------------------------------
 
 check "deployments_have_an_identity" {
@@ -219,9 +252,25 @@ check "deploy_workflow_declares_the_trusted_environment" {
       || strcontains(file(local.cicd_deploy_workflow_path), "environment: ${var.github_deploy_environment}")
     )
     error_message = join(" ", [
-      ".github/workflows/deploy.yml does not declare `environment: ${var.github_deploy_environment}`, but the deploy role's trust policy admits only repo:${coalesce(var.github_repository, "<unset>")}:environment:${var.github_deploy_environment}.",
+      ".github/workflows/deploy.yml does not declare `environment: ${var.github_deploy_environment}`, but every subject the deploy role trusts ends in `:environment:${var.github_deploy_environment}`.",
       "GitHub substitutes the environment for the ref in the OIDC `sub` claim, so the two names must agree exactly or every deployment fails at the assume-role step with AccessDenied.",
       "Set github_deploy_environment to the name the workflow uses, or change the workflow to match.",
+    ])
+  }
+}
+
+check "trusted_subject_is_a_single_string" {
+  assert {
+    # "both" is a legitimate way out of an AccessDenied you cannot otherwise
+    # diagnose, and it is still StringEquals over two literals rather than a
+    # pattern. It is not a resting place: it re-admits `owner/name` by name,
+    # which is exactly the case the immutable format exists to close, so a
+    # future holder of a released repository name satisfies half the policy.
+    condition = !local.cicd_enabled || var.github_subject_format != "both"
+    error_message = join(" ", [
+      "github_subject_format is \"both\", so the deploy role trusts the name-based subject AND the id-based one.",
+      "That is wider than either alone and keeps the name-squatting exposure the immutable format was introduced to remove.",
+      "Narrow it once a run has shown you which subject you are actually issued — deploy.yml prints it when the assume-role step fails.",
     ])
   }
 }
@@ -235,9 +284,9 @@ output "github_actions_role_arn" {
   value       = one(module.cicd[*].role_arn)
 }
 
-output "github_actions_trusted_subject" {
-  description = "The exact OIDC `sub` claim the deploy role admits, matched with StringEquals. Any other repository, or any job not running in the deploy environment, is refused by STS."
-  value       = one(module.cicd[*].trusted_subject)
+output "github_actions_trusted_subjects" {
+  description = "The exact OIDC `sub` claim(s) the deploy role admits, matched with StringEquals. One entry unless github_subject_format is \"both\". Any other repository, or any job not running in the deploy environment, is refused by STS. Compare this against what a real run is issued — deploy.yml prints that on an assume-role failure."
+  value       = one(module.cicd[*].trusted_subjects)
 }
 
 output "github_actions_deploy_environment" {

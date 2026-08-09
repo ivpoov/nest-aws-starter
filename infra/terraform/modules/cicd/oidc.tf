@@ -45,6 +45,32 @@ locals {
   # by GitHub before one exists. See README.md: the branch rule is a manual
   # step, and it is the half of this control that Terraform cannot create.
   #
+  # TWO SPELLINGS OF THE SAME SUBJECT, and you must know which one your
+  # repository uses. GitHub has a second, IMMUTABLE default subject format that
+  # interpolates numeric ids the owner and repository keep forever:
+  #
+  #     repo:<owner>@<owner-id>/<name>@<repo-id>:environment:<name>
+  #
+  # It applies to repositories created after 2026-07-15, and to any repository
+  # renamed or transferred after that date. It exists to close the one real
+  # weakness of the name-based form: names can be released and re-registered, so
+  # a policy naming `owner/name` can in principle be satisfied by whoever holds
+  # that name next, whereas ids are never reissued.
+  #
+  # THIS MODULE CANNOT DETECT WHICH FORM APPLIES TO YOU. Terraform has no
+  # GitHub provider here, the REST reference does not document a field that
+  # answers it, and the fields that do exist have been observed disagreeing with
+  # each other on a single repository. So the subject is expressible rather than
+  # assumed: var.github_subject_format picks the shape,
+  # var.github_repository_ids supplies the ids the immutable shape needs, and
+  # var.github_deploy_subject_override replaces the whole computed value when
+  # neither shape is right (a customised claim template, say).
+  #
+  # Guessing wrong FAILS CLOSED — AccessDenied at the assume-role step, nothing
+  # deployed, no grant widened — and deploy.yml prints the `sub` the run was
+  # actually issued when that happens, so one failed run settles it. README.md
+  # gives the `gh api` call that reads it without deploying anything.
+  #
   # The claim is issued by token.actions.githubusercontent.com for EVERY
   # repository on github.com — public ones included. The issuer therefore
   # proves nothing about who is calling; only the `sub` does. Three ways to get
@@ -64,22 +90,48 @@ locals {
   #                             attacker-created repository whose name starts
   #                             with yours.
   #
-  # So: StringEquals, one literal value, the environment named in full. No
-  # wildcard operator is used anywhere in the trust policy, and
-  # var.github_repository and var.github_deploy_environment both reject `*` and
-  # `?` outright, so a StringLike cannot be reintroduced by editing a variable.
-  # The environment name additionally rejects `:`, which is the separator the
-  # claim itself is built from — without that, an environment called
-  # `production:ref:refs/heads/main` would make the subject ambiguous with a
-  # customised claim template.
+  # So: StringEquals, literal values, the environment named in full. No wildcard
+  # operator is used anywhere in the trust policy; var.github_repository,
+  # var.github_deploy_environment and var.github_deploy_subject_override all
+  # reject `*` and `?` outright, and var.github_repository_ids is typed as
+  # numbers, which cannot contain either. A StringLike therefore cannot be
+  # reintroduced by editing a variable. The environment name additionally
+  # rejects `:`, the separator the claim itself is built from — without that, an
+  # environment called `production:ref:refs/heads/main` would make the subject
+  # ambiguous with a customised claim template.
   #
-  # NOTE: if you ever customise the repository's subject-claim template
-  # (`PUT /repos/{owner}/{repo}/actions/oidc/customization/sub`), this value
-  # stops matching and every deployment fails closed until it is updated to the
-  # new shape. That is the safe direction to fail in, but it is worth knowing
-  # before you go looking for the cause.
+  # `values` may hold TWO entries when var.github_subject_format is "both".
+  # StringEquals over a list is an OR of exact matches, not a pattern, so the
+  # no-wildcard property survives — but it does widen the policy, and the
+  # trade-off is argued in README.md. "both" is not the default.
   # ---------------------------------------------------------------------
-  github_deploy_subject = "repo:${var.github_repository}:environment:${var.github_deploy_environment}"
+
+  github_repository_owner = split("/", var.github_repository)[0]
+  github_repository_name  = split("/", var.github_repository)[1]
+
+  # The historical shape. Still what every repository created before 2026-07-15
+  # and never renamed since is issued.
+  github_subject_mutable = "repo:${var.github_repository}:environment:${var.github_deploy_environment}"
+
+  # The immutable shape. Null unless the ids were supplied; the variable
+  # validation makes supplying them mandatory whenever this shape is selected,
+  # so a null can never reach the policy.
+  github_subject_immutable = var.github_repository_ids == null ? null : format(
+    "repo:%s@%d/%s@%d:environment:%s",
+    local.github_repository_owner,
+    var.github_repository_ids.owner,
+    local.github_repository_name,
+    var.github_repository_ids.repository,
+    var.github_deploy_environment,
+  )
+
+  github_deploy_subjects = (
+    var.github_deploy_subject_override != null
+    ? [var.github_deploy_subject_override]
+    : var.github_subject_format == "mutable" ? [local.github_subject_mutable]
+    : var.github_subject_format == "immutable" ? [local.github_subject_immutable]
+    : [local.github_subject_mutable, local.github_subject_immutable]
+  )
 
   # The deployment branch rule is expressed to GitHub as a bare name plus a
   # type, not as a full ref, so the `refs/...` form is decomposed once here and
@@ -147,12 +199,12 @@ data "aws_iam_policy_document" "assume_role" {
       values   = [var.oidc_audience]
     }
 
-    # StringEquals, one value, the environment named in full. See the note on
-    # local.github_deploy_subject.
+    # StringEquals, literal values, the environment named in full. See the note
+    # on local.github_deploy_subjects.
     condition {
       test     = "StringEquals"
       variable = "${local.github_oidc_issuer}:sub"
-      values   = [local.github_deploy_subject]
+      values   = local.github_deploy_subjects
     }
   }
 }

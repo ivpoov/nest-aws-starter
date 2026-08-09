@@ -18,9 +18,9 @@ output "role_name" {
   value       = aws_iam_role.github_actions.name
 }
 
-output "trusted_subject" {
-  description = "The exact `sub` claim the trust policy admits, matched with StringEquals. A token from any other repository, ref, pull request or environment is rejected by STS."
-  value       = local.github_deploy_subject
+output "trusted_subjects" {
+  description = "The exact `sub` claim(s) the trust policy admits, matched with StringEquals. One entry unless github_subject_format is \"both\". A token carrying anything else — another repository, a ref, a pull request, another environment, or the other spelling of this repository's subject — is rejected by STS."
+  value       = local.github_deploy_subjects
 }
 
 output "deploy_environment" {
@@ -50,13 +50,38 @@ output "github_actions_setup" {
     gh variable set AWS_REGION --body '${data.aws_region.current.region}'
     gh variable set DEPLOY_MANIFEST_PARAMETER --body '${aws_ssm_parameter.deploy_manifest.name}'
 
-    # The role trusts exactly one subject:
+    # The role trusts ${length(local.github_deploy_subjects)} subject(s), matched with StringEquals:
     #
-    #     ${local.github_deploy_subject}
+    ${join("\n    ", formatlist("#     %s", local.github_deploy_subjects))}
     #
     # A token minted for any other repository, or for a job that is not running
     # in the '${var.github_deploy_environment}' environment, gets an AccessDenied
     # from STS before it can do anything at all.
+
+    # CONFIRM THAT IS THE SUBJECT YOU ARE ACTUALLY ISSUED. GitHub has two
+    # default subject formats — the name-based one above and an immutable one
+    # carrying numeric ids, which applies to repositories created after
+    # 2026-07-15 and to any repository renamed or transferred after that date.
+    # Terraform cannot see which one you get, and github_subject_format is a
+    # default rather than a determination. Read the real claim without deploying
+    # anything:
+
+    gh api repos/${var.github_repository}/actions/oidc/customization/sub
+
+    # If that returns a `sub_claim_prefix`, THAT prefix is the shape your tokens
+    # carry — the trusted subject must be `<prefix>:environment:${var.github_deploy_environment}`.
+    # The fields on that endpoint are not in the REST reference and have been
+    # seen disagreeing with each other, so the only conclusive answer is a real
+    # run: deploy.yml prints the `sub` it was issued whenever the assume-role
+    # step fails. Then set, as appropriate:
+    #
+    #     github_subject_format          = "immutable"
+    #     github_repository_ids          = { owner = <n>, repository = <n> }
+    #     github_deploy_subject_override = "<the exact string from the run>"
+    #
+    # Reading the ids, if you need them:
+
+    gh api repos/${var.github_repository} --jq '{owner: .owner.id, repository: .id}'
 
     # NOT OPTIONAL, and not creatable by Terraform: the environment named in
     # that subject, and the deployment branch rule on it. GitHub checks an
