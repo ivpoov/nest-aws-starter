@@ -85,7 +85,9 @@ Left alone, a fork's "report a security vulnerability" link points at *this*
 repository's inbox rather than yours — silently. `--repo` is what fixes it; if
 you omit it the value is read from your clone's `origin` remote, and if that is
 still the upstream you get an obvious `your-org/...` placeholder and a warning
-rather than a wrong link.
+rather than a wrong link. Its owner half also becomes the handle in
+`.github/CODEOWNERS`, which otherwise demands review from the upstream author
+on pull requests they cannot approve.
 
 Two things it deliberately leaves alone: your untracked `.env` files (re-copy
 `apps/api/.env.example` afterwards — its `DATABASE_URL` carries the database

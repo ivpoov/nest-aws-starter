@@ -12,8 +12,8 @@
 //     .env.example, the dev-defaults guard, CI workflows, the docs)
 //   - the README title, the Swagger title, the gitleaks config title, the
 //     Terraform project_name, the Docker image tag
-//   - the absolute github.com URLs in SECURITY.md and the issue templates
-//     (see the --repo note below)
+//   - the absolute github.com URLs in SECURITY.md and the issue templates,
+//     and the review owner in .github/CODEOWNERS (see the --repo note below)
 //   - the LICENSE copyright line, when --author is given
 // then regenerates pnpm-lock.yaml.
 //
@@ -50,6 +50,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const CURRENT = {
   name: 'nest-aws-starter',
   scope: '@nest-aws-starter',
+  owner: 'ivpoov',
   repo: 'ivpoov/nest-aws-starter',
   database: 'starter',
   copyright: 'Copyright (c) 2026 Igor Popov',
@@ -197,6 +198,10 @@ function resolveRepo(explicit, name) {
 function buildReplacements(options) {
   return [
     [CURRENT.repo, options.repo],
+    // .github/CODEOWNERS assigns every review to a GitHub handle. Left alone,
+    // a fork demands review from the upstream author on its own pull requests
+    // — GitHub cannot satisfy that, so nothing gets approved.
+    [`@${CURRENT.owner}`, `@${options.repo.split('/')[0]}`],
     [`${CURRENT.scope}/`, `${options.scope}/`],
     [CURRENT.name, options.name],
     [`POSTGRES_DB=${CURRENT.database}`, `POSTGRES_DB=${options.database}`],
