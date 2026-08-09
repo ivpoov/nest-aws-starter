@@ -139,6 +139,20 @@ describe('PaymentTransactionPrismaRepository.findManyForAdmin', () => {
     });
   });
 
+  it('keysets the cursor into the where clause instead of offsetting past it', async () => {
+    const { repository, paymentTransaction } = createRepository();
+    const pagination: CursorPaginationInterface = { cursor: 'txn-0', limit: 20 };
+    const filters: TransactionFiltersInterface = { status: TransactionStatusEnum.SUCCEEDED };
+
+    await repository.findManyForAdmin(pagination, filters);
+
+    expect(paymentTransaction.findMany).toHaveBeenCalledWith({
+      where: { status: 'SUCCEEDED', id: { lt: 'txn-0' } },
+      take: 20,
+      orderBy: { id: 'desc' },
+    });
+  });
+
   it('builds an unfiltered where clause when no filters are given', async () => {
     const { repository, paymentTransaction } = createRepository();
     const pagination: CursorPaginationInterface = { cursor: null, limit: 20 };

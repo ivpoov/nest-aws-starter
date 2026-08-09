@@ -20,6 +20,11 @@ export class ContactMessagePrismaRepository implements ContactMessageRepositoryI
     return this.toDomain(message);
   }
 
+  // Keyset pagination, not Prisma's `cursor` + `skip: 1`: `status` is state a
+  // row can leave, so an admin resolving the cursor message between two page
+  // requests drops it from the filtered set — and `skip: 1`, which exists only
+  // to step past the cursor row, then eats the next legitimate message instead.
+  // Comparing ids in the `where` never depends on the cursor row surviving.
   public async findManyAfter(
     pagination: CursorPaginationInterface,
     filters: ContactMessageFiltersInterface,
@@ -27,9 +32,10 @@ export class ContactMessagePrismaRepository implements ContactMessageRepositoryI
     const messages: ContactMessageModel[] = await this.prisma.contactMessage.findMany({
       where: {
         ...(filters.status && { status: ContactMessageStatus[filters.status] }),
+        // `lt` pairs with `id: 'desc'` — UUIDv7 ids are time-ordered.
+        ...(pagination.cursor && { id: { lt: pagination.cursor } }),
       },
       take: pagination.limit,
-      ...(pagination.cursor && { cursor: { id: pagination.cursor }, skip: 1 }),
       // UUIDv7 ids are time-ordered — id order IS creation order.
       orderBy: { id: 'desc' },
     });

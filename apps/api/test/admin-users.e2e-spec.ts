@@ -103,6 +103,43 @@ describe('admin users', () => {
     expect(searched.body.items[0].passwordHash).toBeUndefined();
   });
 
+  // Paging used Prisma's `cursor` + `skip: 1`, which offsets past exactly one
+  // row on the assumption that the cursor row is still the first row the query
+  // matches. `search` matches on mutable columns: the moment the cursor user is
+  // renamed, the search has already excluded them and the offset ate the next
+  // legitimate user instead — silently, and only for searched lists.
+  it('keeps the user after a cursor whose own row stopped matching the search', async () => {
+    const marker: string = `Keyset${randomUUID().replace(/-/g, '')}`;
+    const prisma: PrismaService = app.get(PrismaService);
+
+    await registerUser(`${marker} oldest`);
+    const middle = await registerUser(`${marker} middle`);
+    const newest = await registerUser(`${marker} newest`);
+
+    const middleId: string =
+      (await prisma.authMethod.findFirst({ where: { email: middle.email } }))?.userId ?? '';
+    const newestId: string =
+      (await prisma.authMethod.findFirst({ where: { email: newest.email } }))?.userId ?? '';
+
+    const firstPage = await request(app.getHttpServer())
+      .get(`/api/v1/admin/users?search=${marker}&limit=1`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(firstPage.body.items[0].id).toBe(newestId);
+    expect(firstPage.body.nextCursor).toBe(newestId);
+
+    // The cursor row leaves the searched set between the two requests.
+    await prisma.user.update({ where: { id: newestId }, data: { displayName: 'Renamed Away' } });
+
+    const secondPage = await request(app.getHttpServer())
+      .get(`/api/v1/admin/users?search=${marker}&limit=1&cursor=${newestId}`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(secondPage.body.items[0].id).toBe(middleId);
+  });
+
   it('returns the user detail and its sessions', async () => {
     const detail = await request(app.getHttpServer())
       .get(`/api/v1/admin/users/${userId}`)

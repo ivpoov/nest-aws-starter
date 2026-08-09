@@ -213,19 +213,25 @@ export class UserPrismaRepository implements UserRepositoryInterface {
     }
   }
 
+  // Keyset pagination, not Prisma's `cursor` + `skip: 1`: `search` matches on
+  // mutable columns, so a rename or an unlinked email between two page requests
+  // drops the cursor row from the result set — and `skip: 1`, which exists only
+  // to step past the cursor row, then eats the next legitimate user instead.
+  // Comparing ids in the `where` never depends on the cursor row surviving.
   public async findManyForAdmin(query: AdminUsersQueryInterface): Promise<AdminUserInterface[]> {
     const users = await this.prisma.user.findMany({
-      where: query.search
-        ? {
-            OR: [
-              { displayName: { contains: query.search, mode: 'insensitive' } },
-              { authMethods: { some: { email: { contains: query.search, mode: 'insensitive' } } } },
-            ],
-          }
-        : {},
+      where: {
+        ...(query.search && {
+          OR: [
+            { displayName: { contains: query.search, mode: 'insensitive' } },
+            { authMethods: { some: { email: { contains: query.search, mode: 'insensitive' } } } },
+          ],
+        }),
+        // `lt` pairs with `id: 'desc'` — UUIDv7 ids are time-ordered.
+        ...(query.cursor && { id: { lt: query.cursor } }),
+      },
       include: { authMethods: { select: { type: true, email: true } } },
       take: query.limit,
-      ...(query.cursor && { cursor: { id: query.cursor }, skip: 1 }),
       orderBy: { id: 'desc' },
     });
 
