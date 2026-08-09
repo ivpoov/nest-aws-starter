@@ -22,10 +22,10 @@ same markers appear as `{/* <module:oauth-discord> */}`. Delete the marked lines
 and the markers themselves.
 
 - `apps/api/src/app.module.ts`
-  - line 16: `import { DiscordOauthModule } from '@modules/oauth-discord/discord-oauth.module.js'; // <module:oauth-discord>`
+  - line 17: `import { DiscordOauthModule } from '@modules/oauth-discord/discord-oauth.module.js'; // <module:oauth-discord>`
   - line 75: `DiscordOauthModule, // <module:oauth-discord>`
 - `apps/api/src/configs/index.ts`
-  - line 5: `import { discordOauthConfig } from '@configs/discord-oauth.config.js'; // <module:oauth-discord>`
+  - line 6: `import { discordOauthConfig } from '@configs/discord-oauth.config.js'; // <module:oauth-discord>`
   - line 28: `discordOauthConfig, // <module:oauth-discord>`
 
 ### Not yet fence-marked (edit by hand)

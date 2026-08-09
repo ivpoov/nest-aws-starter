@@ -5,7 +5,7 @@ import type { MailContentInterface } from '@modules/notification/interfaces/mail
 // builders/*.builder.ts functions the event subscriber uses to write them), so
 // there is nothing type-specific left to template here. Plain function, no
 // template engine, same precedent as auth/templates and
-// suspicious-activity/templates/new-device-alert.template.ts.
+// account-security/templates/new-device-alert.template.ts.
 export function buildNotificationEmailMail(title: string, body: string): MailContentInterface {
   return {
     subject: title,

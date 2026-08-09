@@ -25,7 +25,7 @@ and the markers themselves.
   - line 33: `import { CloudFrontModule } from '@providers/cloudfront/cloudfront.module.js'; // <module:cloudfront>`
   - line 61: `CloudFrontModule, // <module:cloudfront>`
 - `apps/api/src/configs/index.ts`
-  - line 3: `import { cloudfrontConfig } from '@configs/cloudfront.config.js'; // <module:cloudfront>`
+  - line 4: `import { cloudfrontConfig } from '@configs/cloudfront.config.js'; // <module:cloudfront>`
   - line 26: `cloudfrontConfig, // <module:cloudfront>`
 - `apps/api/src/modules/file/services/file.service.ts`
   - line 2: `import { type CloudFrontConfig, cloudfrontConfig } from '@configs/cloudfront.config.js'; // <module:cloudfront>`

@@ -340,7 +340,7 @@ describe('notification event subscriber (persist-first, e2e)', () => {
 
       // Each channel is contained on its own: the dead socket transport must
       // not stop the EMAIL channel that runs after it. ('New sign-in to your
-      // account' is the unrelated suspicious-activity alert for the same
+      // account' is the unrelated account-security alert for the same
       // event — the notification channel's own subject is its row title.)
       const notificationMails: number = send.mock.calls.filter(
         (call: unknown[]): boolean =>

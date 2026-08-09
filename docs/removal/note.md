@@ -29,7 +29,7 @@ same markers appear as `{/* <module:note> */}`. Delete the marked lines/blocks
 and the markers themselves.
 
 - `apps/api/src/app.module.ts`
-  - line 13: `import { NoteModule } from '@modules/note/note.module.js'; // <module:note>`
+  - line 14: `import { NoteModule } from '@modules/note/note.module.js'; // <module:note>`
   - line 76: `NoteModule, // <module:note>`
 - `apps/api/src/modules/event/constants/event-names.constants.ts`
   - line 1: `export const NOTE_CREATED_EVENT = 'note.created'; // <module:note>`
@@ -42,13 +42,13 @@ and the markers themselves.
 - `apps/web/src/constants/app-nav-items.constants.ts`
   - line 9: `{ to: '/notes', label: 'Notes' }, // <module:note>`
 - `packages/shared/src/index.ts`
-  - line 46: `export * from './notes/constants/note-error-codes.constants.js'; // <module:note>`
-  - line 47: `export * from './notes/enums/note-status.enum.js'; // <module:note>`
-  - line 48: `export * from './notes/interfaces/create-note-request.interface.js'; // <module:note>`
-  - line 49: `export * from './notes/interfaces/note-list-response.interface.js'; // <module:note>`
-  - line 50: `export * from './notes/interfaces/note-response.interface.js'; // <module:note>`
-  - line 51: `export * from './notes/interfaces/update-note-request.interface.js'; // <module:note>`
-  - line 52: `export * from './notes/types/note-error-code.type.js'; // <module:note>`
+  - line 52: `export * from './notes/constants/note-error-codes.constants.js'; // <module:note>`
+  - line 53: `export * from './notes/enums/note-status.enum.js'; // <module:note>`
+  - line 54: `export * from './notes/interfaces/create-note-request.interface.js'; // <module:note>`
+  - line 55: `export * from './notes/interfaces/note-list-response.interface.js'; // <module:note>`
+  - line 56: `export * from './notes/interfaces/note-response.interface.js'; // <module:note>`
+  - line 57: `export * from './notes/interfaces/update-note-request.interface.js'; // <module:note>`
+  - line 58: `export * from './notes/types/note-error-code.type.js'; // <module:note>`
 
 ### Not yet fence-marked (edit by hand)
 

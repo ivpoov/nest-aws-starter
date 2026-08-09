@@ -43,7 +43,7 @@ same markers appear as `{/* <module:statistic> */}`. Delete the marked lines/blo
 and the markers themselves.
 
 - `apps/api/src/app.module.ts`
-  - line 22: `import { StatisticModule } from '@modules/statistic/statistic.module.js'; // <module:statistic>`
+  - line 23: `import { StatisticModule } from '@modules/statistic/statistic.module.js'; // <module:statistic>`
   - line 81: `StatisticModule, // <module:statistic>`
 - `apps/admin/src/App.tsx`
   - line 12: `import { StatisticsPage } from './pages/StatisticsPage'; // <module:statistic>`
@@ -51,13 +51,13 @@ and the markers themselves.
 - `apps/admin/src/constants/admin-nav-items.constants.ts`
   - line 9: `{ to: '/dashboard', label: 'Dashboard' }, // <module:statistic>`
 - `packages/shared/src/index.ts`
-  - line 84: `export * from './statistics/enums/statistics-metric.enum.js'; // <module:statistic>`
-  - line 85: `export * from './statistics/interfaces/statistics-count-breakdown.interface.js'; // <module:statistic>`
-  - line 86: `export * from './statistics/interfaces/statistics-overview-response.interface.js'; // <module:statistic>`
-  - line 87: `export * from './statistics/interfaces/statistics-revenue-by-plan.interface.js'; // <module:statistic>`
-  - line 88: `export * from './statistics/interfaces/statistics-series-point.interface.js'; // <module:statistic>`
-  - line 89: `export * from './statistics/interfaces/statistics-series-response.interface.js'; // <module:statistic>`
-  - line 90: `export * from './statistics/interfaces/statistics-totals.interface.js'; // <module:statistic>`
+  - line 90: `export * from './statistics/enums/statistics-metric.enum.js'; // <module:statistic>`
+  - line 91: `export * from './statistics/interfaces/statistics-count-breakdown.interface.js'; // <module:statistic>`
+  - line 92: `export * from './statistics/interfaces/statistics-overview-response.interface.js'; // <module:statistic>`
+  - line 93: `export * from './statistics/interfaces/statistics-revenue-by-plan.interface.js'; // <module:statistic>`
+  - line 94: `export * from './statistics/interfaces/statistics-series-point.interface.js'; // <module:statistic>`
+  - line 95: `export * from './statistics/interfaces/statistics-series-response.interface.js'; // <module:statistic>`
+  - line 96: `export * from './statistics/interfaces/statistics-totals.interface.js'; // <module:statistic>`
 
 ### Not yet fence-marked (edit by hand)
 

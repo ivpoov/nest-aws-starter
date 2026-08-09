@@ -1,3 +1,6 @@
+import type { NewDeviceCheckInterface } from '@modules/account-security/interfaces/new-device-check.interface.js';
+import { LoginLockoutService } from '@modules/account-security/services/login-lockout.service.js';
+import { NewDeviceService } from '@modules/account-security/services/new-device.service.js';
 import { ARGON2_OPTIONS } from '@modules/auth/constants/auth.constants.js';
 import {
   AUTH_EMAIL_LINKED_TO_PROVIDER,
@@ -20,9 +23,6 @@ import { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import type { SessionContextInterface } from '@modules/session/interfaces/session-context.interface.js';
 import { SessionService } from '@modules/session/services/session.service.js';
-import type { NewDeviceCheckInterface } from '@modules/suspicious-activity/interfaces/new-device-check.interface.js';
-import { LoginLockoutService } from '@modules/suspicious-activity/services/login-lockout.service.js';
-import { NewDeviceService } from '@modules/suspicious-activity/services/new-device.service.js';
 import type { TokenPairInterface } from '@modules/token/interfaces/token-pair.interface.js';
 import { USER_BLOCKED } from '@modules/user/constants/user-errors.constants.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
@@ -69,7 +69,7 @@ export class AuthService {
 
   public async login(dto: LoginDto, context: SessionContextInterface): Promise<TokenPairInterface> {
     // Synchronous and read-only — must block credential verification, unlike
-    // everything else the suspicious-activity module does for this login.
+    // everything else the account-security module does for this login.
     await this.loginLockoutService.assertNotLocked(dto.email, context.ip);
 
     const method: AuthMethodInterface | null = await this.userService.findEmailMethod(dto.email);

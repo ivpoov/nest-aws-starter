@@ -1,3 +1,6 @@
+import type { NewDeviceCheckInterface } from '@modules/account-security/interfaces/new-device-check.interface.js';
+import type { LoginLockoutService } from '@modules/account-security/services/login-lockout.service.js';
+import type { NewDeviceService } from '@modules/account-security/services/new-device.service.js';
 import { ARGON2_OPTIONS } from '@modules/auth/constants/auth.constants.js';
 import type { LoginDto } from '@modules/auth/dtos/login.dto.js';
 import { AuthService } from '@modules/auth/services/auth.service.js';
@@ -5,9 +8,6 @@ import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js'
 import type { EventBusService } from '@modules/event/services/event-bus.service.js';
 import type { SessionContextInterface } from '@modules/session/interfaces/session-context.interface.js';
 import type { SessionService } from '@modules/session/services/session.service.js';
-import type { NewDeviceCheckInterface } from '@modules/suspicious-activity/interfaces/new-device-check.interface.js';
-import type { LoginLockoutService } from '@modules/suspicious-activity/services/login-lockout.service.js';
-import type { NewDeviceService } from '@modules/suspicious-activity/services/new-device.service.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
 import type { UserInterface } from '@modules/user/interfaces/user.interface.js';
 import type { UserService } from '@modules/user/services/user.service.js';

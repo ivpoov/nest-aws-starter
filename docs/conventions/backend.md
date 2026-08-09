@@ -244,8 +244,8 @@ one kind per folder, even for a single file:
 | `gateways/` | WebSocket gateways — transport concerns only (handshake auth, room joins, revalidation), no domain logic, no repository access (§11b) | `notification` |
 | `adapters/` | Transport adapters installed at bootstrap (e.g. the Redis-backed Socket.IO adapter and its disabled twin) (§11b) | `notification` |
 | `builders/` | Pure event-payload → persisted-content mappers — no I/O, no DI (§11a) | `notification` |
-| `listeners/` | `@OnDomainEvent` subscribers — contained handlers that never break the emitter (§11a) | `activity`, `user`, `suspicious-activity` |
-| `templates/` | Mail/render templates — pure functions returning content shapes | `auth`, `suspicious-activity`, `notification` |
+| `listeners/` | `@OnDomainEvent` subscribers — contained handlers that never break the emitter (§11a) | `activity`, `user`, `account-security` |
+| `templates/` | Mail/render templates — pure functions returning content shapes | `auth`, `account-security`, `notification` |
 | `helpers/` | Module-owned free functions needed outside DI (e.g. bootstrap wiring) | `notification` |
 
 Registered by exactly one line in `AppModule`. Feature modules never import other
@@ -466,7 +466,7 @@ always with a hard `limit` cap.
 `MAX_PAGE_SIZE` / `DEFAULT_PAGE_SIZE` (`@constants/pagination.constants.js`) are the
 `@Max` and the default on both pagination DTOs. A list whose wire contract is a plain
 array with no cursor — `/billing/plans`, `/sessions`, `/auth/methods`,
-`/admin/suspicious/lockouts` — still passes `take: MAX_PAGE_SIZE` in its repository:
+`/admin/account-security/lockouts` — still passes `take: MAX_PAGE_SIZE` in its repository:
 "the table is small today" is a property of the data, not of the query, and
 `/billing/plans` is public and unauthenticated. Never write a per-endpoint cap.
 

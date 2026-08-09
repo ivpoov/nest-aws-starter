@@ -23,19 +23,19 @@ same markers appear as `{/* <module:api-key> */}`. Delete the marked lines/block
 and the markers themselves.
 
 - `apps/api/src/app.module.ts`
-  - line 5: `import { ApiKeyModule } from '@modules/api-key/api-key.module.js'; // <module:api-key>`
+  - line 6: `import { ApiKeyModule } from '@modules/api-key/api-key.module.js'; // <module:api-key>`
   - line 83: `ApiKeyModule, // <module:api-key>`
 - `apps/api/prisma/schema.prisma`
   - line 43: `apiKeys                 ApiKey[] // <module:api-key>`
   - lines 228-252 (block)
 - `packages/shared/src/index.ts`
-  - line 6: `export * from './api-keys/constants/api-key-error-codes.constants.js'; // <module:api-key>`
-  - line 7: `export * from './api-keys/interfaces/api-demo-whoami-response.interface.js'; // <module:api-key>`
-  - line 8: `export * from './api-keys/interfaces/api-key-list-response.interface.js'; // <module:api-key>`
-  - line 9: `export * from './api-keys/interfaces/api-key-response.interface.js'; // <module:api-key>`
-  - line 10: `export * from './api-keys/interfaces/create-api-key-request.interface.js'; // <module:api-key>`
-  - line 11: `export * from './api-keys/interfaces/create-api-key-response.interface.js'; // <module:api-key>`
-  - line 12: `export * from './api-keys/types/api-key-error-code.type.js'; // <module:api-key>`
+  - line 12: `export * from './api-keys/constants/api-key-error-codes.constants.js'; // <module:api-key>`
+  - line 13: `export * from './api-keys/interfaces/api-demo-whoami-response.interface.js'; // <module:api-key>`
+  - line 14: `export * from './api-keys/interfaces/api-key-list-response.interface.js'; // <module:api-key>`
+  - line 15: `export * from './api-keys/interfaces/api-key-response.interface.js'; // <module:api-key>`
+  - line 16: `export * from './api-keys/interfaces/create-api-key-request.interface.js'; // <module:api-key>`
+  - line 17: `export * from './api-keys/interfaces/create-api-key-response.interface.js'; // <module:api-key>`
+  - line 18: `export * from './api-keys/types/api-key-error-code.type.js'; // <module:api-key>`
 
 ### Not yet fence-marked (edit by hand)
 

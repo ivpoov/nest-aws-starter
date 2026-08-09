@@ -24,7 +24,7 @@ takes the demo module out on the way. What is left is yours.
 Email/password with verification and reset · OAuth login **and** account linking
 for Google, Facebook and Discord · refresh-token sessions you can list and
 revoke · long-lived API keys · CASL permissions · login lockout, new-device
-alerts and a suspicious-activity trail. Tokens live in Redis, never in Postgres
+alerts and a suspicious-login trail. Tokens live in Redis, never in Postgres
 ([ADR 0003](docs/decisions/0003-tokens-in-redis-never-postgres.md)); nothing in
 the tree sets a cookie ([ADR 0004](docs/decisions/0004-bearer-tokens-no-cookies.md)).
 

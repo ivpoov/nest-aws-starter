@@ -36,7 +36,7 @@ same markers appear as `{/* <module:contact-us> */}`. Delete the marked lines/bl
 and the markers themselves.
 
 - `apps/api/src/app.module.ts`
-  - line 9: `import { ContactUsModule } from '@modules/contact-us/contact-us.module.js'; // <module:contact-us>`
+  - line 10: `import { ContactUsModule } from '@modules/contact-us/contact-us.module.js'; // <module:contact-us>`
   - line 82: `ContactUsModule, // <module:contact-us>`
 - `apps/api/prisma/schema.prisma`
   - lines 167-190 (block)
@@ -69,11 +69,11 @@ and the markers themselves.
   - lines 17-19 (block)
   - lines 37-41 (block)
 - `packages/shared/src/index.ts`
-  - line 33: `export * from './contact/enums/contact-message-status.enum.js'; // <module:contact-us>`
-  - line 34: `export * from './contact/interfaces/contact-message-list-response.interface.js'; // <module:contact-us>`
-  - line 35: `export * from './contact/interfaces/contact-message-response.interface.js'; // <module:contact-us>`
-  - line 36: `export * from './contact/interfaces/create-contact-request.interface.js'; // <module:contact-us>`
-  - line 37: `export * from './contact/interfaces/update-contact-message-status-request.interface.js'; // <module:contact-us>`
+  - line 39: `export * from './contact/enums/contact-message-status.enum.js'; // <module:contact-us>`
+  - line 40: `export * from './contact/interfaces/contact-message-list-response.interface.js'; // <module:contact-us>`
+  - line 41: `export * from './contact/interfaces/contact-message-response.interface.js'; // <module:contact-us>`
+  - line 42: `export * from './contact/interfaces/create-contact-request.interface.js'; // <module:contact-us>`
+  - line 43: `export * from './contact/interfaces/update-contact-message-status-request.interface.js'; // <module:contact-us>`
 
 ### Not yet fence-marked (edit by hand)
 

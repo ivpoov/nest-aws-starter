@@ -26,7 +26,7 @@ Optional modules are delimited by fence markers.
 Eleven modules are optional and fenced: `payment` (93 markers), `notification` (43), `file`
 (26), `contact-us` (26), `cloudfront` (19), `note` (15), `statistic` (12), `api-key` (11), and
 the three OAuth providers (4 each). Everything else — `user`, `auth`, `session`, `token`,
-`casl`, `event`, `common`, `activity`, `suspicious-activity`, `oauth` core — is core and has
+`casl`, `event`, `common`, `activity`, `account-security`, `oauth` core — is core and has
 no markers.
 
 `scripts/subtraction-test.mjs` is the proof. For each module it deletes the module's own

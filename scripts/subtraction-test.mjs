@@ -524,7 +524,7 @@ export const MODULES = [
 // found not (currently) cleanly removable. Not exercised by the script.
 const NON_REMOVABLE = [
   {
-    id: 'suspicious-activity',
+    id: 'account-security',
     reason:
       'Fenceable in principle — multi-line/block fences exist elsewhere in this PR — ' +
       'but disproportionately invasive here: it is a synchronous security gate inside ' +
@@ -600,7 +600,7 @@ const DEFERRED_PROVIDERS = [
     id: 'mail',
     note:
       'Coupled into core auth: `EmailFlowService` (verify/reset emails, `auth` module) calls ' +
-      '`MAIL_TRANSPORT` unconditionally; `NewDeviceService` (`suspicious-activity`) also ' +
+      '`MAIL_TRANSPORT` unconditionally; `NewDeviceService` (`account-security`) also ' +
       "injects it directly, gated only by its own `newDeviceEmailEnabled` flag, not by mail's " +
       "own `isEnabled`. `NotificationEmailService` (`notification`, PR 5) checks mail's own " +
       '`isEnabled` before every send, so it degrades cleanly — but it is still a removable ' +
