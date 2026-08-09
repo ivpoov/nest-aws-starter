@@ -55,6 +55,19 @@ locals {
   # the load balancer's DNS name from the compute module.
   edge_api_distribution_enabled = false
   edge_alb_dns_name             = null
+
+  # Two things the edge consumes but does not own, both null until the modules
+  # that do own them land. The check block at the bottom of this file is what
+  # stops that from being silent on a profile that asked for them.
+  #
+  #   - the access-log bucket (local.names.logs_bucket) belongs to shared
+  #     storage, and must have ACLs enabled: CloudFront standard logging still
+  #     delivers with an ACL grant, so a BucketOwnerEnforced bucket rejects it
+  #   - the web ACL (local.names.waf_web_acl) is shared across distributions,
+  #     and for CloudFront must itself be created in us-east-1 with CLOUDFRONT
+  #     scope
+  edge_log_bucket_domain_name = null
+  edge_web_acl_arn            = null
 }
 
 module "edge" {
@@ -83,7 +96,9 @@ module "edge" {
   domain_name = var.domain_name
   price_class = local.profile.cloudfront_price_class
 
-  logging_enabled = local.profile.cloudfront_logs_enabled
+  logging_enabled        = local.profile.cloudfront_logs_enabled
+  log_bucket_domain_name = local.edge_log_bucket_domain_name
+  web_acl_arn            = local.edge_web_acl_arn
 
   api_distribution_enabled = local.edge_api_distribution_enabled
   alb_dns_name             = local.edge_alb_dns_name
@@ -175,4 +190,20 @@ output "frontend_build_env" {
 output "api_cors_origins" {
   description = "Value for the API's CORS_ORIGINS environment variable: every origin the frontends are served from, comma-separated, no spaces."
   value       = join(",", module.edge.cors_origins)
+}
+
+# A cost profile that asks for edge logging or a web ACL and gets neither is
+# worse than one that never asked: the setting reads as enabled everywhere it is
+# shown. Warn on plan rather than fail — the modules that own these resources
+# land separately, and a stack should still be applyable in between.
+check "edge_supporting_resources" {
+  assert {
+    condition     = !(local.profile.cloudfront_logs_enabled && local.edge_log_bucket_domain_name == null)
+    error_message = "The selected cost profile enables CloudFront access logs, but no log bucket is wired into the edge module — no logs will be delivered."
+  }
+
+  assert {
+    condition     = !(local.profile.waf_enabled && local.edge_web_acl_arn == null)
+    error_message = "The selected cost profile enables WAF, but no web ACL is wired into the edge module — the distributions are unprotected."
+  }
 }
