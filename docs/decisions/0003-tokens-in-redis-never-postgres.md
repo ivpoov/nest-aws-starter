@@ -81,6 +81,19 @@ the sense of [ADR 1](./0001-contracts-over-implementations.md).
   and, in cluster mode, runs it per master node and deletes keys one at a time (multi-key
   `DEL` is `CROSSSLOT`). It is fine at this cardinality and would not be at a much larger one.
 
+**Upgrade step, to be done once and then deleted**
+
+The release that introduced digests also shipped a compatibility shim —
+`TokenRedisRepository.matchesPreDigestKey` — which accepts an allowlist key still holding a
+verbatim token, rewrites it as a digest with `SET … KEEPTTL`, and lets that request through.
+Without it, deploying the change would have signed every logged-in user out at once.
+
+**Delete `matchesPreDigestKey` and its callers once one `AUTH_REFRESH_TTL_SEC` window (26
+days by default) has passed since that deploy.** No pre-digest key can survive longer than
+its own TTL, so after that window the shim is unreachable code on the auth hot path. Nothing
+breaks if it is left in place; it is simply dead weight that invites the question "when is a
+non-digest accepted?" every time someone reads the file.
+
 **Where it is bent — and why the bend is intentional**
 
 The rule is about *tokens*, not about *everything auth-adjacent*. Two things do live in

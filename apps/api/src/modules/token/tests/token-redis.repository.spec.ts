@@ -178,6 +178,24 @@ describe('TokenRedisRepository', () => {
     expect(redis.setModes).toContain('KEEPTTL');
   });
 
+  // Without the "already digested" guard the fallback compares the stored
+  // digest to whatever was presented, so presenting the digest itself matches
+  // and rewrites the key to sha256(digest) — the genuine token is then dead
+  // for the life of that session. Unreachable through the API (the JWT
+  // signature is verified first) but bricking, so it is guarded and pinned.
+  it('never treats a stored digest as a pre-digest key', async () => {
+    const { repository, redis } = createRepository();
+
+    await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 60);
+
+    const digest: string = redis.values.get(REFRESH_KEY) ?? '';
+
+    expect(await repository.matchesRefreshToken('user-1', 'sess-1', digest)).toBe(false);
+    // The key is untouched, so the real token still works.
+    expect(redis.values.get(REFRESH_KEY)).toBe(digest);
+    expect(await repository.matchesRefreshToken('user-1', 'sess-1', REFRESH_TOKEN)).toBe(true);
+  });
+
   it('still rejects a wrong token against a pre-digest key', async () => {
     const { repository, redis } = createRepository();
 

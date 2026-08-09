@@ -130,17 +130,38 @@ export class TokenRedisRepository implements TokenRepositoryInterface {
     if (stored === null) return false;
     if (this.equals(stored, this.digest(token))) return true;
 
-    // Keys written before this repository started digesting hold the token
-    // verbatim. Accepting one — and immediately rewriting it as a digest,
-    // keeping its remaining TTL — is what stops the deploy that ships this
-    // from signing every logged-in user out. Safe to delete once one refresh
-    // TTL (AUTH_REFRESH_TTL_SEC) has passed since that deploy, after which no
-    // such key can still exist.
+    // A digested key is done: it can only ever be matched by digest. Falling
+    // through would compare the stored digest to the presented string, so
+    // presenting the digest itself as the token would "match" and rewrite the
+    // key to sha256(digest) — permanently bricking the real token for that
+    // session. Not reachable from outside (TokenService verifies the JWT
+    // signature first, and a hex digest is not a signed JWT), which is why it
+    // is a correctness guard rather than a vulnerability fix.
+    if (this.isDigest(stored)) return false;
+
+    return this.matchesPreDigestKey(key, stored, token);
+  }
+
+  // Compatibility shim for allowlist keys written before this repository
+  // digested anything: they hold the token verbatim. Accepting one — and
+  // rewriting it as a digest with its remaining TTL intact — is what stops the
+  // deploy that ships digesting from signing every logged-in user out.
+  //
+  // DELETE ME once one AUTH_REFRESH_TTL_SEC window (26 days by default) has
+  // passed since that deploy: no pre-digest key can exist after that and this
+  // is pure dead weight. Grep `matchesPreDigestKey`; the removal step is also
+  // written down in docs/decisions/0003-tokens-in-redis-never-postgres.md so
+  // it is on the page an operator actually reads rather than only in here.
+  private async matchesPreDigestKey(key: string, stored: string, token: string): Promise<boolean> {
     if (!this.equals(stored, token)) return false;
 
     await this.redis.set(key, this.digest(token), 'KEEPTTL');
 
     return true;
+  }
+
+  private isDigest(value: string): boolean {
+    return /^[0-9a-f]{64}$/.test(value);
   }
 
   private parseGrace(raw: string): Record<string, unknown> | null {
