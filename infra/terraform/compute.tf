@@ -51,12 +51,9 @@ variable "api_extra_environment" {
 # ---------------------------------------------------------------------------
 # Names
 #
-# The compute names in local.names cover the cluster, the repositories, the API
-# task definition, the service, the ALB and the target group. The three below —
-# the migration task family, its log group and the scaling policy — are not in
-# that map and this file does not own locals.tf, so they are derived from the
-# same local.name_prefix in the way network.tf derives its security-group names.
-# They belong in local.names the next time that file is touched.
+# Every one of them comes from local.names; this block only reshapes the flat
+# map into the object the module's variable declares. Nothing here builds a
+# string out of local.name_prefix.
 #
 # The migration log group deliberately sits under the same /aws/ecs/<prefix>
 # path as the API's: that is the prefix the execution role's CreateLogStream
@@ -71,16 +68,17 @@ locals {
     alb                    = local.names.alb
     target_group_api       = local.names.target_group_api
     api_log_group          = local.names.api_log_group
-    migrations_task        = "${local.name_prefix}-migrations"
-    migrations_log_group   = "${local.ecs_log_group_prefix}/migrations"
-    autoscaling_cpu_policy = "${local.name_prefix}-api-cpu"
+    migrations_task        = local.names.migrations_task
+    migrations_log_group   = local.names.migrations_log_group
+    autoscaling_cpu_policy = local.names.autoscaling_cpu_policy
   }
 
-  # One repository, not two. local.names carries an ecr_web name, but apps/web
-  # and apps/admin are static Vite builds served from S3 through CloudFront (see
-  # edge.tf) — there is no web container to store, and an empty repository that
-  # exists "in case" is a resource nobody can explain later. Add the key here and
-  # to the services module's ecr_repository_names together if that changes.
+  # One repository, not two. apps/web and apps/admin are static Vite builds
+  # served from S3 through CloudFront (see edge.tf) — there is no web container
+  # to store, and an empty repository that exists "in case" is a resource nobody
+  # can explain later. local.names carries no ecr_web key for the same reason.
+  # Adding one means adding it here and to the services module's
+  # ecr_repository_names together, so the execution role can pull what it stores.
   compute_ecr_repositories = {
     api = local.names.ecr_api
   }
@@ -124,6 +122,10 @@ locals {
       SQS_ENABLED                   = "true"
       SQS_PAYMENT_WEBHOOK_QUEUE_URL = module.services.payment_webhook_queue_url
 
+      # The provider is constructed, and nothing in apps/api asks it to publish.
+      # The task role holds no sns:Publish either — see modules/services/iam.tf
+      # for why an unused grant is removed rather than scoped. Adding the first
+      # publisher means adding that statement back, not flipping a flag here.
       SNS_ENABLED = "true"
 
       # Every origin a browser can legitimately load a frontend from, including
@@ -254,7 +256,8 @@ check "single_task_ceiling" {
     condition = local.profile.compute_max_capacity > 1
     error_message = join(" ", [
       "The selected cost profile caps the API at one task, so the scheduler's Redis lock and the Socket.IO Redis adapter are never exercised — both are no-ops at a single task.",
-      "Raising compute_max_capacity above one in local.profile_settings turns them on, and also switches Redis from a task-local sidecar to a shared ElastiCache replication group (~$12/month for cache.t4g.micro), because two tasks with two sidecars would disagree about who is logged in.",
+      "Exercising them takes two edits in local.profile_settings, not one: raise compute_min_capacity and compute_max_capacity to 2, AND set managed_cache_enabled = true.",
+      "The second is not optional and is not implied by the first — a Redis sidecar is per task, so two tasks would get two caches and disagree about who is logged in. The combination costs roughly $12/month for cache.t4g.micro plus about $3/month for a second Fargate Spot task.",
     ])
   }
 }

@@ -110,7 +110,7 @@ data "aws_iam_policy_document" "ecs_tasks_assume_role" {
 
 resource "aws_iam_role" "task" {
   name               = var.task_role_name
-  description        = "Identity the application's AWS SDK calls run as. Scoped to this stack's bucket, queue, topic and parameter path."
+  description        = "Identity the application's AWS SDK calls run as. Scoped to this stack's bucket, queue and parameter path."
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume_role.json
 }
 
@@ -167,13 +167,28 @@ data "aws_iam_policy_document" "task" {
     resources = [aws_sqs_queue.webhook.arn]
   }
 
-  # SnsProviderService.publish(). One topic, one action.
-  statement {
-    sid       = "PublishNotifications"
-    effect    = "Allow"
-    actions   = ["sns:Publish"]
-    resources = [aws_sns_topic.notifications.arn]
-  }
+  # There is deliberately no sns:Publish statement here.
+  #
+  # SnsProviderService exists and SnsModule is registered in app.module.ts, but
+  # nothing outside apps/api/src/modules/common/providers/sns/ injects
+  # SNS_PROVIDER: the only other references in the repository are that
+  # provider's own unit spec and test/sns.e2e-spec.ts. Nothing publishes.
+  #
+  # A grant with no caller is not "scoped": it is a permission the running
+  # container holds for a call it never makes, and the only thing it can do is
+  # be used by something else that gets into the container. Least privilege
+  # means removing it, not narrowing it — so the topic stays as the extension
+  # point, and the statement comes back with the first real publisher:
+  #
+  #   statement {
+  #     sid       = "PublishNotifications"
+  #     effect    = "Allow"
+  #     actions   = ["sns:Publish"]
+  #     resources = [aws_sns_topic.notifications.arn]
+  #   }
+  #
+  # Until then a publish attempt fails with an AccessDenied naming this role,
+  # which is the correct way to find out the grant was never wired.
 
   # SsmReadProjectParameters — see the note on the execution role: ECS resolves
   # container `secrets` with the *execution* role, so this statement covers the

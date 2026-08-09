@@ -1,11 +1,11 @@
 # ---------------------------------------------------------------------------
 # Shared access-log bucket
 #
-# This is the bucket local.names.logs_bucket has been reserved for and that
-# edge.tf's `edge_supporting_resources` check has been warning about: the
-# production profile sets cloudfront_logs_enabled, the edge module takes a
-# log_bucket_domain_name, and until now nothing created one, so the setting read
-# as enabled and delivered nothing.
+# This is the bucket local.names.logs_bucket is reserved for. The production
+# profile sets cloudfront_logs_enabled, the edge module takes a
+# log_bucket_domain_name, and edge.tf passes this module's
+# access_logs_bucket_domain_name straight into it — one profile key creates the
+# bucket and turns on delivery into it.
 #
 # It lives here rather than in the edge module because access logs are not a
 # CloudFront concern — ALB access logs and S3 server access logs belong in the

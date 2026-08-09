@@ -37,8 +37,11 @@
 # The tradeoff, stated plainly: a sidecar cache is per-task and ephemeral. Every
 # deploy, every task replacement and every crash empties it, which logs every
 # user out, because the refresh-token allowlist lives there. Two tasks would each
-# get their own and disagree about who is logged in — which is exactly why the
-# caller enables the managed cache as soon as more than one task exists.
+# get their own and disagree about who is logged in — so this flag and the task
+# ceiling have to be raised together. The caller keeps both as explicit keys in
+# its cost profiles and fails a check on plan if they ever disagree; it does not
+# derive one from the other, because a ~$12/month cache should not appear as a
+# side effect of editing a capacity number.
 # ---------------------------------------------------------------------------
 
 locals {

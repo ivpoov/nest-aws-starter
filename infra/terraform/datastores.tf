@@ -41,20 +41,22 @@ variable "database_max_allocated_storage_gb" {
 }
 
 locals {
-  # Whether the cache is a managed service or a container beside the API is not
-  # a cost-profile question, it is a correctness one: a task-local cache is
-  # correct exactly while there is one task. Two tasks with two sidecars would
-  # disagree about who is logged in, because the refresh-token allowlist lives
-  # in Redis.
+  # An explicit key, not a derivation. It used to read
+  # `local.profile.compute_max_capacity > 1`, which tied the cache shape to the
+  # task ceiling and meant that raising the demo profile to two tasks silently
+  # created an ElastiCache replication group — about $12/month, roughly 40% of
+  # that profile's total bill, from editing a capacity number.
   #
-  # So this keys off the ceiling on the task count rather than off the profile
-  # name. compute_max_capacity, not compute_desired_count: with autoscaling on,
-  # desired is where the service starts and max is how many tasks can exist.
+  # The rule the derivation encoded is still true and still matters: a task-local
+  # cache is correct exactly while there is one task, because two tasks with two
+  # sidecars disagree about who is logged in — the refresh-token allowlist lives
+  # in Redis. What changed is that the rule is now enforced by the check below,
+  # where it can be read and explained, rather than applied silently.
   #
-  # There is no `managed_cache_enabled` key in local.profile_settings today and
-  # this file does not own locals.tf. If that key is ever added, point this at
-  # it — and keep the rule above in its comment.
-  datastores_managed_cache_enabled = local.profile.compute_max_capacity > 1
+  # compute_max_capacity is still the number the check uses, not
+  # compute_desired_count: with autoscaling on, desired is where the service
+  # starts and max is how many tasks can exist.
+  datastores_managed_cache_enabled = local.profile.managed_cache_enabled
 
   # Credentials that come into existence only when a human registers this
   # application somewhere. Terraform creates the parameter and describes where
@@ -134,13 +136,34 @@ check "database_connection_pool" {
   }
 }
 
+check "sidecar_cache_across_multiple_tasks" {
+  assert {
+    # The one combination in local.profile_settings that is not a trade-off but
+    # a bug. A sidecar is per task: at a ceiling above one, each task gets its
+    # own Redis and they share nothing. The refresh-token allowlist is in there,
+    # so a request served by task A can be told to log in again by task B. The
+    # scheduler's lock stops holding across tasks, so a job scheduled to run once
+    # runs once per task; the Socket.IO adapter stops fanning broadcasts out.
+    condition = local.datastores_managed_cache_enabled || local.profile.compute_max_capacity <= 1
+    error_message = join(" ", [
+      "The selected cost profile leaves managed_cache_enabled = false but allows more than one task, so every task gets its own Redis sidecar and they share nothing.",
+      "The refresh-token allowlist, the scheduler's lock and the Socket.IO adapter all assume one shared Redis: expect users signed out at random, scheduled jobs running once per task, and websocket broadcasts reaching only the task that sent them.",
+      "Set managed_cache_enabled = true in local.profile_settings, or bring compute_max_capacity back to one.",
+    ])
+  }
+}
+
 check "ephemeral_cache_in_a_durable_stack" {
   assert {
     # Deletion protection says "this stack holds something worth keeping". A
     # sidecar cache says "every deploy logs everyone out". Both at once is
     # almost always an accident.
-    condition     = local.datastores_managed_cache_enabled || !local.profile.deletion_protection
-    error_message = "The selected cost profile protects the database from deletion but caps the task count at one, so Redis runs as a task-local sidecar. That cache is emptied by every deploy, task replacement and crash — which signs every user out, because the refresh-token allowlist lives in it. Raise compute_max_capacity above one to get a shared ElastiCache replication group."
+    condition = local.datastores_managed_cache_enabled || !local.profile.deletion_protection
+    error_message = join(" ", [
+      "The selected cost profile protects the database from deletion but runs Redis as a task-local sidecar.",
+      "That cache is emptied by every deploy, task replacement and crash — which signs every user out, because the refresh-token allowlist lives in it.",
+      "Set managed_cache_enabled = true in local.profile_settings to get a shared ElastiCache replication group (~$12/month for cache.t4g.micro).",
+    ])
   }
 }
 

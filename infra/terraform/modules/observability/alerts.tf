@@ -2,15 +2,14 @@
 # Alert topic
 #
 # A second topic, deliberately. The services module already owns an SNS topic
-# (local.names.events_topic) and it is a *data plane*: the ECS task role holds
-# sns:Publish on it, the application publishes domain events through it, and its
-# subscribers are application consumers. Alarms are a control plane. Sharing one
-# topic between them means:
+# (local.names.notifications_topic) and it is a *data plane*: it exists for
+# application domain events and its subscribers would be application consumers.
+# Alarms are a control plane. Sharing one topic between them means:
 #
 #   - every application event fans out to the on-call address, and every alarm
 #     fans out to the application's consumers;
-#   - anything holding the task role can publish a message that is indis-
-#     tinguishable from a CloudWatch alarm;
+#   - the task role would need publish on it, so anything holding that role
+#     could emit a message indistinguishable from a CloudWatch alarm;
 #   - reworking the application's eventing quietly takes alerting with it.
 #
 # The topic is created unconditionally even though the alarms are profile-gated.

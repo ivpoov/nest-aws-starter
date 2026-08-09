@@ -6,6 +6,11 @@
 # and mixing them means either paging on business events or losing alerts in
 # the noise.
 #
+# The topic exists; the task role's sns:Publish does not. Nothing in apps/api
+# publishes to it — SnsProviderService has no consumer — and iam.tf explains why
+# an unused grant is removed rather than scoped. This resource is the extension
+# point: add a subscription and a publisher, then paste the statement back.
+#
 # Not encrypted at rest. SNS SSE requires a KMS key, and every publisher then
 # additionally needs kms:GenerateDataKey* and kms:Decrypt on it — a broader
 # grant than anything else in this module, in exchange for encrypting messages
