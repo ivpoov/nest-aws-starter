@@ -143,7 +143,7 @@ What actually differs:
 | `compute_task_cpu` / `_memory`          | 256 / 512            | 512 / 1024           | Fargate bills per vCPU-second and GB-second                 |
 | `compute_desired_count`                 | 1                    | 2                    | One task means no rolling deploy without a gap              |
 | `compute_autoscaling`, `_min`, `_max`   | off, 1, 1            | on, 2, 6             | The ceiling is what the cache and the checks key off        |
-| `waf_enabled`                           | `false`              | `true`               | ~$5/month + per-rule + per-request — **and see the gap below** |
+| `waf_enabled`                           | `false`              | `false`              | The one key that is equal on both profiles — **see below**   |
 | `cloudfront_price_class`                | `PriceClass_100`     | `PriceClass_All`     | Which edge locations serve traffic                          |
 | `cloudfront_logs_enabled`               | `false`              | `true`               | Creates the access-log bucket and delivers into it          |
 | `log_retention_days`                    | 7                    | 30                   | Every log group in the stack                                |
@@ -199,11 +199,22 @@ capacity number. Two independent things now have two keys.
 
 ### What this stack does not create
 
-`waf_enabled` is `true` on the production profile and **no module creates a web
-ACL**. The distributions are unprotected, and the `edge_supporting_resources`
-check in `edge.tf` warns on every plan that asks for one. To close it: create
-the web ACL in `us-east-1` with `CLOUDFRONT` scope, name it
-`local.names.waf_web_acl`, and set `local.edge_web_acl_arn` to its ARN.
+**No WAF.** No module here creates a web ACL, so `waf_enabled` is `false` on
+**both** profiles — it is the only key in the two maps that does not differ, and
+it is false rather than absent so the `edge_supporting_resources` check in
+`edge.tf` still has something to warn on if anyone flips it.
+
+It used to be `true` on production, which was wrong twice over: nothing was
+created, and the input it fed (`local.edge_web_acl_arn`) is `CLOUDFRONT`-scoped,
+so the most it could ever have covered is the two static SPA distributions —
+content-hashed Vite output behind Origin Access Control. The tier that earns a
+WAF is the API behind the ALB, which needs a **`REGIONAL`** web ACL in this
+stack's own region, associated with `aws_wafv2_web_acl_association`. Different
+scope, different region, different resource.
+
+Both paths, what each costs and which managed rule groups to start from are in
+[`docs/guides/production.md`](../../docs/guides/production.md) §5. Building the
+module is a roadmap item, not something this README should half-specify.
 
 ## Variables
 

@@ -51,7 +51,9 @@ variable "cost_profile" {
                    instance classes, Fargate Spot, minimal retention, no
                    deletion protection. Expect to tear it down.
       production — managed and durable: NAT egress, multi-AZ, automated backups
-                   with real retention, deletion protection, WAF, alarms.
+                   with real retention, deletion protection, access logs,
+                   alarms. Not a WAF: no module creates one, so the key stays
+                   false on both profiles — see docs/guides/production.md §5.
 
     The two profiles run the *same* code with different inputs. If you ever feel
     the need to branch on cost_profile inside a module, add a key to
