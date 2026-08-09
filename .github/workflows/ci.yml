@@ -24,6 +24,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Declared rather than inherited. A repository's default workflow permissions
+# are a settings toggle, and the permissive setting ("read and write") is still
+# the default on older organisations — which would hand every job here a token
+# that can push to the repository, for jobs that only ever read it. Stating the
+# scope in the file makes it a property of the workflow instead of a property of
+# whoever last touched Settings -> Actions.
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
