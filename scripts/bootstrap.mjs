@@ -243,6 +243,9 @@ function buildReplacements(options) {
     [`${prefix}-queue`, `${options.name}-queue`],
     [`${prefix}-topic`, `${options.name}-topic`],
     [`${prefix}-example`, `${options.name}-example`],
+    // The mkdtemp prefix the lambda e2e spec packages its zip under. Purely
+    // cosmetic, but it is one of the strings a reader greps for.
+    [`${prefix}-lambda-`, `${options.name}-lambda-`],
     [`${prefix}-api`, `${options.name}-api`],
     [`S3_BUCKET_NAME=${CURRENT.bucket}`, `S3_BUCKET_NAME=${options.name}`],
     [`S3_BUCKET_NAME: ${CURRENT.bucket}`, `S3_BUCKET_NAME: ${options.name}`],
