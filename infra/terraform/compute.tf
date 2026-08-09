@@ -121,6 +121,10 @@ locals {
       SQS_ENABLED                   = "true"
       SQS_PAYMENT_WEBHOOK_QUEUE_URL = module.services.payment_webhook_queue_url
 
+      # The provider is constructed, and nothing in apps/api asks it to publish.
+      # The task role holds no sns:Publish either — see modules/services/iam.tf
+      # for why an unused grant is removed rather than scoped. Adding the first
+      # publisher means adding that statement back, not flipping a flag here.
       SNS_ENABLED = "true"
 
       # Every origin a browser can legitimately load a frontend from, including
