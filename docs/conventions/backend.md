@@ -215,9 +215,13 @@ src/modules/note/
 ├── enums/
 │   └── note-status.enum.ts
 └── tests/
-    ├── note.service.spec.ts
-    └── note.e2e-spec.ts
+    └── note.service.spec.ts               # unit specs only
 ```
+
+E2E specs are the one artifact that does **not** live in the module: they boot the
+whole app against real Postgres/Redis/LocalStack, so they sit together in
+`apps/api/test/` (`apps/api/test/note.e2e-spec.ts`) under their own tsconfig and
+vitest config.
 
 Modules that own other artifact kinds add sibling folders under the same rule —
 one kind per folder, even for a single file:
@@ -1085,9 +1089,9 @@ export const s3Config = registerAs('s3', (): S3Config => {
 
 No module merges untested; tests land in the same commit series.
 
-- **Unit** (`tests/*.spec.ts`): services and guards; repository contracts mocked at
-  the interface (token) level — unit tests never touch Prisma.
-- **E2E** (`tests/*.e2e-spec.ts`): supertest against the running app with real
+- **Unit** (`<module>/tests/*.spec.ts`): services and guards; repository contracts
+  mocked at the interface (token) level — unit tests never touch Prisma.
+- **E2E** (`apps/api/test/*.e2e-spec.ts`): supertest against the running app with real
   Postgres/Redis/LocalStack. Per endpoint: happy path + 401 unauthenticated +
   403 forbidden + 404 missing + validation 400 with the exact error `code`.
 - Deepest suites on the security-relevant paths: auth, identity linking, payments.

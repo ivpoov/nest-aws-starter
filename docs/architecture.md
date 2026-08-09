@@ -13,6 +13,8 @@ Related reading:
 - [`docs/decisions/`](./decisions/) — one page per architectural decision, including the
   costs.
 - [`docs/removal/`](./removal/) — generated recipes for deleting optional modules.
+- [`docs/guides/adding-a-module.md`](./guides/adding-a-module.md) — a worked, end-to-end
+  walkthrough building one feature module against every convention.
 - [`docs/guides/container.md`](./guides/container.md) — how the API image is built and run.
 
 ---
