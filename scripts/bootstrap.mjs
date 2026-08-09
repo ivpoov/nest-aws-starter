@@ -19,7 +19,9 @@
 //   - the absolute github.com URLs in SECURITY.md and the issue templates,
 //     and the review owner in .github/CODEOWNERS (see the --repo note below)
 //   - the LICENSE copyright line, when --author is given
-// then regenerates pnpm-lock.yaml.
+// then regenerates pnpm-lock.yaml and re-formats the tree (a shorter scope
+// changes both line widths and import order, so `pnpm run lint` is otherwise
+// red on a freshly renamed clone).
 //
 // Flags:
 //   --name <kebab-name>     required. The new project name.
@@ -400,6 +402,28 @@ function dropDemo(dryRun) {
   log('  removed scripts/bootstrap.mjs');
 }
 
+// Not cosmetic: `@my-app/shared` is shorter than `@nest-aws-starter/shared`,
+// so import statements that had to wrap now fit on one line, and the scope
+// sorts to a different place in the import order. Every one of those is a
+// `biome ci` failure — i.e. `pnpm run lint` is red on a freshly renamed clone
+// until the tree is re-formatted. Runs after `pnpm install`, which is what
+// puts biome on disk in the first place.
+function formatTree() {
+  log('\nre-formatting (the new scope changes line widths and import order)');
+
+  const checked = run('pnpm', ['exec', 'biome', 'check', '--write', '.']);
+
+  if (checked.status === 0) {
+    log('  ok');
+
+    return;
+  }
+
+  log('  biome still reports problems after fixing what it can:');
+  log(checked.output.split('\n').slice(-30).join('\n'));
+  log('  re-run `pnpm exec biome check --write .` and resolve the rest by hand');
+}
+
 function main() {
   const options = validate(parseArgs(process.argv.slice(2)));
   const resolved = resolveRepo(options.repo, options.name);
@@ -435,13 +459,16 @@ function main() {
   if (options.dryRun) return;
 
   if (options.skipInstall) {
-    log('\nskipped pnpm install — pnpm-lock.yaml still holds the old package names');
+    log('\nskipped pnpm install — pnpm-lock.yaml still holds the old package names,');
+    log('and the tree is unformatted: run `pnpm install && pnpm exec biome check --write .`');
   } else {
     log('\nregenerating pnpm-lock.yaml');
 
     const installed = run('pnpm', ['install'], { stdio: 'inherit' });
 
     if (installed.status !== 0) fail('pnpm install failed — see the output above');
+
+    formatTree();
   }
 
   log('\nDone. Still yours to do:');

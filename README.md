@@ -61,7 +61,9 @@ handle. Renaming that by hand is an afternoon of grep. One command instead:
 pnpm bootstrap --name my-app --scope @my-app --author "Jane Doe"
 ```
 
-It rewrites every file git tracks, then regenerates `pnpm-lock.yaml`. Add
+It rewrites every file git tracks, regenerates `pnpm-lock.yaml`, and re-runs
+`biome check --write` — a shorter scope changes line widths and import order,
+so a renamed clone that skipped the format pass fails `pnpm run lint`. Add
 `--dry-run` first if you want to see the list before anything is written.
 
 | flag | what it does |
