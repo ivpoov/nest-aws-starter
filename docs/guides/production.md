@@ -74,9 +74,9 @@ These are the literal values in `local.profile_settings`, not a summary:
 
 | Key | `demo` | `production` |
 | --- | --- | --- |
-| `waf_enabled` | `false` | `true` — **and it creates nothing; see §5** |
+| `waf_enabled` | `false` | `false` — **the one key equal on both profiles; see §5** |
 | `cloudfront_price_class` | `PriceClass_100` | `PriceClass_All` |
-| `cloudfront_logs_enabled` | `false` | `true` |
+| `access_logs_enabled` | `false` | `true` |
 | `log_retention_days` | `7` | `30` |
 | `container_insights` | `false` | `true` |
 | `alarms_enabled` | `false` | `true` |
@@ -688,12 +688,13 @@ writes before `app.useLogger()` runs, and any uncaught exception's stack trace,
 is plain text and will never be counted. Those are startup and crash signals —
 the no-healthy-hosts alarm is what covers them.
 
-**Access logs.** CloudFront standard logs land in the shared access-log bucket
-under `cloudfront/<site>/` when `cloudfront_logs_enabled` is true. **ALB access
-logs are not enabled** — there is no `access_logs` block on `aws_lb.api`. The
-bucket is built to hold them (that is why it lives in the observability module
-rather than the edge one), but nothing delivers them today. If you need
-per-request ALB data during an incident, turn it on before the incident.
+**Access logs.** One bucket, two writers, one switch: when `access_logs_enabled`
+is true — so on `production`, not on `demo` — CloudFront standard logs land in
+the shared access-log bucket under `cloudfront/<site>/`, and the ALB delivers
+into the same bucket under `alb/` via the `access_logs` block on `aws_lb.api`.
+That the bucket lives in the observability module rather than the edge one is
+why it can serve both. ELB batches delivery roughly every five minutes, so ALB
+per-request data lags an incident by about that much.
 
 ### The alarms, and what each one means
 
