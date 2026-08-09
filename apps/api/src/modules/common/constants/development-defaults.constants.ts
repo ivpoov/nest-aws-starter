@@ -48,12 +48,14 @@ export const DEVELOPMENT_DEFAULTS: readonly DevelopmentDefaultInterface[] = [
   {
     variable: 'S3_ACCESS_KEY',
     value: 'minioadmin',
-    remedy: 'use a real S3 credential (this one is the public MinIO default)',
+    remedy:
+      'use a real S3 credential (this one is the public MinIO default), or unset it together with S3_SECRET_KEY and let the task role sign requests',
   },
   {
     variable: 'S3_SECRET_KEY',
     value: 'minioadmin',
-    remedy: 'use a real S3 credential (this one is the public MinIO default)',
+    remedy:
+      'use a real S3 credential (this one is the public MinIO default), or unset it together with S3_ACCESS_KEY and let the task role sign requests',
   },
   {
     variable: 'WEB_APP_BASE_URL',

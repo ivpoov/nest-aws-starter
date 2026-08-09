@@ -9,3 +9,24 @@ coverage/
 .DS_Store
 .claude/settings.local.json
 .superpowers/
+
+# Terraform
+# Provider/module caches, and every form of state. The bootstrap stack keeps
+# its state on local disk by design (it creates the bucket the root stack uses),
+# so *.tfstate must never be committed — it contains the account id and, for
+# later stacks, generated credentials.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+*.tfplan
+crash.log
+crash.*.log
+# Real inputs stay out of a public repository; the *.example files are tracked.
+terraform.tfvars
+*.auto.tfvars
+backend.hcl
+# NOTE: .terraform.lock.hcl is deliberately NOT ignored. These are root stacks,
+# not reusable modules — committing the lock file pins exact provider versions
+# and checksums so CI, every contributor and the one real apply all resolve the
+# same providers.

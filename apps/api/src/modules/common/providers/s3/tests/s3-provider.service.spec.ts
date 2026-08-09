@@ -36,7 +36,32 @@ describe('s3Config', () => {
     vi.stubEnv('S3_SECRET_KEY', 'minioadmin');
     vi.stubEnv('S3_ENDPOINT', 'http://localhost:9010');
 
-    expect(s3Config()).toMatchObject({ isEnabled: true, bucketName: 'starter' });
+    expect(s3Config()).toMatchObject({
+      isEnabled: true,
+      bucketName: 'starter',
+      credentials: { accessKeyId: 'minioadmin', secretAccessKey: 'minioadmin' },
+    });
+  });
+
+  it('omits credentials entirely when no static keys are configured', () => {
+    vi.stubEnv('S3_ENABLED', 'true');
+    vi.stubEnv('AWS_REGION', 'us-east-1');
+    vi.stubEnv('S3_BUCKET_NAME', 'starter');
+    vi.stubEnv('S3_ACCESS_KEY', '');
+    vi.stubEnv('S3_SECRET_KEY', '');
+    vi.stubEnv('S3_ENDPOINT', '');
+
+    expect(s3Config()).toEqual({ isEnabled: true, region: 'us-east-1', bucketName: 'starter' });
+  });
+
+  it('fails boot when only one half of the static key pair is set', () => {
+    vi.stubEnv('S3_ENABLED', 'true');
+    vi.stubEnv('AWS_REGION', 'us-east-1');
+    vi.stubEnv('S3_BUCKET_NAME', 'starter');
+    vi.stubEnv('S3_ACCESS_KEY', 'minioadmin');
+    vi.stubEnv('S3_SECRET_KEY', '');
+
+    expect(() => s3Config()).toThrow(/Invalid configuration/);
   });
 });
 
@@ -55,13 +80,49 @@ describe('DisabledS3ProviderService', () => {
 });
 
 describe('S3ProviderService', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('signs with the configured static keys when they are present', async () => {
+    vi.stubEnv('AWS_ACCESS_KEY_ID', 'chain-key');
+    vi.stubEnv('AWS_SECRET_ACCESS_KEY', 'chain-secret');
+
+    const service: S3ProviderService = new S3ProviderService({
+      isEnabled: true,
+      region: 'us-east-1',
+      bucketName: 'starter',
+      credentials: { accessKeyId: 'static-key', secretAccessKey: 'static-secret' },
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: reaching into the private client to resolve its credentials
+    const identity = await (service as any).client.config.credentials();
+    const accessKeyId: string = identity.accessKeyId;
+
+    expect(accessKeyId).toBe('static-key');
+  });
+
+  it('falls back to the default credential chain when no static keys are configured', async () => {
+    vi.stubEnv('AWS_ACCESS_KEY_ID', 'chain-key');
+    vi.stubEnv('AWS_SECRET_ACCESS_KEY', 'chain-secret');
+
+    const service: S3ProviderService = new S3ProviderService({
+      isEnabled: true,
+      region: 'us-east-1',
+      bucketName: 'starter',
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: reaching into the private client to resolve its credentials
+    const identity = await (service as any).client.config.credentials();
+    const accessKeyId: string = identity.accessKeyId;
+
+    expect(accessKeyId).toBe('chain-key');
+  });
+
   it('uploads through the client and returns the key', async () => {
     const service: S3ProviderService = new S3ProviderService({
       isEnabled: true,
       region: 'us-east-1',
       bucketName: 'starter',
-      accessKeyId: 'a',
-      secretAccessKey: 'b',
+      credentials: { accessKeyId: 'a', secretAccessKey: 'b' },
     });
     const send = vi.fn().mockResolvedValue({});
 
@@ -83,8 +144,7 @@ describe('S3ProviderService', () => {
       isEnabled: true,
       region: 'us-east-1',
       bucketName: 'starter',
-      accessKeyId: 'a',
-      secretAccessKey: 'b',
+      credentials: { accessKeyId: 'a', secretAccessKey: 'b' },
     });
     const send = vi.fn().mockResolvedValue({ ContentLength: 1024, ContentType: 'image/png' });
 
@@ -101,8 +161,7 @@ describe('S3ProviderService', () => {
       isEnabled: true,
       region: 'us-east-1',
       bucketName: 'starter',
-      accessKeyId: 'a',
-      secretAccessKey: 'b',
+      credentials: { accessKeyId: 'a', secretAccessKey: 'b' },
     });
     const notFound = Object.assign(new Error('not found'), { name: 'NotFound' });
     const send = vi.fn().mockRejectedValue(notFound);
