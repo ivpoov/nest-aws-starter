@@ -98,6 +98,9 @@ and the markers themselves.
   - line 47: `notifications           Notification[] // <module:notification>`
   - line 48: `notificationReceipts    NotificationReceipt[] // <module:notification>`
   - lines 349-397 (block)
+- `apps/api/prisma/seed.ts`
+  - lines 727-869 (block)
+  - lines 897-899 (block)
 - `apps/web/src/App.tsx`
   - line 5: `import { NotificationSocketProvider } from './contexts/NotificationSocketContext'; // <module:notification>`
   - line 14: `import { NotificationPreferencesPage } from './pages/NotificationPreferencesPage'; // <module:notification>`
