@@ -100,6 +100,23 @@ jobs:
           WEBSOCKET_ENABLED: "true"
           WEBSOCKET_HEARTBEAT_INTERVAL_MS: "200"
 
+  # The README's headline "make it yours" command, on a pristine clone —
+  # exactly what a newcomer runs first. It went unnoticed that a tracked
+  # symlink added with the docs workspace crashed it (EISDIR) before it wrote
+  # anything, because nothing in CI had ever executed this script. --dry-run
+  # writes nothing, so this is safe to run on every pull request; the working
+  # tree is checked afterwards to prove it.
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/bootstrap.mjs --name smoke-app --scope @smoke-app --author "CI Smoke" --repo smoke/smoke-app --dry-run
+      - name: assert --dry-run wrote nothing
+        run: git diff --exit-code
+
   audit:
     runs-on: ubuntu-latest
     steps:
