@@ -147,6 +147,8 @@ retains forever and bills forever.
 - `local.names.mail_config_set` is unused: an SES configuration set only earns
   its keep once the mail transport passes `ConfigurationSetName`, which it does
   not.
-- Without `domain_name` set, the uploads CORS origin list is `["*"]` — the
-  frontend hostname is assigned by the edge stack and is not knowable here. The
-  presigned signature is what authorizes an upload; CORS is a browser control.
+- The uploads CORS origin list is never `["*"]`. The caller passes
+  `module.edge.cors_origins` — the hostnames the frontends are actually served
+  from, CloudFront-assigned ones included — unless `cors_allowed_origins` pins
+  it by hand. The presigned signature is what authorizes an upload; CORS is a
+  browser control on top of it.

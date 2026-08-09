@@ -7,17 +7,52 @@
 # ever sees var.cost_profile.
 # ---------------------------------------------------------------------------
 
+variable "cors_allowed_origins" {
+  description = <<-EOT
+    Browser origins allowed to run presigned uploads against the uploads bucket.
+
+    Empty by default, and empty is the useful setting: the list is then taken
+    from the edge module, which knows every hostname the two frontends are
+    actually served from — including the *.cloudfront.net ones AWS only assigns
+    at apply time. That is what replaced the old `["*"]` fallback, which is what
+    this stack fell back to whenever domain_name was unset, which is the common
+    case for a demo.
+
+    Set it to pin the list by hand: an extra origin the stack cannot know about
+    (a frontend hosted elsewhere), or a local dev server working against
+    deployed infrastructure, e.g. ["http://localhost:5173"].
+
+    CORS is a browser control, not an authorization control — the presigned
+    signature is what authorizes an upload and it expires in minutes. Narrow
+    this anyway: it is free, and it is the difference between "any page on the
+    internet may drive an upload with a leaked URL" and "the app may".
+  EOT
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for origin in var.cors_allowed_origins :
+      origin == "*" || can(regex("^https?://[a-z0-9.*-]+(:[0-9]{1,5})?$", origin))
+    ])
+    error_message = "Each entry must be an origin — scheme://host with an optional port, no path and no trailing slash (e.g. https://app.example.com, http://localhost:5173) — or the literal \"*\"."
+  }
+}
+
 locals {
-  # Origins allowed to run a presigned PUT from a browser. With a custom domain
-  # this is exact. Without one, the frontend is served from a CloudFront
-  # hostname AWS assigns at apply time in the edge stack, which is not knowable
-  # here — hence the wildcard, which is a browser-side control and not an
-  # authorization one: the presigned signature is what authorizes the upload,
-  # and it expires in minutes. Set domain_name to narrow it.
-  uploads_cors_allowed_origins = var.domain_name == null ? ["*"] : [
-    "https://${var.domain_name}",
-    "https://www.${var.domain_name}",
-  ]
+  # Origins allowed to run a presigned PUT from a browser, and never "*".
+  #
+  # With a custom domain the edge module's list is the apex, www and admin
+  # hostnames; without one it is the CloudFront hostnames AWS assigns at apply
+  # time. Either way it is read from the module rather than rebuilt here, which
+  # is the same source the API's CORS_ORIGINS comes from in compute.tf — so a
+  # browser cannot be allowed to load the app from an origin the bucket then
+  # refuses, or the reverse.
+  uploads_cors_allowed_origins = (
+    length(var.cors_allowed_origins) > 0
+    ? var.cors_allowed_origins
+    : module.edge.cors_origins
+  )
 
   # No mail domain means no SES identity and no ses:SendEmail on the task role:
   # there is nothing to verify and nowhere legitimate to send from. Change the
