@@ -8,9 +8,11 @@ name: deploy
 #   gh workflow run deploy.yml -f sha=<earlier-commit-sha>
 #
 # That is the entire procedure. It works because every image is tagged with the
-# commit SHA that produced it, so an earlier SHA names exactly one artefact.
+# commit SHA that produced it — the runtime image as `<sha>`, the migration
+# image as `migrations-<sha>` — so an earlier SHA names exactly one artefact.
 # `latest` would name whichever build happened to finish last, and "roll back to
-# latest" is not a sentence.
+# latest" is not a sentence. Start the dispatch from the default branch: the
+# commit to deploy is the `sha` input, not the ref the run is started from.
 # ---------------------------------------------------------------------------
 #
 # NO AWS ACCESS KEY. There is one AWS-related secret in this repository and it
@@ -261,13 +263,26 @@ jobs:
       # Every layer is already in the daemon's cache from the step above, so it
       # costs seconds.
       #
-      # The tag is the moving `:migrations` one the migration task definition
-      # points at (Terraform owns that definition; a deployment does not
-      # re-register it). Rolling back re-runs this build from the older commit,
-      # which repoints the tag in step with the runtime image.
+      # TWO TAGS, one image. `ecs run-task` resolves the migration task
+      # definition Terraform owns, and that definition names the moving
+      # `:migrations` tag — a deployment does not re-register it — so that tag
+      # has to be repointed here or the wrong migrations run.
+      #
+      # A moving tag is not an artefact, though. `:migrations` alone answers
+      # "which schema is live?" with "whichever build pushed last", and after a
+      # rollback it answers wrongly. The second tag, `:migrations-<sha>`, is the
+      # same manifest under an immutable name: it makes the image that produced
+      # a given schema addressable forever, exactly as `:<sha>` does for the
+      # runtime image, and it costs nothing — one manifest, two tags, so ECR
+      # stores one image and the retention policy counts one.
+      #
+      # Rolling back re-runs this build from the older commit, which repoints
+      # `:migrations` in step with the runtime image and re-tags the same
+      # historical SHA.
       - name: build and push the migration image
         env:
           MIGRATIONS_IMAGE: ${{ env.ECR_REPOSITORY_URL }}:${{ env.MIGRATIONS_IMAGE_TAG }}
+          MIGRATIONS_IMAGE_SHA: ${{ env.ECR_REPOSITORY_URL }}:${{ env.MIGRATIONS_IMAGE_TAG }}-${{ env.IMAGE_TAG }}
           DOCKER_BUILDKIT: "1"
         run: |
           set -euo pipefail
@@ -277,7 +292,12 @@ jobs:
             --network host \
             --secret id=database_url,env=DATABASE_URL \
             --tag "$MIGRATIONS_IMAGE" \
+            --tag "$MIGRATIONS_IMAGE_SHA" \
             .
+          # The SHA tag first: if the second push fails, the immutable name
+          # exists and the task definition is still pointing at the previous
+          # migration image rather than at nothing.
+          docker push "$MIGRATIONS_IMAGE_SHA"
           docker push "$MIGRATIONS_IMAGE"
 
       # -------------------------------------------------------------------
@@ -533,6 +553,7 @@ jobs:
             echo "| --- | --- |"
             echo "| commit | \`${IMAGE_TAG}\` |"
             echo "| image | \`${ECR_REPOSITORY_URL}:${IMAGE_TAG}\` |"
+            echo "| migration image | \`${ECR_REPOSITORY_URL}:${MIGRATIONS_IMAGE_TAG}-${IMAGE_TAG}\` |"
             echo "| task definition | \`${REVISION:-not registered}\` |"
             echo "| api | ${HEALTH_CHECK_URL} |"
             echo "| cors origins | \`${API_CORS_ORIGINS}\` |"

@@ -418,6 +418,12 @@ variable "migrations_image_tag" {
     workflow builds the Dockerfile's `build` stage — which has the CLI, the
     workspace and prisma/migrations — and pushes it under this tag beside the
     runtime image.
+
+    This tag MOVES: the task definition below names it, and a deployment does
+    not re-register that definition, so each deploy repoints it. The same image
+    is also pushed as `<tag>-<commit-sha>`, which does not move — that is the
+    name to use when you need to know which image applied a given schema, or to
+    retag one by hand. Only this moving tag belongs here.
   EOT
   type        = string
   default     = "migrations"
