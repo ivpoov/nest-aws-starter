@@ -1,0 +1,23 @@
+# Copy to terraform.tfvars and edit. terraform.tfvars is gitignored — this
+# repository is public, so no real account ids, profile names, domains or
+# addresses belong in version control. Everything below is a placeholder.
+
+project_name = "nest-aws-starter"
+environment  = "dev"
+aws_region   = "us-east-1"
+
+# Named AWS CLI profile, or remove the line to use the ambient credential chain
+# (env vars, SSO, or a CI role).
+# profile = "your-aws-profile"
+
+# "demo" for the cheapest disposable stack, "production" for the managed and
+# durable one. Same code, different inputs — see locals.tf.
+cost_profile = "demo"
+
+# Optional. Leave unset to run on the AWS-assigned hostnames with no ACM
+# certificate or Route 53 zone.
+# domain_name = "example.com"
+
+# Optional for demo, required for production: where CloudWatch alarms are sent.
+# AWS mails a subscription confirmation that has to be clicked.
+# alert_email = "alerts@example.com"
