@@ -478,9 +478,18 @@ docs/removal/     # generated per-module removal recipes
 scripts/          # bootstrap rename + subtraction test + removal-recipe generator
 ```
 
-**Read `docs/conventions/backend.md` before writing any backend code** — it is
-the law of this repository, and the `note` module is its living reference
-implementation.
+**Read the conventions before writing code** — they are the law of this
+repository, and reviewers apply them literally:
+
+- [`docs/conventions/backend.md`](./docs/conventions/backend.md) — `apps/api`.
+  The `note` module is its living reference implementation.
+- [`docs/conventions/frontend.md`](./docs/conventions/frontend.md) — `apps/web`
+  and `apps/admin`.
+- [`docs/conventions/shared-contracts.md`](./docs/conventions/shared-contracts.md)
+  — `packages/shared`, the wire contracts all three consume.
+
+How work flows through branches, commits and PRs is a separate concern and lives
+in [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
 ## License
 
