@@ -32,9 +32,10 @@ variable "enable_nat" {
     private-subnet workload genuinely needs outbound internet — pulling images
     from a non-ECR registry, calling a third-party API — and expect the bill.
 
-    Ignored unless the cost profile creates private subnets in the first place:
-    the demo profile has none, so it can never create a NAT gateway however this
-    is set.
+    Ignored unless the cost profile both creates private subnets
+    (`private_subnets_enabled`) and budgets for their egress
+    (`nat_gateway_enabled`). The demo profile does neither, so it can never
+    create a NAT gateway however this is set.
   EOT
   type        = bool
   default     = false
@@ -55,20 +56,19 @@ variable "interface_endpoints" {
 }
 
 locals {
-  # The private tier is a property of the posture, not a separate switch: the
-  # profile that budgets for NAT egress is the profile that has something to put
-  # behind it. There is no `private_subnets_enabled` key in
-  # local.profile_settings today and this file does not own locals.tf, so it
-  # keys off the existing knob that carries the same meaning. If that key is
-  # ever added, point this at it.
-  network_private_tier_enabled = local.profile.nat_gateway_enabled
+  # An explicit key, not nat_gateway_enabled used as a proxy for one. The two
+  # were the same flag until Stage D and should not have been: private subnets
+  # are route tables and address space, which are free, and NAT egress from them
+  # is roughly $32/month per gateway. A stack can legitimately want the first
+  # without the second — that is what the interface_endpoints path is for.
+  network_private_tier_enabled = local.profile.private_subnets_enabled
 
-  # NAT is the product of two independent conditions: the profile must have a
-  # private tier to attach it to, AND the operator must have opted into the
-  # spend. Demo fails the first, so `enable_nat = true` there is a no-op rather
-  # than a surprise invoice.
+  # NAT is the product of three independent conditions: there must be a private
+  # tier to attach it to, the profile must budget for the egress, and the
+  # operator must have opted into the spend. Demo fails the first two, so
+  # `enable_nat = true` there is a no-op rather than a surprise invoice.
   network_nat_gateway_count = (
-    local.network_private_tier_enabled && var.enable_nat
+    local.network_private_tier_enabled && local.profile.nat_gateway_enabled && var.enable_nat
     ? local.profile.nat_gateway_count
     : 0
   )
@@ -123,6 +123,16 @@ check "nat_without_private_subnets" {
   assert {
     condition     = !(var.enable_nat && !local.network_private_tier_enabled)
     error_message = "enable_nat is set, but the selected cost profile creates no private subnets — no NAT gateway will be created and nothing will be billed for one. Setting it here has no effect."
+  }
+}
+
+check "nat_budgeted_without_a_private_tier" {
+  assert {
+    # Profile coherence, not operator error: a profile that budgets for NAT
+    # egress but creates no private subnets has nothing for the gateways to
+    # serve, and every workload sits in a public subnet regardless.
+    condition     = !(local.profile.nat_gateway_enabled && !local.profile.private_subnets_enabled)
+    error_message = "The selected cost profile sets nat_gateway_enabled but leaves private_subnets_enabled false. NAT gateways route egress out of private subnets; with none, no gateway is created and workloads run in the public subnets. Set both keys or neither in local.profile_settings."
   }
 }
 

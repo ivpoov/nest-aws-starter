@@ -39,11 +39,19 @@ locals {
   profile_settings = {
     demo = {
       # network
-      az_count              = 2 # ALB and RDS subnet groups both require >= 2
-      nat_gateway_enabled   = false
-      nat_gateway_count     = 0 # NAT is the single largest fixed cost in a small stack
-      vpc_endpoints_enabled = false
-      vpc_flow_logs_enabled = false
+      #
+      # private_subnets_enabled and nat_gateway_enabled are two keys because
+      # they are two decisions. Private subnets are free — they are route
+      # tables and address space — and egress from them is not. Keying the
+      # tier off the NAT flag, as this file used to, made "I want workloads
+      # off the public internet" and "I am willing to pay ~$32/month per AZ
+      # for their egress" the same sentence.
+      az_count                = 2 # ALB and RDS subnet groups both require >= 2
+      private_subnets_enabled = false
+      nat_gateway_enabled     = false
+      nat_gateway_count       = 0 # NAT is the single largest fixed cost in a small stack
+      vpc_endpoints_enabled   = false
+      vpc_flow_logs_enabled   = false
 
       # data
       #
@@ -106,11 +114,12 @@ locals {
 
     production = {
       # network
-      az_count              = 3
-      nat_gateway_enabled   = true
-      nat_gateway_count     = 3 # one per AZ: a shared NAT is a cross-AZ SPOF
-      vpc_endpoints_enabled = true
-      vpc_flow_logs_enabled = true
+      az_count                = 3
+      private_subnets_enabled = true
+      nat_gateway_enabled     = true
+      nat_gateway_count       = 3 # one per AZ: a shared NAT is a cross-AZ SPOF
+      vpc_endpoints_enabled   = true
+      vpc_flow_logs_enabled   = true
 
       # data
       #
