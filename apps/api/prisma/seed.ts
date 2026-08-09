@@ -2,7 +2,9 @@
 // their own data per-test). Invoke manually:
 //   pnpm --dir apps/api exec prisma db seed
 // or directly:
-//   pnpm --dir apps/api exec tsx prisma/seed.ts   (DATABASE_URL set)
+//   pnpm --dir apps/api exec tsx prisma/seed.ts
+//     (needs DATABASE_URL and NODE_ENV=development|test — the guard below
+//      refuses anything else; `prisma db seed` gets both from .env)
 //
 // Goal: a fresh clone that follows the quick start opens an application with
 // content on every page — an admin, three users in three different states,
@@ -35,9 +37,17 @@ import { ARGON2_OPTIONS } from '../src/modules/auth/constants/auth.constants.js'
 // public. Seeding a production database with them hands an admin account to
 // anyone who read the README, so refuse before the client is even
 // constructed: no connection, no writes, no half-seeded state.
-if (process.env.NODE_ENV === 'production') {
+//
+// Fail CLOSED, on an allowlist. Refusing only NODE_ENV=production would wave
+// through the likeliest accident of all: `prisma db seed` — the command this
+// file's own header and the README document — sets no NODE_ENV, and
+// prisma.config.ts sets none either, so an operator with production
+// credentials exported hits the one case a deny-list never covers.
+const nodeEnv: string | undefined = process.env.NODE_ENV;
+
+if (nodeEnv !== 'development' && nodeEnv !== 'test') {
   console.error(
-    'Refusing to seed: NODE_ENV=production. This script creates demo accounts with publicly documented passwords.',
+    `Refusing to seed: NODE_ENV=${nodeEnv ?? '(unset)'}. This script creates demo accounts with publicly documented passwords — set NODE_ENV=development or NODE_ENV=test to run it.`,
   );
   process.exit(1);
 }
@@ -45,6 +55,40 @@ if (process.env.NODE_ENV === 'production') {
 const connectionString: string | undefined = process.env.DATABASE_URL;
 
 if (!connectionString) throw new Error('DATABASE_URL is not set');
+
+// NODE_ENV is a label an operator sets; DATABASE_URL is where the writes
+// actually land. `NODE_ENV=development` with a production connection string
+// still exported is a normal afternoon, so the destination is checked too.
+//
+// Loopback addresses only. A resolvable hostname is never proof of locality:
+// `postgres` and `db` are the ordinary service names for a *production*
+// Postgres under Docker Compose and for a Kubernetes Service, so allowing them
+// would wave through precisely the operator-with-production-credentials case
+// this guard exists to stop. `localhost` is the one name kept, because RFC 6761
+// reserves it to resolve to loopback and forbids resolvers from querying DNS
+// for it. `0.0.0.0` is the unspecified address, which connects to this machine.
+//
+// The cost is that seeding from *inside* a container against a sibling database
+// container is refused. That is not a workflow this repository documents — its
+// compose stack publishes Postgres on localhost:5433 and the seed is run from
+// the host — and an operator who really wants it can port-forward.
+function isLoopbackHost(host: string): boolean {
+  return host === 'localhost' || host === '::1' || host === '0.0.0.0' || /^127\.\d/.test(host);
+}
+
+// Case is normalised by hand: `postgresql:` is a non-special URL scheme, so
+// WHATWG parsing leaves the host's case alone and `@LOCALHOST` would otherwise
+// be refused with a message no developer can act on.
+const databaseHost: string = URL.canParse(connectionString)
+  ? new URL(connectionString).hostname.replace(/^\[/, '').replace(/\]$/, '').toLowerCase()
+  : '';
+
+if (!isLoopbackHost(databaseHost)) {
+  console.error(
+    `Refusing to seed: DATABASE_URL host "${databaseHost === '' ? '(unparseable)' : databaseHost}" is not a loopback address. Demo data belongs on a local database only.`,
+  );
+  process.exit(1);
+}
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
