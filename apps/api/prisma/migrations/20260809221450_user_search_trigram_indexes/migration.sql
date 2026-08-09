@@ -14,11 +14,14 @@
 -- at registration and when a provider is linked. Neither is on a hot write
 -- path.
 --
--- Requires the pg_trgm extension. It ships with PostgreSQL's contrib modules
--- and is available on RDS/Aurora, Cloud SQL and Azure Database, but CREATE
--- EXTENSION needs an elevated role (rds_superuser on RDS) — if the migration
--- role cannot create it, an operator must run this one statement once by
--- hand before deploying.
+-- Requires the pg_trgm extension. It ships with PostgreSQL's contrib modules,
+-- is available on RDS/Aurora, Cloud SQL and Azure Database, and since
+-- PostgreSQL 13 it is a *trusted* extension: any role with CREATE on the
+-- database may install it, no superuser needed. Verified here — a plain LOGIN
+-- role holding only `GRANT ALL ON DATABASE` ran this statement successfully on
+-- PostgreSQL 18. If a managed provider has removed it from its allowlist, an
+-- operator runs this one statement by hand before deploying; that is the
+-- exception, not the expectation.
 --
 -- Safe on a populated, live database. CREATE EXTENSION is a catalog insert.
 -- The index builds are CONCURRENTLY, so they take SHARE UPDATE EXCLUSIVE
