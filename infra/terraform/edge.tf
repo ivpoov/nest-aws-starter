@@ -58,10 +58,9 @@ locals {
   # Two things the edge consumes but does not own.
   #
   # The access-log bucket belongs to the observability module: access logs are
-  # not a CloudFront concern, and ALB and S3 server access logs want the same
-  # bucket under their own prefixes. It exists only on profiles that set
-  # cloudfront_logs_enabled, and on the others this resolves to null — which is
-  # exactly what the module's
+  # not a CloudFront concern, and the ALB delivers into the same bucket under
+  # its own prefix. It exists only on profiles that set access_logs_enabled, and
+  # on the others this resolves to null — which is exactly what the module's
   # `logging_enabled = false` path expects, so the two switch together off one
   # profile key. That bucket is also the one bucket in this stack with ACLs
   # enabled: CloudFront standard logging delivers by writing an object with an
@@ -105,7 +104,7 @@ module "edge" {
   domain_name = var.domain_name
   price_class = local.profile.cloudfront_price_class
 
-  logging_enabled        = local.profile.cloudfront_logs_enabled
+  logging_enabled        = local.profile.access_logs_enabled
   log_bucket_domain_name = local.edge_log_bucket_domain_name
   web_acl_arn            = local.edge_web_acl_arn
 

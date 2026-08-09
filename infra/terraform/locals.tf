@@ -98,9 +98,9 @@ locals {
       #
       # waf_enabled is false on BOTH profiles — see the note in the production
       # map, which is where a reader expects to find it true.
-      waf_enabled             = false
-      cloudfront_price_class  = "PriceClass_100"
-      cloudfront_logs_enabled = false
+      waf_enabled            = false
+      cloudfront_price_class = "PriceClass_100"
+      access_logs_enabled    = false
 
       # observability
       log_retention_days = 7
@@ -164,9 +164,14 @@ locals {
       # docs/guides/production.md §5. Building the module is a roadmap item;
       # until it exists this key stays false and the check in edge.tf says why
       # if anyone flips it.
-      waf_enabled             = false
-      cloudfront_price_class  = "PriceClass_All"
-      cloudfront_logs_enabled = true
+      waf_enabled            = false
+      cloudfront_price_class = "PriceClass_All"
+
+      # One key, two writers. It was called cloudfront_logs_enabled while
+      # CloudFront was the only one; the ALB now delivers into the same bucket
+      # under its own prefix, and a key named for one of its two consumers is
+      # how the next reader concludes ALB logging must be somewhere else.
+      access_logs_enabled = true
 
       # observability
       log_retention_days = 30

@@ -40,6 +40,28 @@ variable "monthly_budget_amount_usd" {
   }
 }
 
+variable "alb_log_delivery_uses_regional_account" {
+  description = <<-EOT
+    Which AWS identity delivers the load balancer's access logs, and therefore
+    which statement the log bucket's policy needs. Region-dependent, and there is
+    no way for Terraform to work it out on its own.
+
+    Leave it true in any Region launched before August 2022 — us-east-1,
+    eu-west-1, ap-southeast-2 and every other familiar id — where delivery comes
+    from a per-Region ELB account that `data.aws_elb_service_account` resolves.
+
+    Set it to false in a Region launched from August 2022 onward (eu-central-2,
+    me-central-1, il-central-1, ap-south-2, ca-west-1, …). Those deliver as
+    `logdelivery.elasticloadbalancing.amazonaws.com`, which the policy grants
+    unconditionally, and `data.aws_elb_service_account` has no entry for them —
+    so leaving it true fails the plan rather than the apply.
+
+    Only read when the profile creates the access-log bucket.
+  EOT
+  type        = bool
+  default     = true
+}
+
 locals {
   # Reshaped from local.names, not derived here — the module wants the alarm
   # names grouped and local.names is deliberately flat. The custom metric
@@ -78,10 +100,12 @@ locals {
   # edge, and a rename cannot leave the alarm pointing at nothing.
   observability_webhook_dlq_name = element(split(":", module.services.payment_webhook_dlq_arn), 5)
 
-  # The same profile key the edge module's logging_enabled reads, so the bucket
-  # and the distributions that deliver into it can never disagree about whether
-  # it exists. edge.tf consumes access_logs_bucket_domain_name from this module.
-  observability_access_logs_enabled = local.profile.cloudfront_logs_enabled
+  # The same profile key the edge module's logging_enabled reads and the same one
+  # the compute module's access_logs takes, so the bucket and the two things that
+  # deliver into it can never disagree about whether it exists. edge.tf consumes
+  # access_logs_bucket_domain_name from this module; compute.tf consumes
+  # alb_access_logs.
+  observability_access_logs_enabled = local.profile.access_logs_enabled
 }
 
 module "observability" {
@@ -119,6 +143,8 @@ module "observability" {
   access_logs_bucket_enabled = local.observability_access_logs_enabled
   access_logs_retention_days = local.profile.log_retention_days
   access_logs_force_destroy  = local.profile.force_destroy_bucket
+
+  alb_log_delivery_uses_regional_account = var.alb_log_delivery_uses_regional_account
 }
 
 # ---------------------------------------------------------------------------
@@ -186,8 +212,13 @@ output "monthly_budget" {
 }
 
 output "access_logs_bucket_name" {
-  description = "Shared access-log bucket for CloudFront (and any other access logs added later), or null when the profile does not ask for edge logging."
+  description = "Shared access-log bucket, or null when the profile does not ask for access logs. Two writers deliver into it: CloudFront under cloudfront/<site>/ and the load balancer under alb/AWSLogs/<account-id>/elasticloadbalancing/<region>/."
   value       = module.observability.access_logs_bucket_name
+}
+
+output "alb_access_logs" {
+  description = "Whether the load balancer delivers access logs, and the bucket and prefix it delivers to. ELB batches to S3 roughly every five minutes, so an empty prefix shortly after an apply is expected rather than a failure."
+  value       = module.observability.alb_access_logs
 }
 
 output "access_logs_bucket_domain_name" {
