@@ -51,10 +51,11 @@ workspaces + Turborepo · Biome · Vitest + supertest.
 
 ## Make it yours
 
-A starter you cloned is still called `nest-aws-starter` in about 490 places —
+A starter you cloned still carries the original name in about 550 places —
 every `package.json`, every `@nest-aws-starter/shared` import, the compose
-project, the database, the Swagger title, the Terraform `project_name`, the
-image tag. Renaming that by hand is an afternoon of grep. One command instead:
+project, the database, the MinIO bucket, the SQS queues, the SNS topic, the
+Swagger title, the Terraform `project_name`, the image tag, the `CODEOWNERS`
+handle. Renaming that by hand is an afternoon of grep. One command instead:
 
 ```bash
 pnpm bootstrap --name my-app --scope @my-app --author "Jane Doe"
@@ -69,7 +70,7 @@ It rewrites every file git tracks, then regenerates `pnpm-lock.yaml`. Add
 | `--scope` | workspace scope for `packages/shared` and friends. Defaults to `@<name>`. |
 | `--author` | `LICENSE` copyright holder, plus `author` in the root `package.json`. |
 | `--repo` | `owner/repo` for the absolute GitHub URLs (see below). Defaults to this clone's `origin`. |
-| `--db` | Postgres database name. Defaults to `<name>`. |
+| `--db` | Postgres database name. Defaults to `<name>` with dashes as underscores — Terraform's `database_name` rejects dashes. |
 | `--drop-demo` | also delete the `note` demo module — and this script. |
 | `--dry-run` | report, write nothing. |
 

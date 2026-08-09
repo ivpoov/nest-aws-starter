@@ -9,7 +9,11 @@
 //   - the compose project name, which is what names the containers, the
 //     volumes and the network
 //   - the Postgres database name, everywhere it is spelled out (compose,
-//     .env.example, the dev-defaults guard, CI workflows, the docs)
+//     .env.example, the dev-defaults guard, CI workflows, Terraform, the docs)
+//   - the local-infra fixture names: the MinIO bucket and user, the two SQS
+//     queues, the SNS topic and the example Lambda — in the init scripts that
+//     create them and in every spec, preflight check and env file that names
+//     them
 //   - the README title, the Swagger title, the gitleaks config title, the
 //     Terraform project_name, the Docker image tag
 //   - the absolute github.com URLs in SECURITY.md and the issue templates,
@@ -23,7 +27,8 @@
 //   --author "<name>"       LICENSE copyright holder + root package.json author.
 //   --repo <owner/repo>     GitHub owner/repo for the absolute URLs. Defaults
 //                           to this clone's `origin` remote; see below.
-//   --db <name>             Postgres database name. Defaults to <name>.
+//   --db <name>             Postgres database name. Defaults to <name> with
+//                           dashes turned into underscores.
 //   --drop-demo             also delete the `note` demo module and this script.
 //   --dry-run               report what would change; write nothing.
 //   --skip-install          skip the closing `pnpm install`.
@@ -53,6 +58,13 @@ const CURRENT = {
   owner: 'ivpoov',
   repo: 'ivpoov/nest-aws-starter',
   database: 'starter',
+  // The local-infra fixtures are all named after the project too: a MinIO
+  // bucket and user, two SQS queues, an SNS topic and a Lambda function. They
+  // are created by docker/localstack/init-aws.sh and the compose minio-init
+  // job, and named again in .env.example, the e2e specs, the e2e preflight
+  // check and CI. They move as one set or not at all.
+  bucket: 'starter',
+  resourcePrefix: 'starter',
   copyright: 'Copyright (c) 2026 Igor Popov',
 };
 
@@ -144,10 +156,15 @@ function validate(args) {
     fail(`--scope must be an npm scope starting with @ (got "${scope}")`);
   }
 
-  const database = args.database ?? args.name;
+  // Dashes are legal in a Postgres database name but not in Terraform's
+  // `database_name` validation (infra/terraform), so the default converts them
+  // rather than producing a name that only works in half the stack.
+  const database = args.database ?? args.name.replace(/-/g, '_');
 
-  if (!/^[a-zA-Z0-9_-]+$/.test(database)) {
-    fail(`--db must be a plain identifier (got "${database}")`);
+  if (!/^[a-zA-Z][a-zA-Z0-9_]{0,62}$/.test(database)) {
+    fail(
+      `--db must start with a letter and contain only letters, digits and _ (got "${database}")`,
+    );
   }
 
   if (args.author?.includes('\n')) fail('--author must be a single line');
@@ -196,6 +213,8 @@ function resolveRepo(explicit, name) {
 // bare project name inside them, and nothing a replacement produces is ever
 // re-scanned.
 function buildReplacements(options) {
+  const prefix = CURRENT.resourcePrefix;
+
   return [
     [CURRENT.repo, options.repo],
     // .github/CODEOWNERS assigns every review to a GitHub handle. Left alone,
@@ -203,10 +222,34 @@ function buildReplacements(options) {
     // — GitHub cannot satisfy that, so nothing gets approved.
     [`@${CURRENT.owner}`, `@${options.repo.split('/')[0]}`],
     [`${CURRENT.scope}/`, `${options.scope}/`],
+    // Longest-first matters here and below: the bare project name is a prefix
+    // of the image tag `nest-aws-starter-api:dev`, and `starter-api` is a
+    // suffix of it. Whichever alternative starts earliest in the string wins,
+    // so the full name always consumes it before `starter-api` can.
     [CURRENT.name, options.name],
+    // The database. `starter` is also an ordinary English word in this repo's
+    // prose ("this starter ships..."), so every rule below is anchored to the
+    // syntax around it rather than matching the word on its own.
     [`POSTGRES_DB=${CURRENT.database}`, `POSTGRES_DB=${options.database}`],
     [`POSTGRES_DB:-${CURRENT.database}`, `POSTGRES_DB:-${options.database}`],
     [`5433/${CURRENT.database}`, `5433/${options.database}`],
+    // Terraform's `database_name` default, in the root stack and the data
+    // module. Its own validation rejects dashes, which is why --db defaults to
+    // the project name with underscores.
+    [`= "${CURRENT.database}"`, `= "${options.database}"`],
+    // LocalStack and MinIO fixtures, longest name first.
+    [`${prefix}-payment-webhook-queue`, `${options.name}-payment-webhook-queue`],
+    [`${prefix}-api-local-secret`, `${options.name}-api-local-secret`],
+    [`${prefix}-queue`, `${options.name}-queue`],
+    [`${prefix}-topic`, `${options.name}-topic`],
+    [`${prefix}-example`, `${options.name}-example`],
+    [`${prefix}-api`, `${options.name}-api`],
+    [`S3_BUCKET_NAME=${CURRENT.bucket}`, `S3_BUCKET_NAME=${options.name}`],
+    [`S3_BUCKET_NAME: ${CURRENT.bucket}`, `S3_BUCKET_NAME: ${options.name}`],
+    [`local/${CURRENT.bucket}`, `local/${options.name}`],
+    // The bucket name as a JS string literal: its fallback in the e2e
+    // bucket helper, and the fixtures throughout the s3 config specs.
+    [`'${CURRENT.bucket}'`, `'${options.name}'`],
   ];
 }
 
