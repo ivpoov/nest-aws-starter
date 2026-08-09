@@ -58,25 +58,34 @@ if (!connectionString) throw new Error('DATABASE_URL is not set');
 
 // NODE_ENV is a label an operator sets; DATABASE_URL is where the writes
 // actually land. `NODE_ENV=development` with a production connection string
-// still exported is a normal afternoon, so the destination is checked too —
-// a Docker service name or a loopback address, or the seed refuses.
-const LOCAL_DATABASE_HOSTS: readonly string[] = [
-  'localhost',
-  '127.0.0.1',
-  '::1',
-  '0.0.0.0',
-  'host.docker.internal',
-  'postgres',
-  'db',
-];
+// still exported is a normal afternoon, so the destination is checked too.
+//
+// Loopback addresses only. A resolvable hostname is never proof of locality:
+// `postgres` and `db` are the ordinary service names for a *production*
+// Postgres under Docker Compose and for a Kubernetes Service, so allowing them
+// would wave through precisely the operator-with-production-credentials case
+// this guard exists to stop. `localhost` is the one name kept, because RFC 6761
+// reserves it to resolve to loopback and forbids resolvers from querying DNS
+// for it. `0.0.0.0` is the unspecified address, which connects to this machine.
+//
+// The cost is that seeding from *inside* a container against a sibling database
+// container is refused. That is not a workflow this repository documents — its
+// compose stack publishes Postgres on localhost:5433 and the seed is run from
+// the host — and an operator who really wants it can port-forward.
+function isLoopbackHost(host: string): boolean {
+  return host === 'localhost' || host === '::1' || host === '0.0.0.0' || /^127\.\d/.test(host);
+}
 
+// Case is normalised by hand: `postgresql:` is a non-special URL scheme, so
+// WHATWG parsing leaves the host's case alone and `@LOCALHOST` would otherwise
+// be refused with a message no developer can act on.
 const databaseHost: string = URL.canParse(connectionString)
-  ? new URL(connectionString).hostname.replace(/^\[/, '').replace(/\]$/, '')
+  ? new URL(connectionString).hostname.replace(/^\[/, '').replace(/\]$/, '').toLowerCase()
   : '';
 
-if (!LOCAL_DATABASE_HOSTS.includes(databaseHost)) {
+if (!isLoopbackHost(databaseHost)) {
   console.error(
-    `Refusing to seed: DATABASE_URL host "${databaseHost === '' ? '(unparseable)' : databaseHost}" is not local. Demo data belongs on a local database only.`,
+    `Refusing to seed: DATABASE_URL host "${databaseHost === '' ? '(unparseable)' : databaseHost}" is not a loopback address. Demo data belongs on a local database only.`,
   );
   process.exit(1);
 }

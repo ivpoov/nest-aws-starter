@@ -77,6 +77,38 @@ describe('demo seed production guard (e2e)', () => {
     expect(result.stderr).toContain('db.production.example.com');
   });
 
+  // "postgres" and "db" are the ordinary service names for a *production*
+  // Postgres in Docker Compose and for a Kubernetes Service. A hostname is not
+  // proof of locality, so only addresses that cannot leave the machine are
+  // allowed — a resolvable name never qualifies.
+  it.each([
+    'postgres',
+    'db',
+    'postgres.default.svc.cluster.local',
+  ])('refuses a resolvable service-name host (%s)', (host: string) => {
+    const result: SpawnSyncReturns<string> = runSeed({
+      NODE_ENV: 'development',
+      DATABASE_URL: `postgresql://postgres:postgres@${host}:5432/starter`,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Refusing to seed: DATABASE_URL host');
+    expect(result.stderr).toContain(host);
+  });
+
+  // `postgresql:` is a non-special URL scheme, so WHATWG parsing leaves the
+  // host's case alone. Without normalising, a capitalised host fails closed
+  // with a refusal the developer cannot make sense of.
+  it('accepts a loopback host whatever its case', () => {
+    const result: SpawnSyncReturns<string> = runSeed({
+      NODE_ENV: 'development',
+      DATABASE_URL: 'postgresql://postgres:postgres@LOCALHOST:5433/starter?connection_limit=10',
+    });
+
+    expect(result.stderr).not.toContain('Refusing to seed');
+    expect(result.status).toBe(0);
+  });
+
   it('prints no credentials and writes nothing when it refuses', () => {
     const result: SpawnSyncReturns<string> = runSeed({ NODE_ENV: 'production' });
     const output: string = `${result.stdout}${result.stderr}`;
