@@ -42,7 +42,7 @@ export class HttpClientService {
     const response: Response = await fetch(url, {
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
     }).catch((caught: unknown): never => {
-      this.logger.warn(`GET ${url} download failed: ${String(caught)}`);
+      this.logger.warn(`GET ${this.redactUrl(url)} download failed: ${String(caught)}`);
 
       throw new InternalError(HTTP_REQUEST_FAILED);
     });
@@ -79,7 +79,7 @@ export class HttpClientService {
       });
 
       this.logger.log(
-        `${options.method} ${options.url} ${response.status} ${Date.now() - startedAt}ms`,
+        `${options.method} ${this.redactUrl(options.url)} ${response.status} ${Date.now() - startedAt}ms`,
       );
 
       if (!response.ok) {
@@ -89,7 +89,7 @@ export class HttpClientService {
       return { ok: true, data: await this.parseBody<T>(response) };
     } catch (caught) {
       this.logger.warn(
-        `${options.method} ${options.url} failed after ${Date.now() - startedAt}ms: ${String(caught)}`,
+        `${options.method} ${this.redactUrl(options.url)} failed after ${Date.now() - startedAt}ms: ${String(caught)}`,
       );
 
       return { ok: false, status: null, retryable: true };
@@ -100,6 +100,21 @@ export class HttpClientService {
     const raw: string = await response.text();
 
     return raw === '' ? (undefined as T) : (JSON.parse(raw) as T);
+  }
+
+  // Origin and path only — the query string never reaches a log line. Callers
+  // put client secrets, access tokens and one-time codes in search params
+  // (several OAuth providers document exactly that), and this service is the
+  // single choke point every outbound request passes through, so redacting
+  // here protects every present and future caller rather than one of them.
+  // Conventions: "never log secrets, tokens, passwords, or raw bodies of auth
+  // endpoints" (docs/conventions/backend.md).
+  private redactUrl(rawUrl: string): string {
+    if (!URL.canParse(rawUrl)) return '[unparseable-url]';
+
+    const parsed: URL = new URL(rawUrl);
+
+    return `${parsed.origin}${parsed.pathname}`;
   }
 
   private pause(ms: number): Promise<void> {
