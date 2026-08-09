@@ -78,9 +78,9 @@ locals {
   # edge, and a rename cannot leave the alarm pointing at nothing.
   observability_webhook_dlq_name = element(split(":", module.services.payment_webhook_dlq_arn), 5)
 
-  # The edge stack asks for CloudFront access logs on the production profile and
-  # has had nowhere to put them. This is the switch that creates the bucket; see
-  # the check at the bottom of this file for the one wire still missing.
+  # The same profile key the edge module's logging_enabled reads, so the bucket
+  # and the distributions that deliver into it can never disagree about whether
+  # it exists. edge.tf consumes access_logs_bucket_domain_name from this module.
   observability_access_logs_enabled = local.profile.cloudfront_logs_enabled
 }
 
@@ -140,22 +140,6 @@ check "budget_without_a_recipient" {
   }
 }
 
-check "access_logs_bucket_not_wired_to_the_edge" {
-  assert {
-    # Half of edge.tf's `edge_supporting_resources` warning is now answerable:
-    # the bucket exists on any profile that asks for CloudFront logs. What is
-    # still missing is one line in edge.tf, which this file does not own —
-    # local.edge_log_bucket_domain_name has to be pointed at
-    # module.observability.access_logs_bucket_domain_name. Until it is, the
-    # bucket is created and nothing writes to it.
-    condition = !local.observability_access_logs_enabled
-    error_message = join(" ", [
-      "The selected cost profile enables CloudFront access logs and this stack now creates the bucket for them, but edge.tf still passes log_bucket_domain_name = null.",
-      "Set local.edge_log_bucket_domain_name in edge.tf to module.observability.access_logs_bucket_domain_name to complete the wiring — until then the bucket exists and receives nothing.",
-    ])
-  }
-}
-
 # ---------------------------------------------------------------------------
 # Outputs
 # ---------------------------------------------------------------------------
@@ -207,6 +191,6 @@ output "access_logs_bucket_name" {
 }
 
 output "access_logs_bucket_domain_name" {
-  description = "Regional domain name of the access-log bucket. This is the value edge.tf's local.edge_log_bucket_domain_name needs; the check above is what keeps that missing wire visible."
+  description = "Regional domain name of the access-log bucket, or null when the profile does not ask for edge logging. This is what edge.tf passes to the edge module as log_bucket_domain_name."
   value       = module.observability.access_logs_bucket_domain_name
 }
