@@ -73,11 +73,12 @@ locals {
     autoscaling_cpu_policy = local.names.autoscaling_cpu_policy
   }
 
-  # One repository, not two. local.names carries an ecr_web name, but apps/web
-  # and apps/admin are static Vite builds served from S3 through CloudFront (see
-  # edge.tf) — there is no web container to store, and an empty repository that
-  # exists "in case" is a resource nobody can explain later. Add the key here and
-  # to the services module's ecr_repository_names together if that changes.
+  # One repository, not two. apps/web and apps/admin are static Vite builds
+  # served from S3 through CloudFront (see edge.tf) — there is no web container
+  # to store, and an empty repository that exists "in case" is a resource nobody
+  # can explain later. local.names carries no ecr_web key for the same reason.
+  # Adding one means adding it here and to the services module's
+  # ecr_repository_names together, so the execution role can pull what it stores.
   compute_ecr_repositories = {
     api = local.names.ecr_api
   }

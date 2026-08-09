@@ -78,7 +78,10 @@ module "services" {
 
   task_role_name           = local.names.task_role
   task_execution_role_name = local.names.task_execution_role
-  ecr_repository_names     = [local.names.ecr_api, local.names.ecr_web]
+  # One repository. apps/web and apps/admin are static Vite builds served from
+  # S3 through CloudFront (edge.tf), so there is no web image to pull and the
+  # execution role is not given a repository to pull it from.
+  ecr_repository_names = [local.names.ecr_api]
 
   # One prefix rather than a list of groups: the execution role is scoped to it
   # with a trailing wildcard, so adding a service does not mean widening IAM.

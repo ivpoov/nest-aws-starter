@@ -53,10 +53,10 @@ variable "create_github_oidc_provider" {
 # Both from local.names. The manifest parameter lives under the same
 # /<project>/<environment> path as every other parameter this stack writes.
 #
-# local.names.deploy_role and local.names.artifacts_bucket are deliberately not
-# used. There is no second deploy role (the OIDC role is the deploy identity)
-# and no build-artifact bucket (images go to ECR, frontends go straight to the
-# site buckets) — an empty bucket that exists "for artifacts" is a resource
+# There is no separate deploy role and no build-artifact bucket, and local.names
+# no longer carries a key for either. The OIDC role IS the deploy identity, and
+# there is nothing to store: images go to ECR and the frontends go straight to
+# the site buckets. An empty bucket that exists "for artifacts" is a resource
 # nobody can explain a year later.
 # ---------------------------------------------------------------------------
 

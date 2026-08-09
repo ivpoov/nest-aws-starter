@@ -79,7 +79,7 @@ check in `file.service.ts` becomes a 500. Read-only, bucket-level, this bucket.
 | Purpose                        | IAM action                                                              | Resource scope           |
 | ------------------------------ | ----------------------------------------------------------------------- | ------------------------ |
 | Registry auth for image pull   | `ecr:GetAuthorizationToken`                                             | `*` — see below          |
-| Image pull                     | `ecr:BatchCheckLayerAvailability`, `ecr:GetDownloadUrlForLayer`, `ecr:BatchGetImage` | this stack's two repositories |
+| Image pull                     | `ecr:BatchCheckLayerAvailability`, `ecr:GetDownloadUrlForLayer`, `ecr:BatchGetImage` | this stack's `api` repository |
 | Container logs                 | `logs:CreateLogStream`, `logs:PutLogEvents`                             | `/aws/ecs/<prefix>*`     |
 | Task-definition `secrets`      | `ssm:GetParameters`                                                     | `<ssm prefix>/*`         |
 
@@ -144,9 +144,9 @@ retains forever and bills forever.
 - Nothing reads the DLQ. The observability stack should alarm on
   `ApproximateNumberOfMessagesVisible` on `payment_webhook_dlq_arn` — a DLQ
   nobody watches is a folder of lost payments.
-- `local.names.mail_config_set` is unused: an SES configuration set only earns
-  its keep once the mail transport passes `ConfigurationSetName`, which it does
-  not.
+- There is no SES configuration set and no name reserved for one. A
+  configuration set only earns its keep once the mail transport passes
+  `ConfigurationSetName`, which `SesMailTransportService` does not.
 - The uploads CORS origin list is never `["*"]`. The caller passes
   `module.edge.cors_origins` — the hostnames the frontends are actually served
   from, CloudFront-assigned ones included — unless `cors_allowed_origins` pins

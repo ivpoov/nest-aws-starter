@@ -168,9 +168,19 @@ locals {
 # ---------------------------------------------------------------------------
 # Derived names
 #
-# Nothing in Stage D is hand-named. Every module takes its names from this map
-# (or builds them from local.name_prefix for names that are per-instance, e.g.
-# one log group per service). Adding a resource means adding a key here first.
+# Nothing in this stack is hand-named. Every module takes its names from this
+# map; the wiring files reshape it into whatever object a module's variable
+# declares, and none of them build a name out of local.name_prefix themselves.
+#
+# The rule runs both ways. Adding a resource means adding a key here first —
+# and a key with no resource behind it comes back out, because a name for
+# something that does not exist reads exactly like a name for something that
+# does, and sends the next reader looking for it in the console.
+#
+# The one deliberate exception is `waf_web_acl`: the production profile sets
+# waf_enabled, no module creates a web ACL yet, and the check in edge.tf is
+# what keeps that gap loud rather than letting the key quietly imply it is
+# handled.
 #
 # Watch the AWS length limits noted inline — a long project_name plus a long
 # environment can overflow them, hence the substr() guards.
@@ -184,7 +194,6 @@ locals {
     nat_gateway                  = "${local.name_prefix}-nat"
     public_subnet                = "${local.name_prefix}-public"
     private_subnet               = "${local.name_prefix}-private"
-    isolated_subnet              = "${local.name_prefix}-isolated"
     flow_log_group               = "/aws/vpc/${local.name_prefix}"
     flow_log_role                = "${local.name_prefix}-vpc-flow-logs"
     security_group_alb           = "${local.name_prefix}-alb-sg"
@@ -197,17 +206,14 @@ locals {
     database_identifier      = "${local.name_prefix}-db"
     database_subnet_group    = "${local.name_prefix}-db-subnets"
     database_parameter_group = "${local.name_prefix}-db-params"
-    database_secret          = "${local.secret_prefix}/database"
     cache_cluster            = substr("${local.name_prefix}-cache", 0, 40) # ElastiCache: 40
     cache_subnet_group       = "${local.name_prefix}-cache-subnets"
-    assets_bucket            = "${local.name_prefix}-assets-${local.bucket_suffix}"
     uploads_bucket           = "${local.name_prefix}-uploads-${local.bucket_suffix}"
     logs_bucket              = "${local.name_prefix}-logs-${local.bucket_suffix}"
 
     # compute
     ecs_cluster            = "${local.name_prefix}-cluster"
     ecr_api                = "${local.name_prefix}/api"
-    ecr_web                = "${local.name_prefix}/web"
     task_definition_api    = "${local.name_prefix}-api"
     ecs_service_api        = "${local.name_prefix}-api"
     alb                    = substr("${local.name_prefix}-alb", 0, 32)    # ELBv2: 32
@@ -238,9 +244,7 @@ locals {
     # prefix the execution role's CreateLogStream statement is scoped to, and a
     # group outside it fails to open a stream.
     alerts_topic         = "${local.name_prefix}-alerts"
-    dashboard            = "${local.name_prefix}-overview"
     api_log_group        = "${local.ecs_log_group_prefix}/api"
-    web_log_group        = "${local.ecs_log_group_prefix}/web"
     migrations_log_group = "${local.ecs_log_group_prefix}/migrations"
     budget               = "${local.name_prefix}-monthly"
     error_metric_filter  = "${local.name_prefix}-api-errors"
@@ -254,8 +258,6 @@ locals {
     alarm_webhook_dlq_depth     = "${local.name_prefix}-webhook-dlq-depth"
 
     # ci/cd
-    artifacts_bucket          = "${local.name_prefix}-artifacts-${local.bucket_suffix}"
-    deploy_role               = "${local.name_prefix}-deploy"
     github_oidc_role          = "${local.name_prefix}-github-actions"
     deploy_manifest_parameter = "${local.secret_prefix}/cicd/deploy-manifest"
     task_execution_role       = "${local.name_prefix}-task-execution"
