@@ -10,7 +10,7 @@ import { ContactUsModule } from '@modules/contact-us/contact-us.module.js'; // <
 import { EventModule } from '@modules/event/event.module.js';
 import { FileModule } from '@modules/file/file.module.js'; // <module:file>
 import { HealthModule } from '@modules/health/health.module.js';
-import { NoteModule } from '@modules/note/note.module.js';
+import { NoteModule } from '@modules/note/note.module.js'; // <module:note>
 import { NotificationModule } from '@modules/notification/notification.module.js'; // <module:notification>
 import { OauthModule } from '@modules/oauth/oauth.module.js';
 import { DiscordOauthModule } from '@modules/oauth-discord/discord-oauth.module.js'; // <module:oauth-discord>
@@ -73,7 +73,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     GoogleOauthModule, // <module:oauth-google>
     FacebookOauthModule, // <module:oauth-facebook>
     DiscordOauthModule, // <module:oauth-discord>
-    NoteModule,
+    NoteModule, // <module:note>
     FileModule, // <module:file>
     NotificationModule, // <module:notification>
     ActivityModule,

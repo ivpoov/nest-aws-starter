@@ -131,25 +131,25 @@ and the markers themselves.
 - `apps/api/prisma/schema.prisma`
   - line 44: `subscriptions           Subscription[] // <module:payment>`
   - line 45: `paymentTransactions     PaymentTransaction[] // <module:payment>`
-  - lines 251-347 (block)
+  - lines 254-350 (block)
 - `apps/api/prisma/seed.ts`
   - lines 380-571 (block)
   - lines 667-684 (block)
   - lines 795-820 (block)
   - lines 893-895 (block)
 - `apps/web/src/App.tsx`
-  - line 6: `import { BillingCanceledPage } from './pages/BillingCanceledPage'; // <module:payment>`
-  - line 7: `import { BillingPage } from './pages/BillingPage'; // <module:payment>`
-  - line 8: `import { BillingSuccessPage } from './pages/BillingSuccessPage'; // <module:payment>`
-  - line 16: `import { PricingPage } from './pages/PricingPage'; // <module:payment>`
-  - lines 35-39 (block)
-  - lines 49-51 (block)
-- `apps/web/src/components/Layout/AppLayout.tsx`
-  - line 14: `{ to: '/settings/billing', label: 'Billing' }, // <module:payment>`
+  - line 7: `import { BillingCanceledPage } from './pages/BillingCanceledPage'; // <module:payment>`
+  - line 8: `import { BillingPage } from './pages/BillingPage'; // <module:payment>`
+  - line 9: `import { BillingSuccessPage } from './pages/BillingSuccessPage'; // <module:payment>`
+  - line 17: `import { PricingPage } from './pages/PricingPage'; // <module:payment>`
+  - lines 36-40 (block)
+  - lines 52-54 (block)
+- `apps/web/src/constants/app-nav-items.constants.ts`
+  - line 13: `{ to: '/settings/billing', label: 'Billing' }, // <module:payment>`
 - `apps/web/src/pages/LoginPage.tsx`
-  - lines 64-69 (block)
+  - lines 65-70 (block)
 - `apps/web/src/pages/RegisterPage.tsx`
-  - lines 62-67 (block)
+  - lines 63-68 (block)
 - `apps/web/src/tests/resolveNotificationLink.spec.ts`
   - lines 13-18 (block)
   - lines 39-52 (block)

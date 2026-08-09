@@ -38,7 +38,7 @@ model User {
   // Sessions this user (as an admin) is currently impersonating a target
   // through — back-relation only, never queried from the User side today.
   impersonatedByMe        Session[]                @relation("SessionSignedAsAdmin")
-  notes                   Note[]
+  notes                   Note[] // <module:note>
   files                   File[] // <module:file>
   apiKeys                 ApiKey[] // <module:api-key>
   subscriptions           Subscription[] // <module:payment>
@@ -96,6 +96,7 @@ model Session {
   @@map("sessions")
 }
 
+// <module:note>
 enum NoteStatus {
   ACTIVE
   ARCHIVED
@@ -116,6 +117,8 @@ model Note {
   @@index([status])
   @@map("notes")
 }
+
+// </module:note>
 
 enum ActivityType {
   USER_REGISTERED

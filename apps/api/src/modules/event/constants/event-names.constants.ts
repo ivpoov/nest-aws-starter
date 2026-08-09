@@ -1,4 +1,4 @@
-export const NOTE_CREATED_EVENT = 'note.created';
+export const NOTE_CREATED_EVENT = 'note.created'; // <module:note>
 export const USER_OAUTH_REGISTERED_EVENT = 'user.oauth-registered';
 export const USER_REGISTERED_EVENT = 'user.registered';
 export const AUTH_LOGIN_EVENT = 'auth.login';

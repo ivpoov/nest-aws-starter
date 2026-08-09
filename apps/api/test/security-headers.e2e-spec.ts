@@ -69,8 +69,11 @@ describe('security headers', () => {
       expect(response.headers['strict-transport-security']).toBeUndefined();
     });
 
+    // Deliberately a core, non-removable route: any authenticated endpoint
+    // produces the 401 this asserts on, and picking an optional module's route
+    // would turn that module's removal into a failing security test.
     it('hardens error responses too, not only successful ones', async () => {
-      const response = await request(app.getHttpServer()).get('/api/v1/notes').expect(401);
+      const response = await request(app.getHttpServer()).get('/api/v1/users/me').expect(401);
 
       expect(response.headers['x-content-type-options']).toBe('nosniff');
       expect(response.headers['content-security-policy']).toContain("default-src 'none'");
