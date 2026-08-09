@@ -10,8 +10,9 @@
 #
 # There are deliberately NO entries in this file. Every advisory it previously
 # suppressed was fixed instead, by the pinned overrides in pnpm-workspace.yaml:
-# nanoid, shell-quote and @prisma/dev (which carried hono, @hono/node-server
-# and valibot). The scan is clean on its own merits, with nothing filtered.
+# nanoid, shell-quote, @prisma/dev (which carried hono, @hono/node-server and
+# valibot) and hyperid (which carried uuid). The scan is clean on its own
+# merits, with nothing filtered.
 #
 # POLICY, should an entry ever be needed again:
 #   * Suppression is the last resort, not the first. If a fixed release

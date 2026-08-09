@@ -1,6 +1,17 @@
-# The root stack has no resources yet — modules land in PRs 10-16. These
-# outputs exist so `terraform plan` on a fresh clone shows you what the inputs
-# resolved to before anything is created.
+# Stack-wide outputs: the identity the stack resolved to, and the inputs every
+# module was handed.
+#
+# Nothing here belongs to a module. Each module's own outputs are declared
+# beside the `module` block that creates it — network.tf, datastores.tf,
+# services.tf, compute.tf, edge.tf, observability.tf, cicd.tf — so an output and
+# its source stay in the same file. What is left is this file: the account,
+# region and partition the provider resolved, the name prefix everything derives
+# from, and the two maps a reader most often wants to see before applying.
+#
+# cost_profile_settings and resource_names are the useful pair. Diffing
+# cost_profile_settings between `demo` and `production` is how you audit the
+# whole cost surface without reading locals.tf, and resource_names is the
+# complete list of what an apply will create, by name, before it exists.
 
 output "account_id" {
   description = "AWS account the stack is targeting."

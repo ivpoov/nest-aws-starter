@@ -23,8 +23,9 @@
 #      of engines). Putting migrations in the entrypoint means putting the CLI
 #      back into every running task, permanently, for something that runs once.
 #
-# So: Terraform defines the task definition, and the deploy workflow (PR 16)
-# runs it as a discrete step and fails the deployment on a non-zero exit code
+# So: Terraform defines the task definition, and the deploy workflow in
+# .github/workflows/ runs it as a discrete step and fails the deployment on a
+# non-zero exit code
 # before it touches the service. The contract is spelled out — command and all —
 # in the migration_task_contract output.
 # ---------------------------------------------------------------------------

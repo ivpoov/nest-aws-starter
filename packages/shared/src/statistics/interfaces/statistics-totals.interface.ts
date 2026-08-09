@@ -7,8 +7,8 @@ export interface StatisticsTotalsInterface {
   // the single reporting currency the starter assumes (see
   // STATISTIC_REPORTING_CURRENCY). Null when the payment module is absent
   // (subtraction-removable) — same shape as the v0.3 stub.
-  readonly revenue: number | null;
+  readonly revenueCents: number | null;
   // Monthly recurring revenue: active subscriptions' plan amounts normalized
-  // to a 30-day month. Null under the same condition as `revenue`.
+  // to a 30-day month. Null under the same condition as `revenueCents`.
   readonly mrrCents: number | null;
 }

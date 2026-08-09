@@ -6,6 +6,7 @@
     "node": ">=24.0.0"
   },
   "scripts": {
+    "benchmark": "node scripts/benchmark.mjs",
     "bootstrap": "node scripts/bootstrap.mjs",
     "build": "turbo run build",
     "lint": "turbo run lint",
@@ -19,6 +20,7 @@
     "@biomejs/biome": "2.5.2",
     "@commitlint/cli": "21.2.0",
     "@commitlint/config-conventional": "21.2.0",
+    "autocannon": "8.0.0",
     "husky": "9.1.7",
     "turbo": "2.10.2"
   }

@@ -9,9 +9,9 @@ import { installWebsocketAdapter } from '@modules/notification/helpers/install-w
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { AppModule } from '@src/app.module.js';
 import { config as loadEnv } from 'dotenv';
 import type { FastifyReply, FastifyRequest, HookHandlerDoneFunction } from 'fastify';
-import { AppModule } from './app.module.js';
 
 async function bootstrap(): Promise<void> {
   // ConfigModule's own .env loading only runs once AppModule resolves, which

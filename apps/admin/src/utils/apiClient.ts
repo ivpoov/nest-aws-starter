@@ -66,10 +66,10 @@ async function requestRefresh(): Promise<boolean> {
 }
 
 export const apiClient = {
-  get<T>(path: string, isPublic = false): Promise<T> {
+  get<T>(path: string, isPublic: boolean = false): Promise<T> {
     return performRequest<T>({ method: 'GET', path, isPublic }, true);
   },
-  post<T>(path: string, body?: unknown, isPublic = false): Promise<T> {
+  post<T>(path: string, body?: unknown, isPublic: boolean = false): Promise<T> {
     return performRequest<T>({ method: 'POST', path, body, isPublic }, true);
   },
   patch<T>(path: string, body: unknown): Promise<T> {

@@ -183,7 +183,9 @@ export const MODULES = [
       'apps/admin/src/interfaces/use-statistics-series-result.interface.ts',
       'apps/admin/src/pages/StatisticsPage.tsx',
       'apps/admin/src/utils/chartColors.ts',
-      'apps/admin/src/utils/formatMoney.ts',
+      // formatMoney.ts deliberately stays: it is a module-agnostic cents →
+      // currency-string helper shared by the Statistics tiles/charts AND by
+      // payment's PlansPage and TransactionList, so neither module owns it.
       'apps/admin/src/tests/AuthMethodBreakdown.spec.tsx',
       'apps/admin/src/tests/KpiTiles.spec.tsx',
       'apps/admin/src/tests/RegistrationsChart.spec.tsx',

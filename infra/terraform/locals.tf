@@ -95,9 +95,12 @@ locals {
       compute_max_capacity     = 1
 
       # edge
-      waf_enabled             = false
-      cloudfront_price_class  = "PriceClass_100"
-      cloudfront_logs_enabled = false
+      #
+      # waf_enabled is false on BOTH profiles — see the note in the production
+      # map, which is where a reader expects to find it true.
+      waf_enabled            = false
+      cloudfront_price_class = "PriceClass_100"
+      access_logs_enabled    = false
 
       # observability
       log_retention_days = 7
@@ -143,9 +146,32 @@ locals {
       compute_max_capacity     = 6
 
       # edge
-      waf_enabled             = true
-      cloudfront_price_class  = "PriceClass_All"
-      cloudfront_logs_enabled = true
+      #
+      # waf_enabled is FALSE here, on the production profile, and that is the
+      # accurate value rather than the aspirational one. No module in this stack
+      # creates a web ACL, so `true` bought nothing except a setting that reads
+      # as "WAF: yes" in a review.
+      #
+      # It was also aimed at the wrong tier. The only CloudFront distributions
+      # this stack creates are the two static SPA sites — content-hashed Vite
+      # output behind Origin Access Control, with no origin logic for a WAF to
+      # protect. The tier that would earn one is the API behind the ALB, and
+      # that needs a REGIONAL web ACL in this stack's own region, which is a
+      # different scope and a different region from the CLOUDFRONT-scoped
+      # us-east-1 shape the edge module's web_acl_arn input takes.
+      #
+      # Both paths, and what each costs, are written up in
+      # docs/guides/production.md §5. Building the module is a roadmap item;
+      # until it exists this key stays false and the check in edge.tf says why
+      # if anyone flips it.
+      waf_enabled            = false
+      cloudfront_price_class = "PriceClass_All"
+
+      # One key, two writers. It was called cloudfront_logs_enabled while
+      # CloudFront was the only one; the ALB now delivers into the same bucket
+      # under its own prefix, and a key named for one of its two consumers is
+      # how the next reader concludes ALB logging must be somewhere else.
+      access_logs_enabled = true
 
       # observability
       log_retention_days = 30
@@ -175,10 +201,12 @@ locals {
 # something that does not exist reads exactly like a name for something that
 # does, and sends the next reader looking for it in the console.
 #
-# The one deliberate exception is `waf_web_acl`: the production profile sets
-# waf_enabled, no module creates a web ACL yet, and the check in edge.tf is
-# what keeps that gap loud rather than letting the key quietly imply it is
-# handled.
+# There are no exceptions to that rule in this map. `waf_web_acl` used to be
+# one — a CLOUDFRONT-shaped name for a web ACL no module creates — and it is
+# gone, because a name is the first thing a reader searches the console for.
+# When a WAF module lands it will bring its own name back, and for the API tier
+# that name is REGIONAL-scoped and lives in this stack's region rather than in
+# us-east-1. See docs/guides/production.md §5.
 #
 # Watch the AWS length limits noted inline — a long project_name plus a long
 # environment can overflow them, hence the substr() guards.
@@ -232,7 +260,6 @@ locals {
 
     # edge
     cloudfront_comment = "${local.name_prefix} distribution"
-    waf_web_acl        = "${local.name_prefix}-waf"
     web_bucket         = "${local.name_prefix}-web-${local.bucket_suffix}"
     admin_bucket       = "${local.name_prefix}-admin-${local.bucket_suffix}"
 

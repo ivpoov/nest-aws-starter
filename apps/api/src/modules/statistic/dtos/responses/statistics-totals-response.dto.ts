@@ -22,7 +22,7 @@ export class StatisticsTotalsResponseDto implements StatisticsTotalsInterface {
 
   @ApiProperty({ type: Number, nullable: true, example: 12_500 })
   @Expose()
-  readonly revenue: number | null;
+  readonly revenueCents: number | null;
 
   @ApiProperty({ type: Number, nullable: true, example: 4_900 })
   @Expose()
