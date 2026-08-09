@@ -6,6 +6,7 @@
     "node": ">=24.0.0"
   },
   "scripts": {
+    "benchmark": "node scripts/benchmark.mjs",
     "bootstrap": "node scripts/bootstrap.mjs",
     "build": "turbo run build",
     "lint": "turbo run lint",
