@@ -55,7 +55,7 @@ describe('ContactMessagePrismaRepository', () => {
     });
   });
 
-  it('applies the status filter and cursor on findManyAfter', async () => {
+  it('applies the status filter and keysets the cursor into the where clause', async () => {
     const { repository, contactMessage } = createRepository();
 
     await repository.findManyAfter(
@@ -64,10 +64,8 @@ describe('ContactMessagePrismaRepository', () => {
     );
 
     expect(contactMessage.findMany).toHaveBeenCalledWith({
-      where: { status: 'RESOLVED' },
+      where: { status: 'RESOLVED', id: { lt: 'prev-id' } },
       take: 10,
-      cursor: { id: 'prev-id' },
-      skip: 1,
       orderBy: { id: 'desc' },
     });
   });

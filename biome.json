@@ -46,6 +46,26 @@
           }
         }
       }
+    },
+    {
+      "includes": ["apps/api/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["./**", "../**"],
+                    "message": "apps/api uses path aliases only (@modules/*, @interfaces/*, @src/*, …) — see docs/conventions/backend.md §14. The frontends deliberately import relatively and are not covered by this rule."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

@@ -45,6 +45,38 @@ resource "aws_lb" "api" {
 
   enable_deletion_protection = var.deletion_protection
 
+  # ---------------------------------------------------------------------
+  # Access logs
+  #
+  # The only record of what the load balancer itself saw. The API's own logs
+  # start after a request reaches a task, so a 502 from a target that never
+  # became healthy, a 4xx the ALB answered on its own, or a TLS negotiation that
+  # failed appear in exactly one place — here.
+  #
+  # Written as a dynamic block rather than `enabled = false` so a disabled
+  # profile never has to name a bucket at all: the bucket only exists on the
+  # profiles that ask for access logs, and var.access_logs.bucket is null on the
+  # others.
+  #
+  # Delivery is not free and not instant: ELB batches to S3 roughly every five
+  # minutes, and the objects are billed as S3 storage plus requests. The
+  # lifecycle rule on the bucket is what stops that growing without bound.
+  #
+  # The bucket policy this needs lives with the bucket, in the observability
+  # module — and it cannot be verified from a plan. ELB checks it by writing a
+  # test object while the load balancer is being created, and the failure is an
+  # apply-time "Access Denied for bucket" with no further detail.
+  # ---------------------------------------------------------------------
+  dynamic "access_logs" {
+    for_each = var.access_logs.enabled ? [1] : []
+
+    content {
+      enabled = true
+      bucket  = var.access_logs.bucket
+      prefix  = var.access_logs.prefix
+    }
+  }
+
   tags = {
     Name = var.names.alb
     Tier = "edge"
@@ -65,8 +97,8 @@ resource "aws_lb_target_group" "api" {
   # ---------------------------------------------------------------------
   # Deregistration delay — 60 seconds.
   #
-  # This is not sized from process exit time. PR 7 measured the container's
-  # clean SIGTERM shutdown at ~97 ms on an idle task, and if that were the
+  # This is not sized from process exit time. The container's clean SIGTERM
+  # shutdown measures ~97 ms on an idle task, and if that were the
   # question the answer would be "1". It is not: deregistration delay is the
   # window in which the load balancer has stopped sending *new* requests to a
   # target but existing connections are still finishing. Stopping the task

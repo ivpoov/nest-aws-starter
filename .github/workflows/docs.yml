@@ -1,0 +1,114 @@
+name: docs
+
+# Builds the documentation site in apps/docs and publishes it to GitHub Pages.
+#
+# The site has no content of its own: it renders `docs/**`, `README.md`,
+# `CONTRIBUTING.md` and `SECURITY.md` where they already live. That is the whole
+# design (see apps/docs/src/repo-docs/loader.mjs) and it is why the path filter
+# below is what it is — the pages change when the prose changes, and at no other
+# time.
+#
+# WHAT A MAINTAINER HAS TO SWITCH ON, once, before the first push to main can
+# publish anything:
+#
+#   Settings -> Pages -> Build and deployment -> Source: "GitHub Actions"
+#
+# Nothing in this file can do that, and no token this workflow is given can
+# either. Until it is set, the deploy job fails with "Get Pages site failed".
+# There is nothing else to configure: no branch, no `gh-pages`, no `/docs`
+# folder, no CNAME. The site lands at https://ivpoov.github.io/nest-aws-starter/,
+# which is the `site` + `base` pair hard-coded in apps/docs/astro.config.mjs — a
+# fork under a different owner or repository name has to change that pair, or
+# every internal link on the published site will point at a path that does not
+# exist.
+#
+# It is NOT part of the pull-request fan-out in ci.yml. `pnpm run build` does not
+# build this site (turbo.json calls the task `docs:build`, not `build`) because
+# rendering every page and launching a browser for the Mermaid diagrams has
+# nothing to say about a change to a service. The pull-request job below runs
+# only when the documentation itself is touched — the same trade the image
+# workflow makes, and for the same reason.
+#
+# Every `uses:` is pinned to a commit SHA with the human-readable version in the
+# trailing comment — see the header of ci.yml for why a tag is not a reference.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'apps/docs/**'
+      - '.github/workflows/docs.yml'
+  # Build, but never publish, when a pull request changes the documentation.
+  # A broken link or an unparseable diagram should fail on the pull request
+  # that introduces it, not on main after the fact.
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'apps/docs/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Superseded pull-request builds are worth cancelling; a deployment in flight
+  # is not — cancelling one leaves the Pages deployment half-applied.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Mermaid has to measure text to lay a diagram out, so it needs a real
+      # browser. This uses the Chrome that is already on the runner image
+      # (`channel: 'chrome'` in astro.config.mjs) rather than downloading
+      # Playwright's own copy on every run. If the image ever stops shipping
+      # Chrome, this step is what says so, instead of a diagram quietly
+      # vanishing from the page.
+      - name: chrome is available for the diagram renderer
+        run: google-chrome --version
+
+      # Fails the build on a broken internal link: the prose is written with
+      # relative file paths for GitHub and rewritten to URLs on the way in, and
+      # starlight-links-validator is what proves the rewrite still holds.
+      - run: pnpm run docs:build
+
+      - name: upload the site
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: apps/docs/dist
+
+  deploy:
+    # Publishing happens from main only. Everything else — pull requests, and a
+    # manual run from a branch — stops after the build above.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+
+    # The two permissions the Pages deployment needs, scoped to this job so the
+    # build job above never holds a token that can publish.
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

@@ -65,3 +65,21 @@ output "access_logs_bucket_domain_name" {
   description = "Regional domain name of the access-log bucket, in the form CloudFront's logging_config takes. This is the value edge.tf's local.edge_log_bucket_domain_name is waiting for."
   value       = one(aws_s3_bucket.access_logs[*].bucket_regional_domain_name)
 }
+
+output "alb_access_logs" {
+  description = "Bucket and prefix the load balancer should deliver access logs to, and whether it should at all. Disabled with a null bucket when the profile does not ask for access logs."
+
+  value = {
+    enabled = var.access_logs_bucket_enabled
+    bucket  = one(aws_s3_bucket.access_logs[*].bucket)
+    prefix  = local.alb_access_logs_prefix
+  }
+
+  # The ordering that makes a first apply work. `aws_lb` with access logging on
+  # is validated by ELB at create time: it writes a test object, and a load
+  # balancer created before the bucket policy exists fails with "Access Denied
+  # for bucket". Depending on the bucket alone would not order the two, because
+  # the policy is a separate resource — so the consumer's dependency edge has to
+  # run through this output.
+  depends_on = [aws_s3_bucket_policy.access_logs]
+}

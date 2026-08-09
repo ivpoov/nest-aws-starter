@@ -233,6 +233,56 @@ describe('contact us', () => {
     ).toBe(false);
   });
 
+  // Paging used Prisma's `cursor` + `skip: 1`, which offsets past exactly one
+  // row on the assumption that the cursor row is still the first row the query
+  // matches. `status` is state a row can leave: the moment the admin resolves
+  // the cursor message, `status=OPEN` has already excluded it and the offset
+  // ate the next legitimate message instead — silently, and only for the
+  // filtered inbox.
+  it('keeps the message after a cursor whose own row stopped matching the status filter', async () => {
+    const marker: string = randomUUID();
+    const subjects: string[] = ['oldest', 'middle', 'newest'].map(
+      (position: string): string => `Keyset ${position} ${marker}`,
+    );
+
+    for (const subject of subjects) {
+      await submitContact({ subject }).expect(204);
+    }
+
+    const middle: ContactMessageBodyInterface | undefined = await findMessageBySubject(
+      subjects[1] as string,
+    );
+    const newest: ContactMessageBodyInterface | undefined = await findMessageBySubject(
+      subjects[2] as string,
+    );
+
+    expect(middle).toBeDefined();
+    expect(newest).toBeDefined();
+
+    const firstPage = await request(app.getHttpServer())
+      .get('/api/v1/admin/contact-messages?status=OPEN&limit=1')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect((firstPage.body.items as ContactMessageBodyInterface[])[0]?.id).toBe(newest?.id);
+    expect(firstPage.body.nextCursor).toBe(newest?.id);
+
+    // The cursor row leaves the filtered set between the two requests —
+    // exactly what triaging the top of the inbox does.
+    await request(app.getHttpServer())
+      .patch(`/api/v1/admin/contact-messages/${newest?.id}/status`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({ status: 'RESOLVED' })
+      .expect(200);
+
+    const secondPage = await request(app.getHttpServer())
+      .get(`/api/v1/admin/contact-messages?status=OPEN&limit=1&cursor=${newest?.id}`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect((secondPage.body.items as ContactMessageBodyInterface[])[0]?.id).toBe(middle?.id);
+  });
+
   it('returns 404 for a status update on an unknown id', async () => {
     const response = await request(app.getHttpServer())
       .patch('/api/v1/admin/contact-messages/01890a5d-ac96-774b-bcce-b30209000000/status')

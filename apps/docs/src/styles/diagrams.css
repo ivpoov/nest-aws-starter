@@ -1,0 +1,25 @@
+/*
+ * Mermaid diagrams are rendered to SVG at build time with Mermaid's `neutral`
+ * theme, which draws dark strokes and dark text. That is unreadable on the dark
+ * theme, so the frame carries its own light surface in both themes rather than
+ * shipping two copies of every diagram.
+ */
+.sl-markdown-content .diagram {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  overflow-x: auto;
+  background: #fdfdfc;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.5rem;
+}
+
+/*
+ * Natural size, not squashed-to-fit: the architecture overview is wider than
+ * any prose column, and scrolling a legible diagram beats staring at an
+ * illegible one.
+ */
+.sl-markdown-content .diagram svg {
+  display: block;
+  max-width: none;
+  height: auto;
+}

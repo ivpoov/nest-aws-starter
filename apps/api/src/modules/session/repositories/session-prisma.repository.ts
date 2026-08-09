@@ -1,3 +1,4 @@
+import { MAX_PAGE_SIZE } from '@constants/pagination.constants.js';
 import { Prisma } from '@generated/prisma/client.js';
 import type { SessionModel } from '@generated/prisma/models.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
@@ -24,9 +25,14 @@ export class SessionPrismaRepository implements SessionRepositoryInterface {
     return session ? this.toDomain(session) : null;
   }
 
+  // Capped: both callers (GET /sessions and GET /admin/users/:id/sessions)
+  // take no `limit`, and the row count is attacker-controlled — one login per
+  // device writes one row. Most-recently-active first, so the cap drops the
+  // stalest sessions rather than the ones a user came to revoke.
   public async findActiveByUserId(userId: string, now: Date): Promise<SessionInterface[]> {
     const sessions: SessionModel[] = await this.prisma.session.findMany({
       where: { userId, activeUntil: { gt: now } },
+      take: MAX_PAGE_SIZE,
       orderBy: { lastActiveAt: 'desc' },
     });
 

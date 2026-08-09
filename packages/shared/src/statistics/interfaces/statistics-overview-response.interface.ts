@@ -7,6 +7,6 @@ export interface StatisticsOverviewResponseInterface {
   readonly usersByStatus: StatisticsCountBreakdownInterface[];
   readonly authMethodDistribution: StatisticsCountBreakdownInterface[];
   // Empty when the payment module is absent — same degrade-gracefully rule
-  // as `totals.revenue`.
+  // as `totals.revenueCents`.
   readonly revenueByPlan: StatisticsRevenueByPlanInterface[];
 }

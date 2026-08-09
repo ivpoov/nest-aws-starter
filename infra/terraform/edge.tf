@@ -58,20 +58,22 @@ locals {
   # Two things the edge consumes but does not own.
   #
   # The access-log bucket belongs to the observability module: access logs are
-  # not a CloudFront concern, and ALB and S3 server access logs want the same
-  # bucket under their own prefixes. It exists only on profiles that set
-  # cloudfront_logs_enabled, and on the others this resolves to null — which is
-  # exactly what the module's `logging_enabled = false` path expects, so the two
-  # switch together off one profile key. That bucket is also the one bucket in
-  # this stack with ACLs enabled: CloudFront standard logging delivers by
-  # writing an object with an ACL grant, and a BucketOwnerEnforced bucket
-  # rejects it silently.
+  # not a CloudFront concern, and the ALB delivers into the same bucket under
+  # its own prefix. It exists only on profiles that set access_logs_enabled, and
+  # on the others this resolves to null — which is exactly what the module's
+  # `logging_enabled = false` path expects, so the two switch together off one
+  # profile key. That bucket is also the one bucket in this stack with ACLs
+  # enabled: CloudFront standard logging delivers by writing an object with an
+  # ACL grant, and a BucketOwnerEnforced bucket rejects it silently.
   #
-  # The web ACL is still null. No module in this stack creates one yet, so the
-  # production profile's waf_enabled currently buys nothing — the check at the
-  # bottom of this file is what keeps that from being quiet. It is shared across
-  # distributions and, for CloudFront, must itself be created in us-east-1 with
-  # CLOUDFRONT scope.
+  # The web ACL is null, and both profiles now set waf_enabled = false to match:
+  # no module in this stack creates one. This input is CLOUDFRONT-scoped, so
+  # what it could ever protect is the two static SPA distributions, which is the
+  # weakest place to spend a WAF. The API behind the ALB is the tier that earns
+  # one, and that is a REGIONAL web ACL in this stack's own region — a different
+  # resource, not this variable. docs/guides/production.md §5 prices both paths;
+  # the check at the bottom of this file fires if the profile key is flipped
+  # back on without one existing.
   edge_log_bucket_domain_name = module.observability.access_logs_bucket_domain_name
   edge_web_acl_arn            = null
 }
@@ -102,7 +104,7 @@ module "edge" {
   domain_name = var.domain_name
   price_class = local.profile.cloudfront_price_class
 
-  logging_enabled        = local.profile.cloudfront_logs_enabled
+  logging_enabled        = local.profile.access_logs_enabled
   log_bucket_domain_name = local.edge_log_bucket_domain_name
   web_acl_arn            = local.edge_web_acl_arn
 
@@ -198,9 +200,11 @@ output "api_cors_origins" {
   value       = join(",", module.edge.cors_origins)
 }
 
-# A cost profile that asks for a web ACL and gets none is worse than one that
-# never asked: the setting reads as enabled everywhere it is shown. Warn on plan
-# rather than fail — a stack with no WAF is still a working stack.
+# Both profiles ship waf_enabled = false, so this never fires as delivered. It
+# exists for the person who flips it, because a cost profile that asks for a web
+# ACL and gets none is worse than one that never asked: the setting reads as
+# enabled everywhere it is shown. Warn on plan rather than fail — a stack with
+# no WAF is still a working stack.
 #
 # The matching warning for access logs is gone because the wire is no longer
 # missing: local.edge_log_bucket_domain_name above resolves to the observability
@@ -209,8 +213,10 @@ check "edge_supporting_resources" {
   assert {
     condition = !(local.profile.waf_enabled && local.edge_web_acl_arn == null)
     error_message = join(" ", [
-      "The selected cost profile enables WAF, but no web ACL is wired into the edge module — the distributions are unprotected.",
-      "No module in this stack creates one: build the web ACL in us-east-1 with CLOUDFRONT scope, name it local.names.waf_web_acl, and set local.edge_web_acl_arn to its ARN.",
+      "The selected cost profile sets waf_enabled, but no module in this stack creates a web ACL — nothing is protected and the key only reads as if something were.",
+      "Note also which tier this input reaches: local.edge_web_acl_arn is CLOUDFRONT-scoped and can only be attached to the two static SPA distributions, which are content-hashed Vite output behind Origin Access Control.",
+      "The tier that earns a WAF is the API behind the ALB, and that is a REGIONAL aws_wafv2_web_acl in this stack's own region attached with aws_wafv2_web_acl_association — not this variable.",
+      "docs/guides/production.md §5 walks through both paths and what each costs. Until a module exists, leave waf_enabled = false.",
     ])
   }
 }

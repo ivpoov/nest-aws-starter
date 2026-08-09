@@ -64,6 +64,12 @@ export class PaymentTransactionPrismaRepository implements PaymentTransactionRep
     );
   }
 
+  // Keyset pagination, not Prisma's `cursor` + `skip: 1`: `status` is state a
+  // row can leave, so a transaction settling from PENDING between two page
+  // requests drops it from the filtered set — and `skip: 1`, which exists only
+  // to step past the cursor row, then eats the next legitimate transaction
+  // instead. Comparing ids in the `where` never depends on the cursor row
+  // surviving.
   public async findManyForAdmin(
     pagination: CursorPaginationInterface,
     filters: TransactionFiltersInterface,
@@ -78,9 +84,10 @@ export class PaymentTransactionPrismaRepository implements PaymentTransactionRep
             ...(filters.dateTo && { lte: filters.dateTo }),
           },
         }),
+        // `lt` pairs with `id: 'desc'` — UUIDv7 ids are time-ordered.
+        ...(pagination.cursor && { id: { lt: pagination.cursor } }),
       },
       take: pagination.limit,
-      ...(pagination.cursor && { cursor: { id: pagination.cursor }, skip: 1 }),
       orderBy: { id: 'desc' },
     });
 

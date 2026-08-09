@@ -205,5 +205,49 @@ describe('transactions', () => {
       expect(page.body.items).toHaveLength(1);
       expect(page.body.nextCursor).toBeTruthy();
     });
+
+    // Paging used Prisma's `cursor` + `skip: 1`, which offsets past exactly one
+    // row on the assumption that the cursor row is still the first row the
+    // query matches. `status` is state a row can leave: the moment the cursor
+    // transaction is refunded, `status=SUCCEEDED` has already excluded it and
+    // the offset ate the next legitimate transaction instead.
+    it('keeps the transaction after a cursor whose own row stopped matching the status filter', async () => {
+      const owner = await registerUser('Transactions Keyset E2E');
+
+      await seedTransaction({ userId: owner.id, status: 'SUCCEEDED', amountCents: 100 });
+      const middle: { id: string } = await seedTransaction({
+        userId: owner.id,
+        status: 'SUCCEEDED',
+        amountCents: 200,
+      });
+      const newest: { id: string } = await seedTransaction({
+        userId: owner.id,
+        status: 'SUCCEEDED',
+        amountCents: 300,
+      });
+
+      const firstPage = await request(app.getHttpServer())
+        .get(`/api/v1/admin/transactions?userId=${owner.id}&status=SUCCEEDED&limit=1`)
+        .set('authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(firstPage.body.items[0].id).toBe(newest.id);
+      expect(firstPage.body.nextCursor).toBe(newest.id);
+
+      // The cursor row leaves the filtered set between the two requests.
+      await prisma.paymentTransaction.update({
+        where: { id: newest.id },
+        data: { status: 'REFUNDED' },
+      });
+
+      const secondPage = await request(app.getHttpServer())
+        .get(
+          `/api/v1/admin/transactions?userId=${owner.id}&status=SUCCEEDED&limit=1&cursor=${newest.id}`,
+        )
+        .set('authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(secondPage.body.items[0].id).toBe(middle.id);
+    });
   });
 });

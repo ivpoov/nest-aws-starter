@@ -69,13 +69,14 @@ Two consequences worth stating out loud:
 
 | Setting | Value | Why |
 | --- | --- | --- |
-| `deregistration_delay` | 60 s | Not process exit time (~97 ms measured in PR 7) — the window in which in-flight requests and Socket.IO connections finish after the target stops receiving new ones. AWS defaults to 300 s, which adds five minutes to every deploy for no benefit here. |
+| `deregistration_delay` | 60 s | Not process exit time (~97 ms measured on an idle task) — the window in which in-flight requests and Socket.IO connections finish after the target stops receiving new ones. AWS defaults to 300 s, which adds five minutes to every deploy for no benefit here. |
 | `stopTimeout` | 30 s | SIGTERM to SIGKILL. Sized for the slowest in-flight request, not for the idle case. |
 | `health_check_grace_period` | 60 s | Nest bootstrap plus the first Prisma connection. Image pull is not included — it happens before the task reaches RUNNING. |
 | health check path | `/api/v1/health/ready` | Readiness, not liveness: the load balancer's question includes Postgres and Redis. A task that cannot reach its database should stop receiving traffic without being killed. |
 | `idle_timeout` | 300 s | Must exceed `WEBSOCKET_HEARTBEAT_INTERVAL_MS` (60 s), or the ALB closes live sockets between heartbeats. |
 | stickiness | on | `socket.io-client` defaults to `["polling", "websocket"]`, and a polling handshake is only valid against the task that issued it. The Redis adapter fans out broadcasts; it does not make a session portable. |
 | deployment | 100% / 200%, circuit breaker + rollback | Start the replacement before stopping the incumbent, and give up (and roll back) on a task definition that cannot start, instead of retrying forever behind a green workflow. |
+| access logs | on when the caller passes a bucket | The only record of what the load balancer itself saw — a 502 from a target that never became healthy, a 4xx the ALB answered alone, a failed TLS negotiation. The bucket and its delivery policy belong to the observability module; this module only names where to write. |
 | ECR lifecycle | untagged after 1 day, then keep 10 | Untagged images are the leak: re-pushing a tag orphans its predecessor's layers and nothing in AWS ever reclaims them. |
 
 ## `assign_public_ip`

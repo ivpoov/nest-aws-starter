@@ -1,0 +1,163 @@
+name: promote
+
+# Opens the two promotion pull requests — dev → staging and staging → main —
+# with a body listing every commit since the previous tag.
+#
+# WHY THIS IS A WORKFLOW AND NOT A CHECKLIST: promotion was forgotten in three
+# consecutive releases. Not skipped on purpose — forgotten, because the only
+# thing that ever triggered it was somebody remembering. A dispatch button and a
+# pull request body that writes itself removes the remembering from the loop.
+#
+# NOTHING IS TAGGED, MERGED OR PUSHED HERE. This workflow opens (or refreshes)
+# pull requests and stops. The tag is release.yml's job and is gated behind its
+# own dispatch.
+#
+# RUN IT TWICE. The chain is dev → staging → main, so the second pull request
+# cannot exist until the first is merged: with staging still equal to main there
+# are no commits between them and GitHub refuses to open a pull request over an
+# empty diff. So the run reports "nothing to promote" for that leg, and the
+# second run — after merging the first — opens it. Re-running is safe at any
+# point: an existing open pull request has its body refreshed rather than being
+# duplicated.
+#
+# Every `uses:` is pinned to a commit SHA with the human-readable version in the
+# trailing comment — see the header of ci.yml for why a tag is not a reference.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version this promotion leads to, e.g. v1.0.0. Used in the pull request titles and checked against existing tags. Nothing is tagged here.'
+        required: true
+        type: string
+
+# Never cancel a half-finished promotion: this workflow creates pull requests,
+# and a run killed between the first and the second leaves a PR nobody opened
+# on purpose. Queueing is the cheaper failure.
+concurrency:
+  group: promote
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Reading the history is how the pull request bodies get written.
+      contents: read
+      # Creating and editing the two promotion pull requests. This is the one
+      # permission the default GITHUB_TOKEN does not carry by default: the
+      # repository setting "Allow GitHub Actions to create and approve pull
+      # requests" (Settings → Actions → General) must also be on, or `gh pr
+      # create` fails with a 403 that reads like a token scope problem and is
+      # not one.
+      pull-requests: write
+
+    env:
+      # Inputs are never interpolated into a `run:` script directly — a version
+      # string is attacker-controlled text as far as the shell is concerned.
+      # Through the environment it is data, not code.
+      VERSION: ${{ inputs.version }}
+      # The default token opens pull requests, but pull requests it opens do NOT
+      # trigger `on: pull_request` workflows — GitHub suppresses that to stop
+      # workflows recursing. So with the default token the promotion PRs show no
+      # ci / security / image checks and there is nothing to require. Set a
+      # RELEASE_PAT secret (a fine-grained token with contents: read and pull
+      # requests: write) and the checks run normally.
+      GH_TOKEN: ${{ secrets.RELEASE_PAT || github.token }}
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+      # fetch-depth: 0 twice over: the pull request bodies are generated from
+      # the history since the previous tag, and the tag guard needs the tags.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      # The scripts are dependency-free — node builtins and git — so there is no
+      # `pnpm install` here. setup-node is only to pin the runtime to the same
+      # major the repository builds on rather than whatever the image ships.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      # Fails before anything is opened if the version is malformed or already
+      # released. Promoting "for v0.5.0" when v0.5.0 shipped last week means
+      # somebody typed the wrong number, and finding that out now is free.
+      - name: the version must be well formed and unreleased
+        run: node scripts/release-guard.mjs tag-absent --version "$VERSION"
+
+      - name: open or refresh the promotion pull requests
+        run: |
+          set -euo pipefail
+
+          previous="$(git describe --tags --abbrev=0 --match 'v[0-9]*' origin/main 2>/dev/null || true)"
+          if [ -n "$previous" ]; then
+            echo "listing commits since ${previous}"
+            range_flag=(--from "$previous")
+          else
+            echo "no previous tag on main; listing the whole history"
+            range_flag=()
+          fi
+
+          opened=0
+
+          promote_leg() {
+            local head="$1"
+            local base="$2"
+            local total non_merge body existing
+
+            total="$(git rev-list --count "origin/${base}..origin/${head}")"
+            if [ "$total" = "0" ]; then
+              echo "::notice title=promote ${head} → ${base}::nothing to promote — ${head} carries no commits ${base} does not have. If you have not merged the ${head} pull request yet, do that and re-run."
+              return 0
+            fi
+            non_merge="$(git rev-list --count --no-merges "origin/${base}..origin/${head}")"
+
+            body="$(mktemp)"
+            {
+              printf '## Promote `%s` → `%s` for %s\n\n' "$head" "$base" "$VERSION"
+              printf 'This merge moves **%s commits** (%s excluding merges) onto `%s`.\n\n' \
+                "$total" "$non_merge" "$base"
+              if [ -n "$previous" ]; then
+                printf 'The list below is the whole release, not just this leg: every commit on `%s`\n' "$head"
+                printf 'since **%s**, which is what %s will contain.\n\n' "$previous" "$VERSION"
+              else
+                printf 'The list below is every commit on `%s`; there is no previous tag.\n\n' "$head"
+              fi
+              node scripts/changelog.mjs "${range_flag[@]}" --to "origin/${head}" --notes
+              printf '\n---\n\n'
+              printf 'Generated by `.github/workflows/promote.yml`. Merge this, then re-run promote for the\n'
+              printf 'next leg; once `dev`, `staging` and `main` all agree, run `release.yml` to tag %s.\n' "$VERSION"
+            } > "$body"
+
+            existing="$(gh pr list --base "$base" --head "$head" --state open --json number --jq '.[0].number // empty')"
+            if [ -n "$existing" ]; then
+              gh pr edit "$existing" --title "chore(release): promote ${head} to ${base} for ${VERSION}" --body-file "$body"
+              echo "::notice title=promote ${head} → ${base}::refreshed existing pull request #${existing}"
+              printf -- '- refreshed [#%s](%s/pull/%s) — `%s` → `%s`, %s commits\n' \
+                "$existing" "${GITHUB_SERVER_URL}/${GH_REPO}" "$existing" "$head" "$base" "$total" \
+                >> "$GITHUB_STEP_SUMMARY"
+            else
+              gh pr create \
+                --base "$base" \
+                --head "$head" \
+                --title "chore(release): promote ${head} to ${base} for ${VERSION}" \
+                --body-file "$body"
+              echo "::notice title=promote ${head} → ${base}::opened a pull request"
+              printf -- '- opened `%s` → `%s`, %s commits\n' "$head" "$base" "$total" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            opened=$((opened + 1))
+          }
+
+          printf '### Promotion pull requests for %s\n\n' "$VERSION" >> "$GITHUB_STEP_SUMMARY"
+          promote_leg dev staging
+          promote_leg staging main
+
+          if [ "$opened" = "0" ]; then
+            printf -- '- nothing to promote: `dev`, `staging` and `main` already agree.\n' >> "$GITHUB_STEP_SUMMARY"
+            printf -- '- next step: run `release.yml` with version `%s`.\n' "$VERSION" >> "$GITHUB_STEP_SUMMARY"
+          fi

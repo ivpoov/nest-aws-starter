@@ -12,7 +12,7 @@ const OVERVIEW: Record<string, unknown> = {
     activeSessions: 7,
     onlineNow: 3,
     newToday: 5,
-    revenue: null,
+    revenueCents: null,
     mrrCents: null,
   },
   usersByStatus: [
@@ -29,10 +29,14 @@ const OVERVIEW: Record<string, unknown> = {
 // <module:payment>
 // Payment present — revenue/mrr are real numbers, and RevenueChart's
 // switcher is only rendered in this state (isAvailable derives from
-// totals.revenue !== null, mirroring KpiTiles).
+// totals.revenueCents !== null, mirroring KpiTiles).
 const OVERVIEW_WITH_REVENUE: Record<string, unknown> = {
   ...OVERVIEW,
-  totals: { ...(OVERVIEW.totals as Record<string, unknown>), revenue: 12_500, mrrCents: 4_900 },
+  totals: {
+    ...(OVERVIEW.totals as Record<string, unknown>),
+    revenueCents: 12_500,
+    mrrCents: 4_900,
+  },
 };
 // </module:payment>
 

@@ -47,6 +47,15 @@ cost_profile = "demo"
 # is behaving normally, which is how you find out the budget works.
 # monthly_budget_amount_usd = 20
 
+# Which AWS identity delivers the load balancer's access logs, and therefore
+# which statement the log bucket's policy needs. Terraform cannot work this out.
+# Leave it unset (true) in any Region launched before August 2022 — us-east-1,
+# eu-west-1, ap-southeast-2 and the rest of the familiar list. Set it to false in
+# a Region launched since (eu-central-2, me-central-1, il-central-1, ap-south-2,
+# ca-west-1, …), where delivery comes from a service principal the policy already
+# grants and `data.aws_elb_service_account` has no entry to look up.
+# alb_log_delivery_uses_regional_account = true
+
 # ---------------------------------------------------------------------------
 # Network
 # ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ export default defineConfig({
   test: {
     include: ['src/**/*.spec.ts'],
     environment: 'node',
+    setupFiles: ['./test/reflect-metadata.setup.ts'],
   },
   plugins: [
     tsconfigPaths(),

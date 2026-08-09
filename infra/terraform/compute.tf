@@ -217,6 +217,13 @@ module "compute" {
   api_hostname   = local.compute_api_hostname
   hosted_zone_id = module.edge.hosted_zone_id
 
+  # Bucket, prefix and on/off in one object, straight from the module that owns
+  # the bucket. Taking it from the module output rather than rebuilding
+  # local.names.logs_bucket here is deliberate: the output carries a dependency
+  # on the bucket policy, and a load balancer created before that policy exists
+  # fails on ELB's own write test.
+  access_logs = module.observability.alb_access_logs
+
   autoscaling_enabled = local.profile.compute_autoscaling
   min_capacity        = local.profile.compute_min_capacity
   max_capacity        = local.profile.compute_max_capacity
