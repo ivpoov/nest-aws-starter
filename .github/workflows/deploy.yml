@@ -186,6 +186,7 @@ jobs:
           cache: pnpm
 
       - name: assume the deploy role
+        id: assume_role
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
@@ -193,6 +194,62 @@ jobs:
           # Shows up in CloudTrail against every call this job makes, so an
           # audit trail leads back to a specific workflow run.
           role-session-name: deploy-${{ github.run_id }}
+
+      # WHY THIS EXISTS. The step above fails with a bare AccessDenied that says
+      # nothing about which claim was rejected, and the single most likely cause
+      # is that the trust policy names the wrong SPELLING of this repository's
+      # subject. GitHub has two default subject formats — the name-based
+      # `repo:<owner>/<name>:...` and, for repositories created after
+      # 2026-07-15 or renamed since, the immutable
+      # `repo:<owner>@<owner-id>/<name>@<repo-id>:...` — and there is no
+      # documented API field that reliably says which one you get. So on failure
+      # this prints the subject the run was ACTUALLY issued. Paste it into
+      # github_deploy_subject_override, or read the ids out of it and set
+      # github_subject_format = "immutable".
+      #
+      # It prints the `sub` claim and nothing else. `sub` is not a secret — it
+      # is owner, repository and environment, all of them public — but the token
+      # it came out of is a live credential, so it is never echoed, never
+      # written to a file, and never passed to anything but jq. The claim is
+      # decoded locally; no request is made to AWS.
+      - name: report the oidc subject this run was actually issued
+        if: ${{ failure() && steps.assume_role.conclusion == 'failure' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "::warning::no OIDC token endpoint in this job — cannot report the subject"
+            exit 0
+          fi
+
+          token="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
+            | jq -r '.value')"
+
+          # Base64url -> base64, padded, decoded, and only `.sub` is ever read
+          # out of the result.
+          payload="$(printf '%s' "$token" | cut -d. -f2 | tr '_-' '/+')"
+          case $(( ${#payload} % 4 )) in
+            2) payload="${payload}==" ;;
+            3) payload="${payload}=" ;;
+          esac
+          subject="$(printf '%s' "$payload" | base64 -d 2>/dev/null | jq -r '.sub')"
+
+          echo "::error::assume-role failed. The subject this run was issued is: ${subject}"
+          {
+            echo "### Assume-role failed"
+            echo
+            echo "GitHub issued this run the OIDC subject:"
+            echo
+            echo "\`\`\`"
+            echo "${subject}"
+            echo "\`\`\`"
+            echo
+            echo "The deploy role's trust policy must contain that exact string."
+            echo "See \`terraform output github_actions_trusted_subjects\` and"
+            echo "\`infra/terraform/modules/cicd/README.md\`."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # One read, and everything the rest of the job needs. The manifest is
       # non-secret metadata written by Terraform; its shape is the object type
