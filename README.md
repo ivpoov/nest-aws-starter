@@ -475,7 +475,7 @@ docker/           # compose init scripts
 docs/architecture.md # request lifecycle, event map, caching tiers, AWS surface
 docs/conventions/ # binding code conventions — read before contributing
 docs/decisions/   # architecture decision records — why, and what it cost
-docs/guides/      # operational guides — building and running the API image
+docs/guides/      # walkthroughs — adding a module, building and running the API image
 docs/removal/     # generated per-module removal recipes
 scripts/          # bootstrap rename + subtraction test + removal-recipe generator
 ```
@@ -493,6 +493,11 @@ repository, and reviewers apply them literally:
   and `apps/admin`.
 - [`docs/conventions/shared-contracts.md`](./docs/conventions/shared-contracts.md)
   — `packages/shared`, the wire contracts all three consume.
+
+For the conventions applied end to end rather than stated,
+[`docs/guides/adding-a-module.md`](./docs/guides/adding-a-module.md) builds one
+feature module file by file — schema, migration, contract, repository, service,
+DTOs, permissions, controller, tests and removal fences.
 
 How work flows through branches, commits and PRs is a separate concern and lives
 in [`CONTRIBUTING.md`](./CONTRIBUTING.md).
