@@ -45,7 +45,8 @@
         "AUTH_REFRESH_GRACE_SEC",
         "TRUST_PROXY",
         "WEBSOCKET_ENABLED",
-        "WEBSOCKET_HEARTBEAT_INTERVAL_MS"
+        "WEBSOCKET_HEARTBEAT_INTERVAL_MS",
+        "E2E_KEEP_DATA"
       ]
     }
   }
