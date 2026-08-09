@@ -12,9 +12,7 @@ provider "aws" {
   }
 }
 
-# NOTE for the edge module: CloudFront certificates, and only CloudFront
-# certificates, must live in us-east-1 regardless of where the rest of the
-# stack runs. Add a second `provider "aws"` here with `alias = "us_east_1"`
-# (same profile, same default_tags) and pass it explicitly when that module
-# lands — an aliased provider with no consumers is dead configuration, so it
-# is not declared up front.
+# NOTE: CloudFront certificates, and only CloudFront certificates, must live in
+# us-east-1 regardless of where the rest of the stack runs. The `us_east_1`
+# aliased provider that serves them is declared in edge.tf, next to the edge
+# module that is its only consumer — do not add a second one here.
