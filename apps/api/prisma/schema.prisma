@@ -161,6 +161,11 @@ model Activity {
   @@index([userId, id])
   @@index([type, id])
   @@index([type, createdAt])
+  // Backs the admin list's date-range filter on its own. Without it a
+  // dateFrom/dateTo query with no type or user walks the primary key
+  // backwards across the whole table to fill one page, and this is the
+  // fastest-growing table in the app.
+  @@index([createdAt, id])
   @@map("activities")
 }
 
@@ -319,6 +324,9 @@ model Subscription {
   @@unique([provider, providerRef])
   @@index([userId, status])
   @@index([status, currentPeriodEndsAt]) // expiry sweep
+  // Foreign key with no index of its own: every plan delete had to seq-scan
+  // subscriptions to prove no row referenced it, holding a lock while it did.
+  @@index([planId])
   @@map("subscriptions")
 }
 
@@ -339,6 +347,14 @@ model PaymentTransaction {
   @@unique([provider, providerRef])
   @@index([userId, id])
   @@index([status, createdAt]) // revenue TypedSQL
+  // Same keyset shape the admin list actually pages by: filter on status,
+  // order by id desc. [status, createdAt] serves the revenue queries but
+  // cannot supply that ordering, so the list read every matching row and
+  // sorted them to return twenty.
+  @@index([status, id])
+  // Foreign key with no index of its own: deleting a subscription nulls this
+  // column on its transactions, which meant a seq scan per delete.
+  @@index([subscriptionId])
   @@map("payment_transactions")
 }
 
