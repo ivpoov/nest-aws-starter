@@ -27,7 +27,27 @@ One variable, `cost_profile`, with exactly two values: `demo` (the default) and
 `local.profile.<key>`. The two maps must have identical key sets. CI enforces the discipline
 by running `tflint` against both profiles.
 
-The 27 keys that differ:
+Each map carries **31 keys**, and **30 of them differ**. The one that does not is
+`waf_enabled`, which is `false` on both because no module in this stack creates a web ACL —
+see the WAF note under *Consequences → Bad*.
+
+Recount it rather than trusting this number, because the maps grow:
+
+```sh
+# 62 = 31 keys x 2 maps. The regex matches only the six-space-indented
+# assignments inside local.profile_settings, not the nested locals around it.
+grep -cE '^ {6}[a-z0-9_]+ +=' infra/terraform/locals.tf
+```
+
+To recount how many *differ*, apply once per profile and diff the resolved maps — the
+`cost_profile_settings` root output exists for exactly this:
+
+```sh
+terraform output -json cost_profile_settings   # with cost_profile = "demo"
+terraform output -json cost_profile_settings   # with cost_profile = "production"
+```
+
+The table below groups the keys by concern, so its row count is smaller than 31:
 
 | Concern | `demo` | `production` |
 |---|---|---|
@@ -43,7 +63,8 @@ The 27 keys that differ:
 | Task size / count | 256 CPU, 512 MB, 1 task | 512 CPU, 1024 MB, 2 tasks |
 | Autoscaling | off (1–1) | on (2–6, CPU target 60 %) |
 | CloudFront price class | `PriceClass_100` | `PriceClass_All` |
-| CloudFront access logs | off | on (creates the log bucket) |
+| Access logs (`access_logs_enabled`) | off | on — creates the shared log bucket; CloudFront and the ALB both deliver into it |
+| WAF (`waf_enabled`) | off | off — the one key equal on both profiles |
 | Log retention | 7 days | 30 days |
 | Container Insights / alarms | off / off | on / all 7 alarms |
 | Deletion protection | off | on (RDS **and** ALB) |
@@ -89,8 +110,9 @@ carries the ECR layer traffic.
 - Going to production is one variable, not a rewrite. The delta is auditable in one file
   rather than scattered across `count` expressions.
 - Because every module reads `local.profile.*`, a reviewer can see the entire cost surface
-  by reading one map. Adding a profile key with no resource behind it is caught in review;
-  the one existing exception is flagged loudly (see below).
+  by reading one map. Adding a profile key with no resource behind it is caught in review —
+  `waf_enabled` was the one that got through, and it is now `false` on both profiles rather
+  than describing infrastructure that does not exist (see below).
 
 **Bad — pay these knowingly**
 
@@ -119,11 +141,17 @@ carries the ECR layer traffic.
   caught by `check "tasks_without_egress"`, which is a **plan warning, not an error** — you
   can apply straight into it. Choosing egress is left as a deliberate, priced decision, but a
   reader who assumes `cost_profile = "production"` is sufficient will hit it.
-- **`waf_enabled = true` on production buys nothing today.** The profile key and the name
-  exist, `local.edge_web_acl_arn` is hardcoded to `null`, and there is no `aws_wafv2_*`
-  resource anywhere in the tree. It is the one acknowledged violation of the "a profile key
-  with no resource behind it comes back out" rule, kept visible by a `check` block and
-  documented in the Terraform README.
+- **There is no WAF, and `waf_enabled` is now `false` on both profiles to say so.** It used
+  to be `true` on production, which was wrong twice over. Nothing was created —
+  `local.edge_web_acl_arn` is `null` and there is no `aws_wafv2_*` resource anywhere in the
+  tree — so the key read as "WAF: yes" in every place a profile is summarised. And it was
+  aimed at the wrong tier: the input it feeds is `CLOUDFRONT`-scoped, so the most it could
+  ever have covered is the two static SPA distributions, which are content-hashed Vite
+  output behind Origin Access Control. The tier that earns a WAF is the API behind the ALB,
+  and that needs a `REGIONAL` web ACL in the stack's own Region — a different scope in a
+  different Region. The `waf_web_acl` name has been removed from `local.names` for the same
+  reason. The `check` in `edge.tf` still fires if anyone flips the key back on;
+  `docs/guides/production.md` §5 prices both paths.
 - **Two profiles is not a spectrum.** There is no `staging`. A team that wants Multi-AZ RDS
   without three NAT gateways has to add a third profile or override individual variables,
   and the second option partly defeats the "one variable, one file" property.

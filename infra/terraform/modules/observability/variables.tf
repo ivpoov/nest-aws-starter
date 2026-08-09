@@ -198,8 +198,25 @@ variable "budget_actual_thresholds_percent" {
 # ---------------------------------------------------------------------------
 
 variable "access_logs_bucket_enabled" {
-  description = "Create the shared access-log bucket. Driven by the profile knob that asks for CloudFront access logs — an empty bucket nobody writes to is a resource no one can explain later."
+  description = "Create the shared access-log bucket, and with it the bucket policy that lets the load balancer deliver into it. Driven by local.profile.access_logs_enabled, the same key that turns both writers on — an empty bucket nobody writes to is a resource no one can explain later."
   type        = bool
+}
+
+variable "alb_log_delivery_uses_regional_account" {
+  description = <<-EOT
+    Whether ALB access logs are delivered by the per-Region ELB account rather
+    than by the logdelivery.elasticloadbalancing.amazonaws.com service principal.
+
+    True for every Region launched before August 2022 — us-east-1, eu-west-1,
+    ap-southeast-2 and the rest of the familiar list — which is why it defaults
+    to true. Set it to false in a Region launched from August 2022 onward
+    (eu-central-2, me-central-1, il-central-1, ap-south-2, ca-west-1, …): those
+    deliver as the service principal, which the bucket policy grants either way,
+    and data.aws_elb_service_account has no entry for them, so leaving this true
+    fails the plan rather than the apply.
+  EOT
+  type        = bool
+  default     = true
 }
 
 variable "access_logs_retention_days" {

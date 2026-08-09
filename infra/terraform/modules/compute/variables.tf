@@ -275,6 +275,36 @@ variable "session_stickiness_duration_seconds" {
   default     = 86400
 }
 
+variable "access_logs" {
+  description = <<-EOT
+    Where the load balancer delivers its access logs, resolved by the caller.
+
+    The bucket is not created here — it is the shared access-log bucket the
+    observability module owns, and the bucket policy that permits delivery lives
+    with it. `bucket` is null whenever `enabled` is false, which is why alb.tf
+    writes the block dynamically rather than passing `enabled = false`.
+  EOT
+
+  type = object({
+    enabled = bool
+    bucket  = string
+    prefix  = string
+  })
+
+  default = {
+    enabled = false
+    bucket  = null
+    prefix  = null
+  }
+
+  validation {
+    # A load balancer created with logging on and no bucket is not a warning
+    # case: ELB rejects it at create time, halfway through an apply.
+    condition     = !var.access_logs.enabled || try(length(var.access_logs.bucket) > 0, false)
+    error_message = "access_logs.enabled is true but access_logs.bucket is null or empty — the load balancer has nowhere to deliver to and ELB refuses to create it."
+  }
+}
+
 variable "deletion_protection" {
   description = "Refuse to delete the load balancer. Comes from the profile's deletion_protection, so a disposable stack stays disposable."
   type        = bool

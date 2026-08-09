@@ -143,9 +143,9 @@ What actually differs:
 | `compute_task_cpu` / `_memory`          | 256 / 512            | 512 / 1024           | Fargate bills per vCPU-second and GB-second                 |
 | `compute_desired_count`                 | 1                    | 2                    | One task means no rolling deploy without a gap              |
 | `compute_autoscaling`, `_min`, `_max`   | off, 1, 1            | on, 2, 6             | The ceiling is what the cache and the checks key off        |
-| `waf_enabled`                           | `false`              | `true`               | ~$5/month + per-rule + per-request — **and see the gap below** |
+| `waf_enabled`                           | `false`              | `false`              | The one key that is equal on both profiles — **see below**   |
 | `cloudfront_price_class`                | `PriceClass_100`     | `PriceClass_All`     | Which edge locations serve traffic                          |
-| `cloudfront_logs_enabled`               | `false`              | `true`               | Creates the access-log bucket and delivers into it          |
+| `access_logs_enabled`                   | `false`              | `true`               | Creates the shared log bucket; CloudFront **and** the ALB deliver into it |
 | `log_retention_days`                    | 7                    | 30                   | Every log group in the stack                                |
 | `container_insights`                    | `false`              | `true`               | Billed as custom metrics                                    |
 | `alarms_enabled`                        | `false`              | `true`               | A demo stack has nobody on call                             |
@@ -197,13 +197,50 @@ from `compute_max_capacity > 1`, so raising the task count quietly added ~$12/mo
 about 40% of the demo stack's bill, to a stack whose author had edited a
 capacity number. Two independent things now have two keys.
 
+### Access logs
+
+`access_logs_enabled` creates one bucket (`local.names.logs_bucket`, owned by
+the observability module) and turns on both writers:
+
+| Prefix                | Written by | Mechanism |
+| --------------------- | ---------- | --------- |
+| `cloudfront/<site>/`  | The two SPA distributions | An ACL grant to the `awslogsdelivery` canonical user — which is why this is the one bucket in the stack with ACLs enabled |
+| `alb/AWSLogs/<account-id>/elasticloadbalancing/<region>/` | The API load balancer | A bucket **policy** naming the AWS identity that delivers |
+
+Which identity that is depends on the Region, and Terraform cannot work it out:
+Regions launched **before August 2022** deliver as a per-Region ELB account that
+`data.aws_elb_service_account` resolves; Regions launched **from August 2022
+onward** deliver as `logdelivery.elasticloadbalancing.amazonaws.com`. The policy
+always grants the service principal; the account statement is behind
+`alb_log_delivery_uses_regional_account`, which defaults to `true` because the
+default `aws_region` — and most likely yours — is an older Region. Flip it to
+`false` in a newer one, where the data source has no entry and would fail the
+plan.
+
+**None of this is verifiable from a plan.** ELB checks the policy by writing a
+test object while the load balancer is being created; a wrong policy surfaces as
+an apply-time `Access Denied for bucket` and nothing earlier. Delivery is also
+batched roughly every five minutes, so an empty prefix right after an apply is
+normal.
+
 ### What this stack does not create
 
-`waf_enabled` is `true` on the production profile and **no module creates a web
-ACL**. The distributions are unprotected, and the `edge_supporting_resources`
-check in `edge.tf` warns on every plan that asks for one. To close it: create
-the web ACL in `us-east-1` with `CLOUDFRONT` scope, name it
-`local.names.waf_web_acl`, and set `local.edge_web_acl_arn` to its ARN.
+**No WAF.** No module here creates a web ACL, so `waf_enabled` is `false` on
+**both** profiles — it is the only key in the two maps that does not differ, and
+it is false rather than absent so the `edge_supporting_resources` check in
+`edge.tf` still has something to warn on if anyone flips it.
+
+It used to be `true` on production, which was wrong twice over: nothing was
+created, and the input it fed (`local.edge_web_acl_arn`) is `CLOUDFRONT`-scoped,
+so the most it could ever have covered is the two static SPA distributions —
+content-hashed Vite output behind Origin Access Control. The tier that earns a
+WAF is the API behind the ALB, which needs a **`REGIONAL`** web ACL in this
+stack's own region, associated with `aws_wafv2_web_acl_association`. Different
+scope, different region, different resource.
+
+Both paths, what each costs and which managed rule groups to start from are in
+[`docs/guides/production.md`](../../docs/guides/production.md) §5. Building the
+module is a roadmap item, not something this README should half-specify.
 
 ## Variables
 
@@ -233,6 +270,7 @@ they configure, so a variable and its only consumer stay in the same file.
 | `migrations_image_tag`              | `migrations`        | `compute.tf`       |
 | `api_extra_environment`             | `{}`                | `compute.tf`       |
 | `monthly_budget_amount_usd`         | `20`                | `observability.tf` |
+| `alb_log_delivery_uses_regional_account` | `true`         | `observability.tf` |
 | `github_repository`                 | `null` (no CI/CD)   | `cicd.tf`          |
 | `github_deploy_ref`                 | `refs/heads/main`   | `cicd.tf`          |
 | `create_github_oidc_provider`       | `true`              | `cicd.tf`          |
