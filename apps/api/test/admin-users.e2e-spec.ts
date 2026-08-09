@@ -192,6 +192,34 @@ describe('admin users', () => {
     expect(secondPage.body.items[0].id).toBe(byNameId);
   });
 
+  // Prisma's `contains` builds a LIKE pattern out of the raw term, so a `%`
+  // was a wildcard rather than a character: searching for it returned the
+  // whole table, and `_` quietly matched any character.
+  it('treats LIKE wildcards in the search term as literal characters', async () => {
+    const marker: string = `Pct${randomUUID().replace(/-/g, '')}`;
+
+    await registerUser(`${marker} 100% Certain`);
+    await registerUser(`${marker} plain`);
+
+    const literal = await request(app.getHttpServer())
+      .get(`/api/v1/admin/users?search=${encodeURIComponent(`${marker} 100%`)}`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(literal.body.items).toHaveLength(1);
+    expect(literal.body.items[0].displayName).toBe(`${marker} 100% Certain`);
+
+    // A bare wildcard is now a search for a percent sign, not for everything.
+    const bare = await request(app.getHttpServer())
+      .get('/api/v1/admin/users?search=%25&limit=100')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    for (const item of bare.body.items) {
+      expect(item.displayName).toContain('%');
+    }
+  });
+
   it('returns the user detail and its sessions', async () => {
     const detail = await request(app.getHttpServer())
       .get(`/api/v1/admin/users/${userId}`)

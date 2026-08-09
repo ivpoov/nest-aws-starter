@@ -69,6 +69,31 @@ describe('UserPrismaRepository.findManyForAdmin', () => {
     });
   });
 
+  // `contains` interpolates the term into a LIKE pattern unescaped, so a
+  // search for `%` used to match every row and `_` every single character.
+  it('escapes LIKE metacharacters so a wildcard is searched for literally', async () => {
+    const { repository, user, authMethod } = createRepository();
+
+    await repository.findManyForAdmin({ search: '100%_off\\', cursor: null, limit: 20 });
+
+    const escaped = '100\\%\\_off\\\\';
+
+    expect(authMethod.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          email: { contains: escaped, mode: 'insensitive' },
+        }),
+      }),
+    );
+    expect(user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [{ displayName: { contains: escaped, mode: 'insensitive' } }, { id: { in: [] } }],
+        }),
+      }),
+    );
+  });
+
   it('does not query auth methods at all when no search term is given', async () => {
     const { repository, authMethod, user } = createRepository();
 

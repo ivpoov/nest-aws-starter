@@ -233,14 +233,15 @@ export class UserPrismaRepository implements UserRepositoryInterface {
   // email side to a list of ids first leaves two index-scannable predicates
   // on one table, which the planner does combine.
   public async findManyForAdmin(query: AdminUsersQueryInterface): Promise<AdminUserInterface[]> {
-    const emailMatchIds: string[] = query.search
-      ? await this.findUserIdsByEmailSearch(query.search, query.cursor, query.limit)
+    const search: string | null = query.search ? this.escapeLikePattern(query.search) : null;
+    const emailMatchIds: string[] = search
+      ? await this.findUserIdsByEmailSearch(search, query.cursor, query.limit)
       : [];
     const users = await this.prisma.user.findMany({
       where: {
-        ...(query.search && {
+        ...(search && {
           OR: [
-            { displayName: { contains: query.search, mode: 'insensitive' } },
+            { displayName: { contains: search, mode: 'insensitive' } },
             { id: { in: emailMatchIds } },
           ],
         }),
@@ -253,6 +254,17 @@ export class UserPrismaRepository implements UserRepositoryInterface {
     });
 
     return users.map((user): AdminUserInterface => this.toAdminDomain(user));
+  }
+
+  // Prisma's `contains` drops the value straight into a LIKE pattern without
+  // escaping it, so `%` searched for everything and `_` matched any single
+  // character — an admin typing a literal `%` got the whole table back rather
+  // than the accounts with a percent sign in them. Backslash is LIKE's default
+  // escape character, so escaping the three metacharacters (and the escape
+  // itself, first) is enough; no ESCAPE clause is needed, which matters
+  // because Prisma gives no way to add one.
+  private escapeLikePattern(search: string): string {
+    return search.replace(/[\\%_]/g, '\\$&');
   }
 
   // Bounded, and still exact for the page being built: the caller orders by
