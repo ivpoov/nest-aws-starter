@@ -1,23 +1,132 @@
 # Copy to terraform.tfvars and edit. terraform.tfvars is gitignored — this
 # repository is public, so no real account ids, profile names, domains or
 # addresses belong in version control. Everything below is a placeholder.
+#
+# Every variable this stack takes is listed here, commented out at its default
+# unless it has to be set. The reasoning for each one is on its `variable`
+# block; README.md says which file that is.
+
+# ---------------------------------------------------------------------------
+# Identity — these three decide every resource name in the stack
+# ---------------------------------------------------------------------------
 
 project_name = "nest-aws-starter"
 environment  = "dev"
 aws_region   = "us-east-1"
 
-# Named AWS CLI profile, or remove the line to use the ambient credential chain
+# Named AWS CLI profile, or leave it out to use the ambient credential chain
 # (env vars, SSO, or a CI role).
 # profile = "your-aws-profile"
 
-# "demo" for the cheapest disposable stack, "production" for the managed and
-# durable one. Same code, different inputs — see locals.tf.
+# ---------------------------------------------------------------------------
+# Posture
+# ---------------------------------------------------------------------------
+
+# "demo" for the cheapest disposable stack (~$15-25/month), "production" for the
+# managed and durable one. Same code, different inputs — the two maps in
+# locals.tf are the whole difference. README.md has the table.
 cost_profile = "demo"
 
-# Optional. Leave unset to run on the AWS-assigned hostnames with no ACM
-# certificate or Route 53 zone.
+# Optional. Leave unset to run on the AWS-assigned CloudFront and ALB hostnames
+# with no ACM certificate and no Route 53 zone. Setting it turns on the
+# certificate, the hosted zone, api./admin. subdomains and the SES identity —
+# and none of it completes until you delegate to the name servers in the
+# edge_hosted_zone_name_servers output.
 # domain_name = "example.com"
 
-# Optional for demo, required for production: where CloudWatch alarms are sent.
-# AWS mails a subscription confirmation that has to be clicked.
+# Optional for demo, required for production: where CloudWatch alarms and the
+# monthly budget alerts are sent. AWS mails a subscription confirmation that has
+# to be clicked. Leave it unset and nothing reaches anyone — including the
+# budget alert, which is the one that tells you the stack you forgot about is
+# still billing.
 # alert_email = "alerts@example.com"
+
+# Monthly cost budget in USD, alerted at 50/80/100% of actual spend and once on
+# a forecast to exceed it. Created on every profile — there is no way to turn it
+# off, deliberately. $20 is set so the first alert arrives while the demo stack
+# is behaving normally, which is how you find out the budget works.
+# monthly_budget_amount_usd = 20
+
+# ---------------------------------------------------------------------------
+# Network
+# ---------------------------------------------------------------------------
+
+# Change only before the first apply — renumbering a live VPC recreates it.
+# vpc_cidr = "10.0.0.0/16"
+
+# Egress from the private subnets. FALSE ON PURPOSE: a NAT gateway is ~$32/month
+# per gateway in hourly charges alone, and the production profile runs one per
+# AZ. Ignored entirely on a profile with no private subnets, so setting it on
+# demo is a no-op rather than a surprise invoice.
+# enable_nat = false
+
+# Interface VPC endpoints, by AWS service short name. Not free (~$7/month per
+# endpoint per AZ), so they are named explicitly rather than switched on as a
+# set. Ignored on profiles that disable VPC endpoints.
+# interface_endpoints = ["ecr.api", "ecr.dkr", "logs", "ssm"]
+
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+
+# Matches the local docker compose database, so a dump moves between them.
+# database_name     = "starter"
+# database_username = "appuser"
+
+# Keep the major in step with the postgres image in docker-compose.yml.
+# database_engine_version = "18"
+
+# Prisma pool size per task, written into DATABASE_URL. The constraint is
+# `max task count x connection_limit <= max_connections - reserved`; a
+# db.t4g.micro lands near 112. A check in datastores.tf warns above 90.
+# database_connection_limit = 10
+
+# Ceiling for RDS storage autoscaling, or 0 to leave the volume at its allocated
+# size. Autoscaling bills only for storage it grows into, so a ceiling is cheap
+# insurance against the one database failure with no partial mode.
+# database_max_allocated_storage_gb = 0
+
+# ---------------------------------------------------------------------------
+# Application
+# ---------------------------------------------------------------------------
+
+# Browser origins allowed to run presigned uploads against the uploads bucket.
+# Empty is the useful setting: the list is then taken from the edge module,
+# which knows every hostname the frontends are actually served from, including
+# the CloudFront ones AWS only assigns at apply time. Set it to add an origin
+# this stack cannot know about, e.g. a local dev server.
+# cors_allowed_origins = ["http://localhost:5173"]
+
+# Tag in the api ECR repository the service runs. "latest" is the bootstrap
+# value and the wrong one for a real deployment — the deploy workflow passes the
+# commit SHA, so every task definition revision names exactly one build.
+# api_image_tag        = "latest"
+# migrations_image_tag = "migrations"
+
+# Extra NON-SECRET environment for the API container, merged over what the stack
+# derives. Anything set here is plaintext in the task definition; secrets go to
+# SSM through the data module instead.
+# api_extra_environment = {
+#   STRIPE_ENABLED       = "true"
+#   GOOGLE_OAUTH_ENABLED = "true"
+# }
+
+# ---------------------------------------------------------------------------
+# Deployments
+# ---------------------------------------------------------------------------
+
+# The one GitHub repository allowed to deploy this stack, as "owner/name".
+# Leave it unset and no OIDC provider, deploy role or manifest is created at
+# all — the right posture for a stack applied from a laptop. Set it and
+# .github/workflows/deploy.yml needs exactly one secret: a role ARN. There is no
+# IAM user and no access key anywhere in this repository, deliberately.
+# github_repository = "your-org/your-repo"
+
+# The only ref deployments may run from. A branch, because a branch is the only
+# ref protected by review; a tag can be moved by anyone with push access.
+# github_deploy_ref = "refs/heads/main"
+
+# Set to false when the account already has a GitHub OIDC provider — an account
+# may hold only one per issuer, so a second environment must adopt rather than
+# create.
+# create_github_oidc_provider = true

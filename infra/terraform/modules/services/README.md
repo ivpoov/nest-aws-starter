@@ -64,7 +64,7 @@ re-run it.
 | `ReceiveMessageCommand`                        | `payment-webhook-consumer.service.ts`            | `sqs:ReceiveMessage`         | webhook queue         |
 | `DeleteMessageCommand`                         | `payment-webhook-consumer.service.ts`            | `sqs:DeleteMessage`          | webhook queue         |
 | `SendEmailCommand` (SES **v1**)                | `ses-mail-transport.service.ts`                  | `ses:SendEmail` + `ses:FromAddress` condition | the domain identity, that one address |
-| `PublishCommand`                               | `sns-provider.service.ts` — **no consumer**      | `sns:Publish`                | notification topic    |
+| `PublishCommand`                               | `sns-provider.service.ts` — **no consumer**      | *nothing — see below*        | —                     |
 | —                                              | —                                                | `ssm:GetParameters`          | `<ssm prefix>/*`      |
 
 `s3:ListBucket` is the one grant that is not one-to-one with a call. S3 answers
@@ -79,7 +79,7 @@ check in `file.service.ts` becomes a 500. Read-only, bucket-level, this bucket.
 | Purpose                        | IAM action                                                              | Resource scope           |
 | ------------------------------ | ----------------------------------------------------------------------- | ------------------------ |
 | Registry auth for image pull   | `ecr:GetAuthorizationToken`                                             | `*` — see below          |
-| Image pull                     | `ecr:BatchCheckLayerAvailability`, `ecr:GetDownloadUrlForLayer`, `ecr:BatchGetImage` | this stack's two repositories |
+| Image pull                     | `ecr:BatchCheckLayerAvailability`, `ecr:GetDownloadUrlForLayer`, `ecr:BatchGetImage` | this stack's `api` repository |
 | Container logs                 | `logs:CreateLogStream`, `logs:PutLogEvents`                             | `/aws/ecs/<prefix>*`     |
 | Task-definition `secrets`      | `ssm:GetParameters`                                                     | `<ssm prefix>/*`         |
 
@@ -105,12 +105,19 @@ retains forever and bills forever.
    the IAM user's keys. Dropping the `credentials` block so the SDK falls back
    to the container credential provider is a small change in the API, and until
    it lands the least-privilege S3 statements here are aspirational for the
-   wrong reason. **The SQS, SNS and SES clients already use the default
-   credential chain and do run as this role.**
-2. **`sns:Publish` is granted with no caller.** `SnsProviderService` exists and
-   is registered, but nothing outside `providers/sns/` injects `SNS_PROVIDER`.
-   The topic is an extension point. Remove the statement if you remove the
-   provider.
+   wrong reason. **The SQS and SES clients already use the default credential
+   chain and do run as this role.**
+2. **`sns:Publish` was granted with no caller, and has been removed.**
+   `SnsProviderService` exists and `SnsModule` is registered in
+   `app.module.ts`, but nothing outside
+   `apps/api/src/modules/common/providers/sns/` injects `SNS_PROVIDER` — the
+   only other references in the repository are that provider's own unit spec
+   and `test/sns.e2e-spec.ts`. Nothing publishes, so the task role no longer
+   holds the action: least privilege means removing an unused grant, not
+   narrowing it. The topic stays as the extension point, and `iam.tf` carries
+   the exact statement to paste back when a real publisher lands. Until then a
+   publish fails with an `AccessDenied` naming this role, which is the right way
+   to discover the grant is missing.
 3. **`ssm:GetParameters` matches no SDK call.** Nothing in `apps/api/src`
    imports an SSM client. It is granted because ECS resolves a task
    definition's `secrets` block with the **execution** role before the container
@@ -137,9 +144,11 @@ retains forever and bills forever.
 - Nothing reads the DLQ. The observability stack should alarm on
   `ApproximateNumberOfMessagesVisible` on `payment_webhook_dlq_arn` — a DLQ
   nobody watches is a folder of lost payments.
-- `local.names.mail_config_set` is unused: an SES configuration set only earns
-  its keep once the mail transport passes `ConfigurationSetName`, which it does
-  not.
-- Without `domain_name` set, the uploads CORS origin list is `["*"]` — the
-  frontend hostname is assigned by the edge stack and is not knowable here. The
-  presigned signature is what authorizes an upload; CORS is a browser control.
+- There is no SES configuration set and no name reserved for one. A
+  configuration set only earns its keep once the mail transport passes
+  `ConfigurationSetName`, which `SesMailTransportService` does not.
+- The uploads CORS origin list is never `["*"]`. The caller passes
+  `module.edge.cors_origins` — the hostnames the frontends are actually served
+  from, CloudFront-assigned ones included — unless `cors_allowed_origins` pins
+  it by hand. The presigned signature is what authorizes an upload; CORS is a
+  browser control on top of it.

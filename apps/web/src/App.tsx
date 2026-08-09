@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { AppLayout } from './components/Layout/AppLayout';
 import { AuthGate } from './components/Layout/AuthGate';
+import { APP_HOME_ROUTE } from './constants/app-home-route.constants';
 import { NotificationSocketProvider } from './contexts/NotificationSocketContext'; // <module:notification>
 import { BillingCanceledPage } from './pages/BillingCanceledPage'; // <module:payment>
 import { BillingPage } from './pages/BillingPage'; // <module:payment>
@@ -10,7 +11,7 @@ import { ContactPage } from './pages/ContactPage'; // <module:contact-us>
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { MethodsPage } from './pages/MethodsPage';
-import { NotesPage } from './pages/NotesPage';
+import { NotesPage } from './pages/NotesPage'; // <module:note>
 import { NotificationPreferencesPage } from './pages/NotificationPreferencesPage'; // <module:notification>
 import { OauthCallbackPage } from './pages/OauthCallbackPage';
 import { PricingPage } from './pages/PricingPage'; // <module:payment>
@@ -42,7 +43,9 @@ export function App(): ReactElement {
         <Route element={<NotificationSocketProvider />}>
           {/* </module:notification> */}
           <Route element={<AppLayout />}>
+            {/* <module:note> */}
             <Route path="/notes" element={<NotesPage />} />
+            {/* </module:note> */}
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/settings/methods" element={<MethodsPage />} />
             <Route path="/settings/sessions" element={<SessionsPage />} />
@@ -57,7 +60,7 @@ export function App(): ReactElement {
         </Route>
         {/* </module:notification> */}
       </Route>
-      <Route path="*" element={<Navigate to="/notes" replace />} />
+      <Route path="*" element={<Navigate to={APP_HOME_ROUTE} replace />} />
     </Routes>
   );
 }

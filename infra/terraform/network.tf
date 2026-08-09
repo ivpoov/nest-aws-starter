@@ -32,9 +32,10 @@ variable "enable_nat" {
     private-subnet workload genuinely needs outbound internet — pulling images
     from a non-ECR registry, calling a third-party API — and expect the bill.
 
-    Ignored unless the cost profile creates private subnets in the first place:
-    the demo profile has none, so it can never create a NAT gateway however this
-    is set.
+    Ignored unless the cost profile both creates private subnets
+    (`private_subnets_enabled`) and budgets for their egress
+    (`nat_gateway_enabled`). The demo profile does neither, so it can never
+    create a NAT gateway however this is set.
   EOT
   type        = bool
   default     = false
@@ -55,20 +56,19 @@ variable "interface_endpoints" {
 }
 
 locals {
-  # The private tier is a property of the posture, not a separate switch: the
-  # profile that budgets for NAT egress is the profile that has something to put
-  # behind it. There is no `private_subnets_enabled` key in
-  # local.profile_settings today and this file does not own locals.tf, so it
-  # keys off the existing knob that carries the same meaning. If that key is
-  # ever added, point this at it.
-  network_private_tier_enabled = local.profile.nat_gateway_enabled
+  # An explicit key, not nat_gateway_enabled used as a proxy for one. The two
+  # were the same flag until Stage D and should not have been: private subnets
+  # are route tables and address space, which are free, and NAT egress from them
+  # is roughly $32/month per gateway. A stack can legitimately want the first
+  # without the second — that is what the interface_endpoints path is for.
+  network_private_tier_enabled = local.profile.private_subnets_enabled
 
-  # NAT is the product of two independent conditions: the profile must have a
-  # private tier to attach it to, AND the operator must have opted into the
-  # spend. Demo fails the first, so `enable_nat = true` there is a no-op rather
-  # than a surprise invoice.
+  # NAT is the product of three independent conditions: there must be a private
+  # tier to attach it to, the profile must budget for the egress, and the
+  # operator must have opted into the spend. Demo fails the first two, so
+  # `enable_nat = true` there is a no-op rather than a surprise invoice.
   network_nat_gateway_count = (
-    local.network_private_tier_enabled && var.enable_nat
+    local.network_private_tier_enabled && local.profile.nat_gateway_enabled && var.enable_nat
     ? local.profile.nat_gateway_count
     : 0
   )
@@ -76,18 +76,16 @@ locals {
   # Interface endpoints need both the profile's blessing and an explicit list.
   network_interface_endpoints = local.profile.vpc_endpoints_enabled ? var.interface_endpoints : []
 
-  # Security-group and IAM names are not in local.names (which this file does
-  # not own), so they are derived from the same local.name_prefix here. They
-  # belong in local.names the next time that file is touched.
+  # Reshaped from local.names, not derived here. The module wants one object per
+  # concern and local.names is deliberately flat, so this is the only thing that
+  # happens between the two — no string is built in this file.
   network_security_group_names = {
-    alb           = "${local.name_prefix}-alb-sg"
-    api           = "${local.name_prefix}-api-sg"
-    database      = "${local.name_prefix}-db-sg"
-    cache         = "${local.name_prefix}-cache-sg"
-    vpc_endpoints = "${local.name_prefix}-vpce-sg"
+    alb           = local.names.security_group_alb
+    api           = local.names.security_group_api
+    database      = local.names.security_group_database
+    cache         = local.names.security_group_cache
+    vpc_endpoints = local.names.security_group_vpc_endpoints
   }
-
-  network_flow_log_role_name = "${local.name_prefix}-vpc-flow-logs"
 }
 
 module "network" {
@@ -102,7 +100,7 @@ module "network" {
     flow_log_group   = local.names.flow_log_group
   }
   security_group_names = local.network_security_group_names
-  flow_log_role_name   = local.network_flow_log_role_name
+  flow_log_role_name   = local.names.flow_log_role
 
   vpc_cidr = var.vpc_cidr
   azs      = local.azs
@@ -123,6 +121,16 @@ check "nat_without_private_subnets" {
   assert {
     condition     = !(var.enable_nat && !local.network_private_tier_enabled)
     error_message = "enable_nat is set, but the selected cost profile creates no private subnets — no NAT gateway will be created and nothing will be billed for one. Setting it here has no effect."
+  }
+}
+
+check "nat_budgeted_without_a_private_tier" {
+  assert {
+    # Profile coherence, not operator error: a profile that budgets for NAT
+    # egress but creates no private subnets has nothing for the gateways to
+    # serve, and every workload sits in a public subnet regardless.
+    condition     = !(local.profile.nat_gateway_enabled && !local.profile.private_subnets_enabled)
+    error_message = "The selected cost profile sets nat_gateway_enabled but leaves private_subnets_enabled false. NAT gateways route egress out of private subnets; with none, no gateway is created and workloads run in the public subnets. Set both keys or neither in local.profile_settings."
   }
 }
 

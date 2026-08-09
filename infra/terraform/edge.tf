@@ -37,12 +37,11 @@ locals {
     api   = ["api.${var.domain_name}"]
   }
 
-  # Site bucket names follow local.names' convention — <prefix>-<role>-<account>
-  # — built from local.name_prefix the same way the per-instance names in
-  # locals.tf are.
+  # Keyed by site so the `sites` map below can be walked; the names themselves
+  # come from local.names like everything else in this stack.
   edge_site_buckets = {
-    web   = "${local.name_prefix}-web-${local.bucket_suffix}"
-    admin = "${local.name_prefix}-admin-${local.bucket_suffix}"
+    web   = local.names.web_bucket
+    admin = local.names.admin_bucket
   }
 
   # Put CloudFront in front of the ALB as well? Off, deliberately — the full
@@ -56,17 +55,24 @@ locals {
   edge_api_distribution_enabled = false
   edge_alb_dns_name             = null
 
-  # Two things the edge consumes but does not own, both null until the modules
-  # that do own them land. The check block at the bottom of this file is what
-  # stops that from being silent on a profile that asked for them.
+  # Two things the edge consumes but does not own.
   #
-  #   - the access-log bucket (local.names.logs_bucket) belongs to shared
-  #     storage, and must have ACLs enabled: CloudFront standard logging still
-  #     delivers with an ACL grant, so a BucketOwnerEnforced bucket rejects it
-  #   - the web ACL (local.names.waf_web_acl) is shared across distributions,
-  #     and for CloudFront must itself be created in us-east-1 with CLOUDFRONT
-  #     scope
-  edge_log_bucket_domain_name = null
+  # The access-log bucket belongs to the observability module: access logs are
+  # not a CloudFront concern, and ALB and S3 server access logs want the same
+  # bucket under their own prefixes. It exists only on profiles that set
+  # cloudfront_logs_enabled, and on the others this resolves to null — which is
+  # exactly what the module's `logging_enabled = false` path expects, so the two
+  # switch together off one profile key. That bucket is also the one bucket in
+  # this stack with ACLs enabled: CloudFront standard logging delivers by
+  # writing an object with an ACL grant, and a BucketOwnerEnforced bucket
+  # rejects it silently.
+  #
+  # The web ACL is still null. No module in this stack creates one yet, so the
+  # production profile's waf_enabled currently buys nothing — the check at the
+  # bottom of this file is what keeps that from being quiet. It is shared across
+  # distributions and, for CloudFront, must itself be created in us-east-1 with
+  # CLOUDFRONT scope.
+  edge_log_bucket_domain_name = module.observability.access_logs_bucket_domain_name
   edge_web_acl_arn            = null
 }
 
@@ -192,18 +198,19 @@ output "api_cors_origins" {
   value       = join(",", module.edge.cors_origins)
 }
 
-# A cost profile that asks for edge logging or a web ACL and gets neither is
-# worse than one that never asked: the setting reads as enabled everywhere it is
-# shown. Warn on plan rather than fail — the modules that own these resources
-# land separately, and a stack should still be applyable in between.
+# A cost profile that asks for a web ACL and gets none is worse than one that
+# never asked: the setting reads as enabled everywhere it is shown. Warn on plan
+# rather than fail — a stack with no WAF is still a working stack.
+#
+# The matching warning for access logs is gone because the wire is no longer
+# missing: local.edge_log_bucket_domain_name above resolves to the observability
+# module's bucket on exactly the profiles that ask for logging.
 check "edge_supporting_resources" {
   assert {
-    condition     = !(local.profile.cloudfront_logs_enabled && local.edge_log_bucket_domain_name == null)
-    error_message = "The selected cost profile enables CloudFront access logs, but no log bucket is wired into the edge module — no logs will be delivered."
-  }
-
-  assert {
-    condition     = !(local.profile.waf_enabled && local.edge_web_acl_arn == null)
-    error_message = "The selected cost profile enables WAF, but no web ACL is wired into the edge module — the distributions are unprotected."
+    condition = !(local.profile.waf_enabled && local.edge_web_acl_arn == null)
+    error_message = join(" ", [
+      "The selected cost profile enables WAF, but no web ACL is wired into the edge module — the distributions are unprotected.",
+      "No module in this stack creates one: build the web ACL in us-east-1 with CLOUDFRONT scope, name it local.names.waf_web_acl, and set local.edge_web_acl_arn to its ARN.",
+    ])
   }
 }
