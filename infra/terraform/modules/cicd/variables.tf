@@ -94,3 +94,54 @@ variable "max_session_duration_seconds" {
     error_message = "max_session_duration_seconds must be between 3600 and 43200 — the range IAM accepts."
   }
 }
+
+# ---------------------------------------------------------------------------
+# What the role is allowed to touch. Every one of these is an existing resource
+# owned by another module; nothing here creates any of them.
+# ---------------------------------------------------------------------------
+
+variable "ecr_repository_arns" {
+  description = "Repositories the workflow may push to. Push only — no ecr:BatchDeleteImage is granted anywhere in this module."
+  type        = list(string)
+}
+
+variable "ecs_cluster_name" {
+  description = "Cluster the service and the migration task run in. Every ECS statement below is scoped to it."
+  type        = string
+}
+
+variable "ecs_service_name" {
+  description = "The one service the workflow may update."
+  type        = string
+}
+
+# NOTE: there is deliberately no api_task_definition_family input. The workflow
+# does register a new revision in that family, but ecs:RegisterTaskDefinition
+# supports no resource-level permissions (see policy.tf), so naming the family
+# here would produce a variable that no statement could use — and a reader would
+# reasonably assume the grant was scoped to it.
+
+variable "migration_task_definition_family" {
+  description = "Family of the one-off migration task. The only family the role may `ecs:RunTask`."
+  type        = string
+}
+
+variable "task_role_arns" {
+  description = "Roles the workflow may pass to ECS — the task role and the execution role. iam:PassRole is scoped to exactly these two and conditioned on ecs-tasks.amazonaws.com."
+  type        = list(string)
+}
+
+variable "log_group_names" {
+  description = "Log groups the workflow may read when a deployment fails. Read only: no logs:PutLogEvents, so a compromised workflow cannot forge or erase application logs."
+  type        = list(string)
+}
+
+variable "site_bucket_names" {
+  description = "Static-site buckets the workflow syncs the built frontends into."
+  type        = list(string)
+}
+
+variable "cloudfront_distribution_ids" {
+  description = "Distributions the workflow may invalidate. Invalidation only — no cloudfront:UpdateDistribution."
+  type        = list(string)
+}
