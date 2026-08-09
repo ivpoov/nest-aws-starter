@@ -523,6 +523,11 @@ Not created by this stack, despite what you might expect: **no WAF** (the profil
 the resource does not — see ADR 10), no Lambda, no EventBridge, no DynamoDB (state locking
 uses S3's native `use_lockfile`), no Secrets Manager, no CloudWatch dashboards, no X-Ray.
 
+Running this for real — the full profile diff, the NAT-versus-endpoints numbers, RDS Proxy
+and the connection-pool ceiling, backup and restore, secret rotation, incident basics, and
+the longer list of deliberate absences — is
+[`docs/guides/production.md`](./guides/production.md).
+
 ---
 
 ## 6. Where the decisions are written down
