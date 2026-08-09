@@ -1,0 +1,22 @@
+{
+  "name": "@nest-aws-starter/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "docs:build": "astro build",
+    "preview": "astro preview",
+    "lint": "biome check src astro.config.mjs"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "7.2.1",
+    "@astrojs/starlight": "0.41.3",
+    "astro": "7.0.7",
+    "unist-util-visit": "5.1.0"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1",
+    "rehype-mermaid": "3.0.0",
+    "starlight-links-validator": "0.25.2"
+  }
+}
