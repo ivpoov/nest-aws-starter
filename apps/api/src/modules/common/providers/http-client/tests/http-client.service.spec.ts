@@ -216,4 +216,45 @@ describe('HttpClientService', () => {
     expect(transcript).not.toContain('?');
     expect(transcript).not.toContain('user-token');
   });
+
+  // Redacting the URL is only half the job: the caught error is appended to the
+  // same line, and fetch's own messages quote the offending URL verbatim —
+  // userinfo, query string and all. Without sanitising the error text the
+  // redaction above is undone by the suffix on the very same log line.
+  it('redacts credentials that fetch echoes back inside the error message', async () => {
+    captureLogs();
+
+    const client: HttpClientService = new HttpClientService();
+
+    await expect(
+      client.request({
+        method: 'POST',
+        url: 'https://user:pa55word@127.0.0.1:1/oauth/access_token?client_secret=top-secret',
+        retries: 0,
+      }),
+    ).rejects.toBeInstanceOf(InternalError);
+
+    const transcript: string = logged.join('\n');
+
+    expect(transcript).toContain('POST https://127.0.0.1:1/oauth/access_token failed');
+    expect(transcript).not.toContain('pa55word');
+    expect(transcript).not.toContain('client_secret');
+    expect(transcript).not.toContain('top-secret');
+  });
+
+  it('redacts an unparseable url that the download error echoes back', async () => {
+    captureLogs();
+
+    const client: HttpClientService = new HttpClientService();
+
+    await expect(
+      client.download('graph.example/avatar.png?access_token=user-token', 10, ['image/png']),
+    ).rejects.toBeInstanceOf(InternalError);
+
+    const transcript: string = logged.join('\n');
+
+    expect(transcript).toContain('[unparseable-url] download failed');
+    expect(transcript).not.toContain('access_token');
+    expect(transcript).not.toContain('user-token');
+  });
 });
