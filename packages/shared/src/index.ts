@@ -43,13 +43,13 @@ export * from './files/interfaces/file-response.interface.js'; // <module:file>
 export * from './files/interfaces/request-upload-request.interface.js'; // <module:file>
 export * from './files/interfaces/request-upload-response.interface.js'; // <module:file>
 export * from './files/types/file-error-code.type.js'; // <module:file>
-export * from './notes/constants/note-error-codes.constants.js';
-export * from './notes/enums/note-status.enum.js';
-export * from './notes/interfaces/create-note-request.interface.js';
-export * from './notes/interfaces/note-list-response.interface.js';
-export * from './notes/interfaces/note-response.interface.js';
-export * from './notes/interfaces/update-note-request.interface.js';
-export * from './notes/types/note-error-code.type.js';
+export * from './notes/constants/note-error-codes.constants.js'; // <module:note>
+export * from './notes/enums/note-status.enum.js'; // <module:note>
+export * from './notes/interfaces/create-note-request.interface.js'; // <module:note>
+export * from './notes/interfaces/note-list-response.interface.js'; // <module:note>
+export * from './notes/interfaces/note-response.interface.js'; // <module:note>
+export * from './notes/interfaces/update-note-request.interface.js'; // <module:note>
+export * from './notes/types/note-error-code.type.js'; // <module:note>
 export * from './notifications/enums/notification-audience.enum.js'; // <module:notification>
 export * from './notifications/enums/notification-channel.enum.js'; // <module:notification>
 export * from './notifications/enums/notification-type.enum.js'; // <module:notification>

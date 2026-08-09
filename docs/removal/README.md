@@ -11,6 +11,7 @@ of the app still type-checks and passes its unit tests — see
 
 ## Removable modules
 
+- [`note`](./note.md) — Demo notes CRUD — the feature a fresh clone has to click on before writing any code.
 - [`contact-us`](./contact-us.md) — Public contact form + admin inbox.
 - [`statistic`](./statistic.md) — Admin dashboard statistics (cached TypedSQL aggregates).
 - [`api-key`](./api-key.md) — Long-lived API key issuance, guard, and admin management.

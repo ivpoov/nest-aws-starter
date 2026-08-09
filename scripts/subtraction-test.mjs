@@ -90,6 +90,49 @@ const SKIP_DIR_NAMES = new Set(['node_modules', 'dist', 'generated', '.git']);
 // the flag cannot drift away from what the entry actually says.
 const MODULES = [
   {
+    // The demo feature the starter ships so a fresh clone has something to
+    // run: CRUD notes behind auth, with the CASL ownership rules and cursor
+    // pagination wired end to end. `pnpm bootstrap --drop-demo` deletes it
+    // through this very entry, which is why it is fenced like any other
+    // optional module rather than special-cased in the bootstrap script.
+    id: 'note',
+    summary: 'Demo notes CRUD — the feature a fresh clone has to click on before writing any code.',
+    paths: [
+      'apps/api/src/modules/note',
+      'apps/api/test/note.e2e-spec.ts',
+      'apps/web/src/apis/notes',
+      'apps/web/src/components/Notes',
+      'apps/web/src/hooks/notes',
+      'apps/web/src/interfaces/use-notes-result.interface.ts',
+      'apps/web/src/pages/NotesPage.tsx',
+      // The attachments demo is rendered *inside* NotesPage, so this spec
+      // cannot outlive the page it mounts. The `file` module itself survives.
+      'apps/web/src/tests/AttachmentsCard.spec.tsx',
+      'packages/shared/src/notes',
+    ],
+    envVars: [],
+    frontendFenced: true,
+    manualSteps: [],
+    cosmeticSteps: [
+      [
+        'apps/web/src/components/Attachments + hooks/files + apis/files',
+        'the `file` module keeps compiling, but NotesPage was the only page mounting AttachmentsCard — nothing renders the upload demo any more. Mount it on a page of your own, or follow docs/removal/file.md and drop the module too',
+      ],
+      [
+        'apps/api/src/modules/common/dtos/error-response.dto.ts',
+        "the Swagger examples still read NOTE_NOT_FOUND and /api/v1/notes/<uuid>. They are illustrative strings in @ApiProperty examples, not references to the deleted module — repoint them at one of your own resources when you have one",
+      ],
+      [
+        'apps/api/src/modules/casl/tests/casl-ability-factory.service.spec.ts',
+        'TestNoteEntity is a throwaway class declared inside the spec, not the deleted entity — the CASL suite is self-contained and keeps passing',
+      ],
+      [
+        "apps/api's cache specs + apps/api/test/cache.e2e-spec.ts",
+        "the 'note:1' / 'cache-e2e:note:' cache keys are arbitrary strings chosen to look like a real key; nothing reads the note tables",
+      ],
+    ],
+  },
+  {
     id: 'contact-us',
     summary: 'Public contact form + admin inbox.',
     paths: [

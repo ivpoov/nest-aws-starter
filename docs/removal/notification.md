@@ -97,17 +97,18 @@ and the markers themselves.
   - line 46: `notificationPreferences NotificationPreference[] // <module:notification>`
   - line 47: `notifications           Notification[] // <module:notification>`
   - line 48: `notificationReceipts    NotificationReceipt[] // <module:notification>`
-  - lines 349-397 (block)
+  - lines 352-400 (block)
 - `apps/web/src/App.tsx`
-  - line 5: `import { NotificationSocketProvider } from './contexts/NotificationSocketContext'; // <module:notification>`
-  - line 14: `import { NotificationPreferencesPage } from './pages/NotificationPreferencesPage'; // <module:notification>`
-  - lines 41-43 (block)
-  - lines 52-54 (block)
-  - lines 56-58 (block)
+  - line 6: `import { NotificationSocketProvider } from './contexts/NotificationSocketContext'; // <module:notification>`
+  - line 15: `import { NotificationPreferencesPage } from './pages/NotificationPreferencesPage'; // <module:notification>`
+  - lines 42-44 (block)
+  - lines 55-57 (block)
+  - lines 59-61 (block)
 - `apps/web/src/components/Layout/AppLayout.tsx`
-  - line 5: `import { NotificationBell } from '../Notifications/NotificationBell'; // <module:notification>`
-  - line 15: `{ to: '/settings/notifications', label: 'Notifications' }, // <module:notification>`
-  - lines 40-42 (block)
+  - line 6: `import { NotificationBell } from '../Notifications/NotificationBell'; // <module:notification>`
+  - lines 32-34 (block)
+- `apps/web/src/constants/app-nav-items.constants.ts`
+  - line 14: `{ to: '/settings/notifications', label: 'Notifications' }, // <module:notification>`
 - `apps/web/src/tests/AppLayout.spec.tsx`
   - lines 7-16 (block)
 - `apps/admin/src/App.tsx`

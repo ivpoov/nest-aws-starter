@@ -11,7 +11,7 @@ import { ContactPage } from './pages/ContactPage'; // <module:contact-us>
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { MethodsPage } from './pages/MethodsPage';
-import { NotesPage } from './pages/NotesPage';
+import { NotesPage } from './pages/NotesPage'; // <module:note>
 import { NotificationPreferencesPage } from './pages/NotificationPreferencesPage'; // <module:notification>
 import { OauthCallbackPage } from './pages/OauthCallbackPage';
 import { PricingPage } from './pages/PricingPage'; // <module:payment>
@@ -43,7 +43,9 @@ export function App(): ReactElement {
         <Route element={<NotificationSocketProvider />}>
           {/* </module:notification> */}
           <Route element={<AppLayout />}>
+            {/* <module:note> */}
             <Route path="/notes" element={<NotesPage />} />
+            {/* </module:note> */}
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/settings/methods" element={<MethodsPage />} />
             <Route path="/settings/sessions" element={<SessionsPage />} />
