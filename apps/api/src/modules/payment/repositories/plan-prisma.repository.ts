@@ -1,3 +1,4 @@
+import { MAX_PAGE_SIZE } from '@constants/pagination.constants.js';
 import type { PlanModel } from '@generated/prisma/models.js';
 import type { CursorPaginationInterface } from '@interfaces/cursor-pagination.interface.js';
 import type { CreatePlanDataInterface } from '@modules/payment/interfaces/create-plan-data.interface.js';
@@ -19,9 +20,13 @@ export class PlanPrismaRepository implements PlanRepositoryInterface {
     return plan ? this.toDomain(plan) : null;
   }
 
+  // Capped: GET /billing/plans is public and takes no `limit`, so the row
+  // count is whatever an operator has seeded. A pricing page shows a handful
+  // of tiers; the cap is the shared page-size budget, not a guess.
   public async findManyActive(): Promise<PlanInterface[]> {
     const plans: PlanModel[] = await this.prisma.plan.findMany({
       where: { isActive: true },
+      take: MAX_PAGE_SIZE,
       orderBy: { amountCents: 'asc' },
     });
 

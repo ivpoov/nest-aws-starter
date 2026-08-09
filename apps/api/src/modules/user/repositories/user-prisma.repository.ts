@@ -1,3 +1,4 @@
+import { MAX_PAGE_SIZE } from '@constants/pagination.constants.js';
 import { Prisma } from '@generated/prisma/client.js';
 import { AuthMethodType, UserStatus } from '@generated/prisma/enums.js';
 import type { AuthMethodModel, UserModel } from '@generated/prisma/models.js';
@@ -114,9 +115,13 @@ export class UserPrismaRepository implements UserRepositoryInterface {
     });
   }
 
+  // Capped: GET /auth/methods takes no `limit`. The row count is bounded by
+  // the enabled providers today, but that is a property of the current schema,
+  // not of this query — the cap makes it one.
   public async findMethodsByUserId(userId: string): Promise<AuthMethodInterface[]> {
     const methods: AuthMethodModel[] = await this.prisma.authMethod.findMany({
       where: { userId },
+      take: MAX_PAGE_SIZE,
       orderBy: { createdAt: 'asc' },
     });
 

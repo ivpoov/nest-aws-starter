@@ -397,6 +397,14 @@ orderBy: { id: 'desc' },
 Offset pagination is allowed only for bounded admin tables (search + page numbers),
 always with a hard `limit` cap.
 
+**Every list is capped, including the ones with no `limit` parameter.**
+`MAX_PAGE_SIZE` / `DEFAULT_PAGE_SIZE` (`@constants/pagination.constants.js`) are the
+`@Max` and the default on both pagination DTOs. A list whose wire contract is a plain
+array with no cursor — `/billing/plans`, `/sessions`, `/auth/methods`,
+`/admin/suspicious/lockouts` — still passes `take: MAX_PAGE_SIZE` in its repository:
+"the table is small today" is a property of the data, not of the query, and
+`/billing/plans` is public and unauthenticated. Never write a per-endpoint cap.
+
 ### Schema rules
 
 - Primary keys: `String @id @default(uuid(7))` — UUIDv7, time-ordered.
