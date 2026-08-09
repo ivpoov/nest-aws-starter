@@ -233,7 +233,12 @@ export const MODULES = [
       'apps/web/src/interfaces/uploaded-file.interface.ts',
       'apps/web/src/interfaces/use-file-upload-result.interface.ts',
       'apps/web/src/types/file-upload-status.type.ts',
-      'apps/web/src/tests/AttachmentsCard.spec.tsx',
+      // The one path two modules share: the spec mounts NotesPage to reach
+      // AttachmentsCard, so `note` deletes it too. Fenced so that dropping
+      // `note` first also drops this line — otherwise this entry would name a
+      // file that no longer exists and assertModulePathsExist() would refuse
+      // to run at all.
+      'apps/web/src/tests/AttachmentsCard.spec.tsx', // <module:note>
       'apps/web/src/tests/useFileUpload.spec.tsx',
       // packages/shared/src/files is deleted file by file, not wholesale:
       // enums/file-intent.enum.ts survives, because the avatar flow
