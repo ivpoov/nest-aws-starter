@@ -94,6 +94,21 @@ RUN pnpm install --frozen-lockfile --offline --filter "@nest-aws-starter/api..."
 COPY packages/shared packages/shared
 COPY apps/api apps/api
 
+# .dockerignore excludes every .env file from the context; this proves it did.
+# The patterns there were once bare (`.env`, `.env.*`), which match the context
+# root only — so a developer's apps/api/.env, with DATABASE_URL, AWS keys and
+# AUTH_JWT_SECRET in it, was copied into this stage. That is the stage the
+# deploy workflow pushes to ECR as the migration image, so a broken pattern has
+# to break the build rather than ship a readable secret in a layer. Cheap, runs
+# before the expensive compile, and fails loudly with the offending path.
+RUN set -eu; \
+    for leaked in .env apps/api/.env packages/shared/.env; do \
+      if [ -e "$leaked" ]; then \
+        echo "SECRET LEAK: $leaked reached the build context — fix .dockerignore" >&2; \
+        exit 1; \
+      fi; \
+    done
+
 # `pnpm run build` for the API is `prisma generate --sql && tsc --noEmit && swc`
 # — SWC, not `nest build`: @nestjs/cli is not a dependency of this repository.
 # The filter's trailing "..." builds packages/shared first, in dependency order.
