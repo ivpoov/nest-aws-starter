@@ -88,7 +88,54 @@ const SKIP_DIR_NAMES = new Set(['node_modules', 'dist', 'generated', '.git']);
 // unverified, and the runner prints a COVERAGE GAP line for it.
 // assertFrontendFencedClaims() below enforces the assertion mechanically, so
 // the flag cannot drift away from what the entry actually says.
-const MODULES = [
+export const MODULES = [
+  // The demo feature the starter ships so a fresh clone has something to run:
+  // CRUD notes behind auth, with the CASL ownership rules and cursor
+  // pagination wired end to end. `pnpm bootstrap --drop-demo` deletes it
+  // through this very entry, which is why it is fenced like any other optional
+  // module rather than special-cased in the bootstrap script — and why the
+  // entry itself sits inside a fence, so the same strip that removes the
+  // module also removes its now-stale recipe from this list.
+  // <module:note>
+  {
+    id: 'note',
+    summary: 'Demo notes CRUD — the feature a fresh clone has to click on before writing any code.',
+    paths: [
+      'apps/api/src/modules/note',
+      'apps/api/test/note.e2e-spec.ts',
+      'apps/web/src/apis/notes',
+      'apps/web/src/components/Notes',
+      'apps/web/src/hooks/notes',
+      'apps/web/src/interfaces/use-notes-result.interface.ts',
+      'apps/web/src/pages/NotesPage.tsx',
+      // The attachments demo is rendered *inside* NotesPage, so this spec
+      // cannot outlive the page it mounts. The `file` module itself survives.
+      'apps/web/src/tests/AttachmentsCard.spec.tsx',
+      'packages/shared/src/notes',
+    ],
+    envVars: [],
+    frontendFenced: true,
+    manualSteps: [],
+    cosmeticSteps: [
+      [
+        'apps/web/src/components/Attachments + hooks/files + apis/files',
+        'the `file` module keeps compiling, but NotesPage was the only page mounting AttachmentsCard — nothing renders the upload demo any more. Mount it on a page of your own, or follow docs/removal/file.md and drop the module too',
+      ],
+      [
+        'apps/api/src/modules/common/dtos/error-response.dto.ts',
+        'the Swagger examples still read NOTE_NOT_FOUND and /api/v1/notes/<uuid>. They are illustrative strings in @ApiProperty examples, not references to the deleted module — repoint them at one of your own resources when you have one',
+      ],
+      [
+        'apps/api/src/modules/casl/tests/casl-ability-factory.service.spec.ts',
+        'TestNoteEntity is a throwaway class declared inside the spec, not the deleted entity — the CASL suite is self-contained and keeps passing',
+      ],
+      [
+        "apps/api's cache specs + apps/api/test/cache.e2e-spec.ts",
+        "the 'note:1' / 'cache-e2e:note:' cache keys are arbitrary strings chosen to look like a real key; nothing reads the note tables",
+      ],
+    ],
+  },
+  // </module:note>
   {
     id: 'contact-us',
     summary: 'Public contact form + admin inbox.',
@@ -186,7 +233,12 @@ const MODULES = [
       'apps/web/src/interfaces/uploaded-file.interface.ts',
       'apps/web/src/interfaces/use-file-upload-result.interface.ts',
       'apps/web/src/types/file-upload-status.type.ts',
-      'apps/web/src/tests/AttachmentsCard.spec.tsx',
+      // The one path two modules share: the spec mounts NotesPage to reach
+      // AttachmentsCard, so `note` deletes it too. Fenced so that dropping
+      // `note` first also drops this line — otherwise this entry would name a
+      // file that no longer exists and assertModulePathsExist() would refuse
+      // to run at all.
+      'apps/web/src/tests/AttachmentsCard.spec.tsx', // <module:note>
       'apps/web/src/tests/useFileUpload.spec.tsx',
       // packages/shared/src/files is deleted file by file, not wholesale:
       // enums/file-intent.enum.ts survives, because the avatar flow
@@ -686,7 +738,7 @@ function fenceFilesUnder(treeRoot) {
 // `// <module:x>` marker, and whole blocks between own-line
 // `// <module:x>` / `// </module:x>` markers. Returns the fence hits found
 // (used by --emit-docs) and, when `write` is true, persists the stripped file.
-function stripFencesInFile(filePath, moduleId, write) {
+export function stripFencesInFile(filePath, moduleId, write) {
   // `//` fences cover .ts/.prisma; the `{/* */}` variants exist because a
   // line comment is a syntax error inside JSX children, which is exactly
   // where a frontend cross-reference lives (a <Bell /> inside a layout).
@@ -732,7 +784,7 @@ function stripFencesInFile(filePath, moduleId, write) {
   return hits;
 }
 
-function scanFences(treeRoot, moduleId, write) {
+export function scanFences(treeRoot, moduleId, write) {
   const results = [];
 
   for (const filePath of fenceFilesUnder(treeRoot)) {
@@ -746,7 +798,7 @@ function scanFences(treeRoot, moduleId, write) {
   return results;
 }
 
-function deleteModulePaths(treeRoot, modulePaths) {
+export function deleteModulePaths(treeRoot, modulePaths) {
   for (const relPath of modulePaths) {
     rmSync(path.join(treeRoot, relPath), { recursive: true, force: true });
   }
@@ -1230,4 +1282,10 @@ function main() {
   }
 }
 
-main();
+// Only run when invoked as a script. `scripts/bootstrap.mjs --drop-demo`
+// imports MODULES/deleteModulePaths/scanFences from here so that a demo
+// removal is the *same* removal this test proves nightly, rather than a
+// second hand-written copy of it that can drift.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
+}

@@ -10,8 +10,8 @@ PostgreSQL on RDS, Redis, and every secret the API boots with. Wired from
    API task ─5432──▶│ RDS PostgreSQL  private, encrypted, gp3   │
         │           └──────────────────────────────────────────┘
         │
-        ├─6379──▶ redis://127.0.0.1   sidecar container, one task    (max 1 task)
-        └─6379──▶ rediss://…          ElastiCache replication group  (max >1 task)
+        ├─6379──▶ redis://127.0.0.1   sidecar container, per task    (managed_cache_enabled = false)
+        └─6379──▶ rediss://…          ElastiCache replication group  (managed_cache_enabled = true)
 
    SSM Parameter Store  /<project>/<env>/AUTH_JWT_SECRET, DATABASE_URL,
                         REDIS_URL, and the third-party placeholders
@@ -43,16 +43,35 @@ was already running, and **no ElastiCache resource is created at all**.
 strings — the extra `s` is what turns TLS on. That abstraction has been carrying
 a small cost since v0.1; this is the invoice it pays.
 
-The switch is `managed_cache_enabled`, and the caller derives it from the ceiling
-on the task count rather than from the profile name, because that is the actual
-rule: **a task-local cache is correct exactly while there is one task.** Two tasks
-with two sidecars would disagree about who is logged in — the refresh-token
-allowlist lives in Redis.
+The switch is `managed_cache_enabled`, and it is an explicit key in **both**
+cost profiles (`local.profile_settings` in the root `locals.tf`) rather than
+something derived from the task count. It used to be derived — from
+`compute_max_capacity > 1` — and that meant raising the demo profile to two
+tasks silently created a replication group, about $12/month, roughly 40% of that
+profile's whole bill, as a side effect of editing a capacity number. A cache
+costing real money should be switched on by someone who meant to.
+
+The rule the derivation encoded is still true: **a task-local cache is correct
+exactly while there is one task.** Two tasks with two sidecars would disagree
+about who is logged in — the refresh-token allowlist lives in Redis. That rule is
+now a `check` in `datastores.tf`, which fails on plan if a profile ever pairs
+`managed_cache_enabled = false` with a task ceiling above one. Enforced and
+readable, instead of applied silently.
+
+So the two keys move together, and both must be raised to run the API on more
+than one instance:
+
+```hcl
+managed_cache_enabled    = true   # shared cache,          ~$12/month
+compute_min_capacity     = 2      # second Fargate task,   ~$3/month on Spot
+compute_max_capacity     = 2
+```
 
 Stated plainly, the sidecar's cost: it is ephemeral. Every deploy, task
 replacement and crash empties it, and that signs every user out. Rate-limit
 counters and cached reads reset with it. For a demo that is the correct trade;
-for anything else, raise the task ceiling and get a replication group.
+for anything else, set `managed_cache_enabled = true` and get a replication
+group.
 
 | | sidecar | ElastiCache replication group |
 | --- | --- | --- |
@@ -148,7 +167,7 @@ rather than a comment because a comment in a `.tf` file is not a reminder.
 | Backups up to the size of the database | free | 1 day demo, 14 days production |
 | Multi-AZ standby | roughly doubles the instance cost | production only |
 | Performance Insights, 7-day retention | free | production only |
-| ElastiCache `cache.t4g.micro` | ~$12/month per node | production only |
+| ElastiCache `cache.t4g.micro` | ~$12/month per node | `managed_cache_enabled` — production only by default |
 | Redis sidecar container | $0 | demo only |
 | SSM Standard parameters | free | always created |
 

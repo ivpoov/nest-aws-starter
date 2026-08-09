@@ -13,10 +13,10 @@
 #             the application instead, which means the application needs AWS
 #             credentials before it can read its own configuration.
 #
-# One parameter per variable is also why local.names.database_secret — which
-# names a single "/project/env/database" secret — is not used here: it describes
-# the blob shape, and the parameters below are named after the variables the
-# container actually receives.
+# One parameter per variable is also why the root stack carries no name for a
+# single "/project/env/database" secret: that name describes the blob shape,
+# and the parameters below are named after the variables the container actually
+# receives.
 #
 # Encryption uses the AWS-managed alias/aws/ssm key. Free, and readable by any
 # principal in the account that already holds ssm:GetParameters on the path, so

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { exchangeOauthCode } from '../apis/auth';
 import { Loader } from '../components/ui/Loader';
+import { APP_HOME_ROUTE } from '../constants/app-home-route.constants';
 import { useAuthStore } from '../stores/auth.store';
 import { logger } from '../utils/logger';
 
@@ -25,7 +26,7 @@ export function OauthCallbackPage(): ReactElement {
       .then(async (result: OauthExchangeResponseInterface): Promise<void> => {
         if (result.tokens) setTokens(result.tokens.accessToken, result.tokens.refreshToken);
 
-        await navigate(result.kind === 'LINK' ? '/settings/methods' : '/notes');
+        await navigate(result.kind === 'LINK' ? '/settings/methods' : APP_HOME_ROUTE);
       })
       .catch((caught: unknown): void => {
         logger.warn('OAuth exchange failed', caught);

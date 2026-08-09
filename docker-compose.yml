@@ -1,3 +1,11 @@
+# Compose derives the project name from the directory name unless it is
+# stated here, which makes every container, volume and network name depend on
+# what the clone happens to be called on disk. Pinning it keeps
+# `nest-aws-starter-postgres-1`, `nest-aws-starter_pgdata` and
+# `nest-aws-starter_default` stable wherever the repo is checked out — and
+# gives `pnpm bootstrap` one line to rewrite instead of none.
+name: nest-aws-starter
+
 services:
   postgres:
     image: postgres:18
