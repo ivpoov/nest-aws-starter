@@ -91,6 +91,21 @@ describe('database indexes', () => {
   });
 });
 
+// `$on('query')` is only typed on a client whose constructor argument carried
+// a `log` option, and that generic does not survive being stored in a `let` of
+// type PrismaClient — the event name narrows to `never`. Declaring the two
+// members this test uses keeps the assertion readable and does not depend on
+// how Prisma threads that generic in any given version.
+interface QueryEventInterface {
+  readonly query: string;
+  readonly params: string;
+}
+
+interface QueryLoggingClientInterface {
+  $on(event: 'query', callback: (event: QueryEventInterface) => void): void;
+  $disconnect(): Promise<void>;
+}
+
 // An index that exists and an index that gets used are different claims, and
 // only the second one was ever the point of this work: with the trigram
 // indexes in place but the email half of the search still expressed as an
@@ -107,7 +122,7 @@ describe('admin user search query plan', () => {
 
   let app: NestFastifyApplication;
   let prisma: PrismaService;
-  let loggingClient: PrismaClient;
+  let loggingClient: QueryLoggingClientInterface;
   let repository: UserPrismaRepository;
   let captured: { sql: string; params: string[] }[] = [];
 
@@ -142,9 +157,9 @@ describe('admin user search query plan', () => {
     loggingClient = new PrismaClient({
       adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? '' }),
       log: [{ emit: 'event', level: 'query' }],
-    });
+    }) as unknown as QueryLoggingClientInterface;
 
-    loggingClient.$on('query', (event: { query: string; params: string }): void => {
+    loggingClient.$on('query', (event: QueryEventInterface): void => {
       captured.push({ sql: event.query, params: JSON.parse(event.params) as string[] });
     });
 
