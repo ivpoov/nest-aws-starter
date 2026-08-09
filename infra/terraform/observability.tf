@@ -72,7 +72,7 @@ locals {
   }
 
   # The AWS/SQS QueueName dimension takes a name, and the services module exports
-  # ARNs. Splitting the ARN rather than reusing local.names.events_dlq is the
+  # ARNs. Splitting the ARN rather than reusing local.names.payment_webhook_dlq is the
   # difference between an alarm bound to the queue that exists and an alarm bound
   # to a name that is supposed to match it: this way there is a real dependency
   # edge, and a rename cannot leave the alarm pointing at nothing.

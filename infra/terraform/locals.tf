@@ -215,11 +215,16 @@ locals {
     migrations_task        = "${local.name_prefix}-migrations"
     autoscaling_cpu_policy = "${local.name_prefix}-api-cpu"
 
-    # services (queues, notifications, mail)
-    events_queue    = "${local.name_prefix}-events"
-    events_dlq      = "${local.name_prefix}-events-dlq"
-    events_topic    = "${local.name_prefix}-events"
-    mail_config_set = "${local.name_prefix}-mail"
+    # services (queues, notifications)
+    #
+    # The queue was called `events` on the theory that a second producer could
+    # share it. Nothing else produces to it, one consumer reads it
+    # (PaymentWebhookConsumerService), and its dead letters are payment
+    # webhooks — so it is named for what it carries. A second producer with
+    # different retry semantics wants its own queue anyway.
+    payment_webhook_queue = "${local.name_prefix}-payment-webhook"
+    payment_webhook_dlq   = "${local.name_prefix}-payment-webhook-dlq"
+    notifications_topic   = "${local.name_prefix}-notifications"
 
     # edge
     cloudfront_comment = "${local.name_prefix} distribution"

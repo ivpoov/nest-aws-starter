@@ -68,13 +68,10 @@ module "services" {
   uploads_bucket_force_destroy = local.profile.force_destroy_bucket
   uploads_cors_allowed_origins = local.uploads_cors_allowed_origins
 
-  # local.names.events_* — the queue currently carries payment webhook events;
-  # the naming is deliberately event-shaped so a second producer does not need a
-  # second queue.
-  webhook_queue_name = local.names.events_queue
-  webhook_dlq_name   = local.names.events_dlq
+  webhook_queue_name = local.names.payment_webhook_queue
+  webhook_dlq_name   = local.names.payment_webhook_dlq
 
-  notifications_topic_name = local.names.events_topic
+  notifications_topic_name = local.names.notifications_topic
 
   mail_domain       = var.domain_name
   mail_from_address = local.mail_from_address
