@@ -23,6 +23,11 @@ output "trusted_subject" {
   value       = local.github_deploy_subject
 }
 
+output "deploy_environment" {
+  description = "GitHub Actions environment the deploy job must declare. Terraform cannot create it; see github_actions_setup for the commands that do."
+  value       = var.github_deploy_environment
+}
+
 output "deploy_manifest_parameter_name" {
   description = "SSM parameter the deploy workflow reads its inputs from. This is the value of the DEPLOY_MANIFEST_PARAMETER repository variable."
   value       = aws_ssm_parameter.deploy_manifest.name
@@ -34,7 +39,7 @@ output "deploy_manifest" {
 }
 
 output "github_actions_setup" {
-  description = "Literal commands that configure the repository. Run them from a clone; nothing here needs to be retyped or adapted, which is the point."
+  description = "Literal commands that configure the repository. Run them from a clone; nothing here needs to be retyped or adapted, which is the point. The environment and its branch rule are the half Terraform cannot create."
 
   value = <<-EOT
     # One secret and two variables. There is no AWS_ACCESS_KEY_ID and there
@@ -49,7 +54,32 @@ output "github_actions_setup" {
     #
     #     ${local.github_deploy_subject}
     #
-    # A workflow run on any other ref — a branch, a tag, a pull request from a
-    # fork — gets an AccessDenied from STS before it can do anything at all.
+    # A token minted for any other repository, or for a job that is not running
+    # in the '${var.github_deploy_environment}' environment, gets an AccessDenied
+    # from STS before it can do anything at all.
+
+    # NOT OPTIONAL, and not creatable by Terraform: the environment named in
+    # that subject, and the deployment branch rule on it. GitHub checks an
+    # environment's rules BEFORE it mints the token, which is what makes this
+    # stronger than matching a ref in the trust policy — but an environment with
+    # no rules checks nothing, and GitHub will auto-create exactly that the
+    # first time a job references one that does not exist. Run these:
+
+    echo '{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}' \
+      | gh api --method PUT --input - \
+          repos/${var.github_repository}/environments/${var.github_deploy_environment}
+
+    gh api --method POST \
+      repos/${var.github_repository}/environments/${var.github_deploy_environment}/deployment-branch-policies \
+      -f name='${local.github_deploy_ref_name}' -f type='${local.github_deploy_ref_type}'
+
+    # Verify — the list must contain '${local.github_deploy_ref_name}' and nothing else:
+
+    gh api repos/${var.github_repository}/environments/${var.github_deploy_environment}/deployment-branch-policies \
+      --jq '.branch_policies[].name'
+
+    # Optional and recommended for anything with real users: required reviewers
+    # and a wait timer attach to the same environment, in
+    # Settings -> Environments -> ${var.github_deploy_environment}.
   EOT
 }

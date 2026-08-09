@@ -12,7 +12,14 @@
 #                        exactly where one gets found. GitHub mints a
 #                        short-lived OIDC token per run instead, and the trust
 #                        policy in modules/cicd/oidc.tf admits precisely one
-#                        repository on one ref.
+#                        repository, running in one GitHub environment.
+#
+#   one manual step      Terraform has no GitHub provider here and cannot create
+#                        that environment or the deployment branch rule on it.
+#                        `terraform output github_actions_setup` prints the two
+#                        `gh api` calls that do; until they are run, the
+#                        environment GitHub auto-creates has no rules and any
+#                        branch a dispatch starts from can reach the role.
 #
 #   no hand-copied URLs  Every bucket name, distribution id, cluster name and
 #                        base URL a deployment needs is derived here from the
@@ -35,8 +42,14 @@ variable "github_repository" {
   default     = null
 }
 
+variable "github_deploy_environment" {
+  description = "GitHub Actions environment the deploy job runs in, and the second half of the trust policy's `sub` claim. Must equal the `environment:` value in .github/workflows/deploy.yml — GitHub replaces the ref subject with the environment subject for any job that declares one, so a mismatch means AccessDenied on every deployment."
+  type        = string
+  default     = "production"
+}
+
 variable "github_deploy_ref" {
-  description = "Full git ref deployments may run from. The default branch is the default because it is the only ref that has been reviewed."
+  description = "Full git ref deployments may run from. Not part of the trust policy — it is the branch to set as the environment's deployment branch rule, which GitHub enforces before the token is minted. The default branch is the default because it is the only ref that has been reviewed."
   type        = string
   default     = "refs/heads/main"
 }
@@ -67,6 +80,15 @@ locals {
   }
 
   cicd_enabled = var.github_repository != null
+
+  # The workflow this stack issues an identity to. Read (when it is there) only
+  # so the check below can compare the environment name in it against the one
+  # baked into the trust policy — a mismatch between the two is invisible until
+  # the first deployment fails with AccessDenied, which reads like a broken role
+  # rather than a typo. `fileexists` because a copy of infra/ lifted into another
+  # repository is a legitimate thing to do, and a missing workflow must not turn
+  # a soft check into a hard error.
+  cicd_deploy_workflow_path = "${path.module}/../../.github/workflows/deploy.yml"
 }
 
 # ---------------------------------------------------------------------------
@@ -118,9 +140,10 @@ module "cicd" {
 
   names = local.cicd_names
 
-  github_repository    = var.github_repository
-  github_deploy_ref    = var.github_deploy_ref
-  create_oidc_provider = var.create_github_oidc_provider
+  github_repository         = var.github_repository
+  github_deploy_environment = var.github_deploy_environment
+  github_deploy_ref         = var.github_deploy_ref
+  create_oidc_provider      = var.create_github_oidc_provider
 
   # Everything below is an existing resource owned by another module. The cicd
   # module creates none of them; it only writes a policy that names them.
@@ -188,6 +211,21 @@ check "deployments_run_from_a_branch" {
   }
 }
 
+check "deploy_workflow_declares_the_trusted_environment" {
+  assert {
+    condition = (
+      !local.cicd_enabled
+      || !fileexists(local.cicd_deploy_workflow_path)
+      || strcontains(file(local.cicd_deploy_workflow_path), "environment: ${var.github_deploy_environment}")
+    )
+    error_message = join(" ", [
+      ".github/workflows/deploy.yml does not declare `environment: ${var.github_deploy_environment}`, but the deploy role's trust policy admits only repo:${coalesce(var.github_repository, "<unset>")}:environment:${var.github_deploy_environment}.",
+      "GitHub substitutes the environment for the ref in the OIDC `sub` claim, so the two names must agree exactly or every deployment fails at the assume-role step with AccessDenied.",
+      "Set github_deploy_environment to the name the workflow uses, or change the workflow to match.",
+    ])
+  }
+}
+
 # ---------------------------------------------------------------------------
 # Outputs
 # ---------------------------------------------------------------------------
@@ -198,8 +236,13 @@ output "github_actions_role_arn" {
 }
 
 output "github_actions_trusted_subject" {
-  description = "The exact OIDC `sub` claim the deploy role admits, matched with StringEquals. Any other repository, branch, tag or pull request is refused by STS."
+  description = "The exact OIDC `sub` claim the deploy role admits, matched with StringEquals. Any other repository, or any job not running in the deploy environment, is refused by STS."
   value       = one(module.cicd[*].trusted_subject)
+}
+
+output "github_actions_deploy_environment" {
+  description = "GitHub Actions environment named in the trust policy. Terraform cannot create it — see github_actions_setup for the `gh api` calls that create it and pin its deployment branch rule."
+  value       = one(module.cicd[*].deploy_environment)
 }
 
 output "github_oidc_provider_arn" {

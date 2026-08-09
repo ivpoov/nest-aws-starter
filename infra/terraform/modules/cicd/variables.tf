@@ -42,13 +42,53 @@ variable "github_repository" {
   }
 }
 
+variable "github_deploy_environment" {
+  description = <<-EOT
+    The GitHub Actions *environment* the deploy job runs in. This is the other
+    half of the trust policy's `sub` condition, matched with StringEquals.
+
+    It must equal the `environment:` value in .github/workflows/deploy.yml
+    exactly. GitHub replaces the ref form of the `sub` claim with
+    `repo:<owner>/<name>:environment:<name>` for any job that declares an
+    environment, so a mismatch here is not a soft failure — STS refuses the
+    first call of every deployment.
+
+    Terraform cannot create a GitHub environment, and this module does not
+    pretend to. Creating it and attaching a deployment branch rule is a manual
+    step; `terraform output github_actions_setup` prints the exact commands.
+  EOT
+  type        = string
+  default     = "production"
+
+  validation {
+    condition     = length(trimspace(var.github_deploy_environment)) > 0 && var.github_deploy_environment == trimspace(var.github_deploy_environment)
+    error_message = "github_deploy_environment must be a non-empty name with no leading or trailing whitespace — GitHub trims environment names, and a trimmed name would no longer match this condition."
+  }
+
+  validation {
+    # `:` is the separator the sub claim itself is built from, so an
+    # environment name containing one could be made to look like a different
+    # claim shape. `*` and `?` are IAM's StringLike wildcards: inert under
+    # StringEquals, but a future edit to StringLike must not inherit a value
+    # written assuming exact matching.
+    condition     = !can(regex("[*?:]", var.github_deploy_environment))
+    error_message = "github_deploy_environment must not contain \"*\", \"?\" or \":\" — those are IAM's wildcard characters and the sub claim's own separator."
+  }
+}
+
 variable "github_deploy_ref" {
   description = <<-EOT
-    The single git ref deployments may run from, in full `refs/...` form.
+    The single branch deployments may run from, in full `refs/...` form.
+
+    This is NOT part of the trust policy — it cannot be, because a job that
+    declares an environment is issued an environment subject with no ref in it
+    at all. It is the branch you must set as the environment's *deployment
+    branch rule*, which GitHub enforces before it mints the token, and it is
+    what `terraform output github_actions_setup` prints the command for.
 
     The default is the default branch, which is the only ref that has passed
-    review. Widening this to `refs/heads/*` or to a `pull_request` subject means
-    any contributor who can open a pull request can run this role's permissions.
+    review. Leaving the environment's branch rule unset means any branch a
+    dispatch can be started from reaches the role.
   EOT
   type        = string
   default     = "refs/heads/main"
@@ -60,7 +100,7 @@ variable "github_deploy_ref" {
 
   validation {
     condition     = !can(regex("[*?]", var.github_deploy_ref))
-    error_message = "github_deploy_ref must not contain a wildcard — the trust policy matches it exactly, and a wildcard here would admit every branch and every fork's pull-request ref."
+    error_message = "github_deploy_ref must not contain a wildcard — it names the one branch the environment's deployment branch rule admits, and a wildcard there would admit every branch."
   }
 }
 

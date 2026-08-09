@@ -36,13 +36,13 @@ claim does, and this module matches it like this:
 "Condition": {
   "StringEquals": {
     "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-    "token.actions.githubusercontent.com:sub": "repo:<owner>/<name>:ref:refs/heads/main"
+    "token.actions.githubusercontent.com:sub": "repo:<owner>/<name>:environment:production"
   }
 }
 ```
 
-`StringEquals`. One value. The full ref included. Three ways that is commonly
-got wrong, in descending order of how bad:
+`StringEquals`. One value. The environment named in full. Three ways that is
+commonly got wrong, in descending order of how bad:
 
 | Written as                                    | Who can then assume the role                      |
 | --------------------------------------------- | ------------------------------------------------- |
@@ -51,14 +51,64 @@ got wrong, in descending order of how bad:
 | `StringLike` `repo:owner/name*`               | `owner/name-anything`, by prefix match            |
 
 Because the condition is `StringEquals`, an `*` in `github_repository` would be
-a literal asterisk that matches nothing rather than a wildcard — but both
-`github_repository` and `github_deploy_ref` reject `*` and `?` in validation
-anyway, so a later switch to `StringLike` cannot silently inherit a value that
-was written assuming exact matching.
+a literal asterisk that matches nothing rather than a wildcard — but
+`github_repository` and `github_deploy_environment` reject `*` and `?` in
+validation anyway (and the environment name rejects `:`, the separator the claim
+is built from), so a later switch to `StringLike` cannot silently inherit a
+value that was written assuming exact matching.
 
 `aud` is pinned in two places (the provider's `client_id_list` and the trust
 policy) so that adding a second audience to the provider for some other tool
 does not widen this role with it.
+
+### Why the environment and not the ref
+
+The `sub` claim has exactly one shape per run, and declaring an environment
+**replaces** the ref rather than adding to it:
+
+| The job declares            | `sub` GitHub mints                          |
+| --------------------------- | ------------------------------------------- |
+| nothing, on a branch push   | `repo:owner/name:ref:refs/heads/main`       |
+| a pull request              | `repo:owner/name:pull_request`              |
+| `environment: production`   | `repo:owner/name:environment:production`    |
+
+`deploy.yml` declares `environment: production` — that is where required
+reviewers and a wait timer attach — so the environment form is the only subject
+this role will ever be shown. A trust policy matching the ref form would deny
+every single deployment at the assume-role step.
+
+It is also the stronger of the two. A ref condition is checked by AWS *after*
+GitHub has already handed out a credential. An environment's **deployment branch
+rule** is checked by GitHub *before* the token exists at all, so a run that is
+not allowed into the environment never gets a token to present.
+
+### The manual step, and what happens if you skip it
+
+Terraform has no GitHub provider here and cannot create an environment. The rule
+is therefore yours to attach, and **an environment with no rules restricts
+nothing**: the first time a job references an environment that does not exist,
+GitHub creates it silently, unprotected. In that state the trust policy still
+admits only this repository — no other repository, no pull request from a fork,
+no other environment — but a `workflow_dispatch` started from *any* branch by
+someone with write access mints a matching subject.
+
+`terraform output github_actions_setup` prints the two `gh api` calls that
+create the environment and pin its branch policy to `github_deploy_ref`, plus
+the call that verifies the result. Run them before the first deployment.
+
+`deploy.yml` also refuses, as its first step, to run from anything but the
+repository's default branch. That is an honest-mistake guard and not a boundary:
+a dispatch from another branch runs *that branch's* copy of the workflow, guard
+included or removed. The branch rule is the control; the guard only makes the
+unconfigured case fail loudly instead of quietly succeeding.
+
+### Do not customise the subject claim template
+
+If the repository's subject-claim template is customised
+(`PUT /repos/{owner}/{repo}/actions/oidc/customization/sub`), the minted `sub`
+stops matching this policy and every deployment fails closed. That is the right
+direction to fail in, but update `local.github_deploy_subject` at the same time
+or spend an afternoon on it.
 
 ## No thumbprint
 
@@ -112,9 +162,17 @@ reads it rather than three steps later.
 gh secret set AWS_DEPLOY_ROLE_ARN --body '<role arn>'
 gh variable set AWS_REGION --body '<region>'
 gh variable set DEPLOY_MANIFEST_PARAMETER --body '<parameter name>'
+
+echo '{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}' \
+  | gh api --method PUT --input - repos/<owner>/<name>/environments/production
+
+gh api --method POST \
+  repos/<owner>/<name>/environments/production/deployment-branch-policies \
+  -f name='main' -f type='branch'
 ```
 
-One secret, two variables, no access key.
+One secret, two variables, one environment, no access key. The environment is
+not optional — see "The manual step" above for what an unconfigured one admits.
 
 ## Rolling back
 
@@ -122,8 +180,14 @@ One secret, two variables, no access key.
 gh workflow run deploy.yml -f sha=<earlier-commit-sha>
 ```
 
-That is the whole procedure. Images are tagged with the commit SHA, so an
-earlier SHA is an unambiguous artefact; `latest` would not be.
+That is the whole procedure. Both images are tagged with the commit SHA — the
+runtime image as `<sha>` and the migration image as `migrations-<sha>` alongside
+the moving `migrations` tag the task definition points at — so an earlier SHA is
+an unambiguous artefact; `latest` would not be.
+
+Note that the dispatch has to be started from the branch the environment's
+deployment branch rule admits. Rolling back to an arbitrary commit is a `-f sha`
+input, not a different ref.
 
 ## Second environment in the same account
 
