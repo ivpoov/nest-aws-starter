@@ -1,0 +1,224 @@
+name: release
+
+# Cuts a release: regenerates CHANGELOG.md from the conventional-commit history,
+# commits it to main, creates the annotated tag on that commit, publishes the
+# GitHub Release, and fast-forwards staging and dev so all three branches end
+# the run agreeing on one commit.
+#
+# ---------------------------------------------------------------------------
+# DRY RUN IS THE DEFAULT, ON PURPOSE.
+#
+# `dry_run` defaults to true, so clicking "Run workflow" and pressing enter
+# produces a full preview — guards, changelog, release notes, and a printed list
+# of every ref that would move — and writes nothing. Cutting a release takes a
+# deliberate flip to false. A tag is the one artefact here that cannot be taken
+# back: it is what `git checkout v1.0.0` resolves to in every clone that already
+# fetched it, so it is never moved and never deleted, only superseded.
+# ---------------------------------------------------------------------------
+#
+# THE GUARDS FAIL LOUDLY AND FIRST, before a single byte is written:
+#
+#   * the version is well formed and no such tag exists, locally or on origin;
+#   * dev, staging and main have nothing unpromoted and carry identical trees;
+#   * none of the three moved on the remote between checkout and now.
+#
+# See scripts/release-guard.mjs for why "in sync" is checked on trees and not on
+# commit SHAs — promotions are pull-request merges, so the three branches are
+# never equal by SHA even immediately after a flawless promotion.
+#
+# WHY THE CHANGELOG COMMIT GOES TO MAIN AND THEN BACK DOWN: the tag has to
+# cover the changelog that describes it, so the commit lands first and the tag
+# names that commit. Leaving it only on main would then break the tree
+# invariant for the next release, so the same commit is fast-forwarded onto
+# staging and dev in the same run. Both are ordinary non-force pushes: they can
+# only succeed because the preflight already proved both branches are ancestors
+# of main.
+#
+# Every `uses:` is pinned to a commit SHA with the human-readable version in the
+# trailing comment — see the header of ci.yml for why a tag is not a reference.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, e.g. v1.0.0. Must not already exist as a tag.'
+        required: true
+        type: string
+      title:
+        description: 'Optional headline for the tag and release, e.g. "Notifications". Appended after an em dash.'
+        required: false
+        type: string
+      dry_run:
+        description: 'Preview only. Leave ticked to generate the changelog and run every guard without pushing, tagging or publishing.'
+        required: false
+        default: true
+        type: boolean
+
+# One release at a time and never cancelled. cancel-in-progress here could
+# interrupt the run between `git push --atomic origin main <tag>` and the
+# fast-forward of staging and dev, leaving the branches in exactly the state
+# this whole workflow exists to prevent.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Pushing the changelog commit, the tag, and the two fast-forwards, and
+      # publishing the GitHub Release. Everything else this workflow does is
+      # read-only; this is the single write grant and it is why the job is
+      # dispatch-only.
+      contents: write
+
+    # Where to attach a required reviewer so cutting a tag needs a second pair
+    # of eyes. An environment with no protection rules is a no-op, which is the
+    # right default for a starter — the hook is here so adding the gate later is
+    # a settings change rather than a workflow change.
+    environment: release
+
+    env:
+      # Inputs reach the shell as data, never as interpolated script text.
+      VERSION: ${{ inputs.version }}
+      RELEASE_TITLE: ${{ inputs.title }}
+      DRY_RUN: ${{ inputs.dry_run }}
+      GH_TOKEN: ${{ secrets.RELEASE_PAT || github.token }}
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+      # ref: main, not the dispatch ref. A release describes what is on main, and
+      # dispatching from a feature branch by accident must not silently release
+      # that branch instead. fetch-depth: 0 brings every branch and tag, which
+      # the guards and the changelog both need.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: main
+          fetch-depth: 0
+          # Persisted so the pushes below authenticate. If branch protection on
+          # main rejects a push from github-actions[bot], set RELEASE_PAT to a
+          # token that is allowed to bypass it — see the notes on permissions in
+          # the workflow header.
+          token: ${{ secrets.RELEASE_PAT || github.token }}
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      # Everything that must hold before a byte is written. Non-zero here ends
+      # the run with an annotation naming the exact problem and its remedy.
+      - name: preflight guards
+        run: |
+          node scripts/release-guard.mjs preflight \
+            --version "$VERSION" \
+            --branches dev,staging,main \
+            --verify-remote
+
+      - name: generate the changelog and the release notes
+        id: notes
+        run: |
+          set -euo pipefail
+
+          previous="$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD 2>/dev/null || true)"
+          echo "previous=${previous}" >> "$GITHUB_OUTPUT"
+
+          # The whole file, every tag from the first to this one — not an append.
+          # Regenerating means the format can be improved once and applied to the
+          # entire history, and it means a hand edit can never survive unnoticed.
+          node scripts/changelog.mjs --release "$VERSION" --out CHANGELOG.md
+
+          # The release body is only this version's section.
+          if [ -n "$previous" ]; then
+            node scripts/changelog.mjs --from "$previous" --to HEAD --notes --out release-notes.md
+          else
+            node scripts/changelog.mjs --to HEAD --notes --out release-notes.md
+          fi
+
+          {
+            printf '### %s\n\n' "$VERSION"
+            printf 'Previous tag: `%s`\n\n' "${previous:-none}"
+            printf '<details><summary>Release notes</summary>\n\n'
+            cat release-notes.md
+            printf '\n</details>\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: preview what would change
+        if: inputs.dry_run
+        run: |
+          set -euo pipefail
+          echo "DRY RUN — nothing below is executed."
+          echo
+          echo "would commit:"
+          git --no-pager diff --stat -- CHANGELOG.md || true
+          git status --short -- CHANGELOG.md
+          echo
+          echo "would create annotated tag ${VERSION} on $(git rev-parse --short HEAD) (plus the changelog commit)"
+          echo "would push:  main, refs/tags/${VERSION}, main:staging, main:dev"
+          echo "would publish GitHub Release ${VERSION} from release-notes.md"
+          {
+            printf '\n**Dry run** — no ref was created or moved. Re-run with `dry_run` unticked to release.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: commit the changelog and tag it
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          git add CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "CHANGELOG.md already up to date; tagging the existing commit"
+          else
+            # Conventional and subject-line only, like every other commit here.
+            git commit --message "docs: generate the changelog for ${VERSION}"
+          fi
+
+          if [ -n "$RELEASE_TITLE" ]; then
+            subject="${VERSION} — ${RELEASE_TITLE}"
+          else
+            subject="${VERSION}"
+          fi
+
+          # Annotated, like every release tag in this repository: it carries an
+          # author, a date and a message, and `git describe` prefers it.
+          { printf '%s\n\n' "$subject"; cat release-notes.md; } > tag-message.txt
+          git tag --annotate "$VERSION" --file tag-message.txt
+
+          # --atomic: the commit and the tag land together or neither does.
+          # Without it a rejected tag push leaves an untagged changelog commit on
+          # main — which is precisely the state release-check exists to flag.
+          git push --atomic origin main "refs/tags/${VERSION}"
+
+      - name: bring staging and dev back in line
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          # Plain fast-forwards, no --force anywhere. They can only succeed
+          # because the preflight already proved staging and dev are ancestors
+          # of main; if either is rejected, the tag is already published and the
+          # fix is a normal promotion pull request, not a force push.
+          git push --atomic origin main:staging main:dev
+
+      - name: publish the github release
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ -n "$RELEASE_TITLE" ]; then
+            title="${VERSION} — ${RELEASE_TITLE}"
+          else
+            title="$VERSION"
+          fi
+          # --verify-tag refuses to invent a tag: if the push above did not land,
+          # this fails instead of quietly creating a second, different tag.
+          gh release create "$VERSION" \
+            --title "$title" \
+            --notes-file release-notes.md \
+            --verify-tag
+          printf '\nPublished %s/releases/tag/%s\n' "${GITHUB_SERVER_URL}/${GH_REPO}" "$VERSION" \
+            >> "$GITHUB_STEP_SUMMARY"

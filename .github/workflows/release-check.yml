@@ -1,0 +1,64 @@
+name: release-check
+
+# One question, asked on every push to main: is everything on main covered by a
+# tag?
+#
+# This is the workflow that exists because the answer was "no" three releases
+# running. Promotion happened, main moved, and the tag never got cut — and
+# nothing anywhere said so. Nothing was broken, no test failed, the deploy went
+# out; the release simply did not exist, and the only way to find out was for
+# somebody to go looking. This turns that silence into a red badge on the
+# default branch that stays red until the tag is cut.
+#
+# NO `paths` FILTER, deliberately, and unlike every other workflow here. The
+# question is not "did anything interesting change" — it is "did main move past
+# its last tag", and a README-only commit moves main exactly as far as a
+# thousand-line feature does. A path filter would make this check green for the
+# precise case it is meant to catch.
+#
+# It is expected to be red between a promotion merging and the release workflow
+# running. That window should be minutes. If it is red for a day, that is the
+# bug, and the badge is saying so.
+#
+# WHAT IT DOES NOT DO: nothing here creates a tag. A workflow that tagged main
+# by itself would name a version nobody chose, and a version number is a
+# judgement call about what changed. This check only refuses to be quiet.
+#
+# Every `uses:` is pinned to a commit SHA with the human-readable version in the
+# trailing comment — see the header of ci.yml for why a tag is not a reference.
+
+on:
+  push:
+    branches: [main]
+  # Catches a tag deleted, or a push that landed while Actions was degraded, and
+  # keeps the badge honest on a repository that has not been touched in a while.
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  release-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      # fetch-depth: 0 is not optional: the check counts commits between the
+      # newest reachable tag and the tip, and a depth-1 clone has neither the
+      # tags nor the commits to count. It would report a cheerful nothing.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: every commit on main is covered by a tag
+        run: node scripts/release-guard.mjs main-tagged --branch main
