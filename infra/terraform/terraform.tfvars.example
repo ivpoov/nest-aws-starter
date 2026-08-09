@@ -18,6 +18,15 @@ cost_profile = "demo"
 # certificate or Route 53 zone.
 # domain_name = "example.com"
 
-# Optional for demo, required for production: where CloudWatch alarms are sent.
-# AWS mails a subscription confirmation that has to be clicked.
+# Optional for demo, required for production: where CloudWatch alarms and the
+# monthly budget alerts are sent. AWS mails a subscription confirmation that has
+# to be clicked. Leave it unset and nothing reaches anyone — including the
+# budget alert, which is the one that tells you the stack you forgot about is
+# still billing.
 # alert_email = "alerts@example.com"
+
+# Monthly cost budget in USD, alerted at 50/80/100% of actual spend and once on
+# a forecast to exceed it. Created on every profile — there is no way to turn it
+# off, deliberately. $20 is set so the first alert arrives while the demo stack
+# is behaving normally, which is how you find out the budget works.
+# monthly_budget_amount_usd = 20

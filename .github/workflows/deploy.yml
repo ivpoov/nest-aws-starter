@@ -1,0 +1,499 @@
+name: deploy
+
+# Deploys the API to ECS and both frontends to S3 + CloudFront.
+#
+# ---------------------------------------------------------------------------
+# ROLLBACK
+#
+#   gh workflow run deploy.yml -f sha=<earlier-commit-sha>
+#
+# That is the entire procedure. It works because every image is tagged with the
+# commit SHA that produced it, so an earlier SHA names exactly one artefact.
+# `latest` would name whichever build happened to finish last, and "roll back to
+# latest" is not a sentence.
+# ---------------------------------------------------------------------------
+#
+# NO AWS ACCESS KEY. There is one AWS-related secret in this repository and it
+# is a role ARN, not a credential: AWS_DEPLOY_ROLE_ARN. GitHub mints a
+# short-lived OIDC token for each run and STS exchanges it for a session that
+# expires with the job. The trust policy admits exactly one repository on one
+# ref — see infra/terraform/modules/cicd/README.md. `AWS_ACCESS_KEY_ID` must
+# never be added here: it does not expire, it works from anywhere, and this is a
+# public repository.
+#
+# NOTHING IS HAND-COPIED. Every cluster name, family, bucket, distribution id
+# and URL below comes out of one SSM parameter that Terraform writes from the
+# stack's own outputs (infra/terraform/cicd.tf). Change a name in Terraform and
+# the next deployment follows it.
+#
+# Every `uses:` is pinned to a commit SHA, with the human-readable version in
+# the trailing comment — see the header of ci.yml for why a tag is not a
+# reference.
+
+on:
+  push:
+    branches: [main]
+    # Scoped to what actually ends up in a released artefact. `infra/**` is
+    # deliberately absent: Terraform is applied by a human with credentials this
+    # workflow does not have, and a deployment is not an apply.
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.dockerignore'
+      - 'docker-compose.yml'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Full 40-character commit SHA to deploy. Leave empty for the tip of the default branch. This is the rollback input.'
+        required: false
+        type: string
+
+# One deployment at a time, and never cancelled. cancel-in-progress would be
+# actively dangerous here: a run interrupted between the migration task and the
+# service update leaves the new schema live with the old code still serving and
+# nothing recorded about it. A queued rollback waiting two minutes for a bad
+# deploy to finish is the cheaper failure by a wide margin.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    # Where to attach required reviewers, a wait timer, or a branch restriction.
+    # An environment with no protection rules is a no-op, which is the right
+    # starting point for a starter — the hook is here so adding the gate later
+    # is a settings change rather than a workflow change.
+    environment: production
+
+    permissions:
+      contents: read
+      # The one permission that makes OIDC work: it lets the job request a token
+      # from GitHub's issuer. Without it the assume-role step fails before it
+      # reaches AWS.
+      id-token: write
+
+    env:
+      # The host view of the compose Postgres, identical to ci.yml and
+      # image.yml. Used by the migration that prepares the build's database and
+      # by the BuildKit secret both image builds consume.
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+
+    steps:
+      - name: check out the commit being deployed
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.inputs.sha || github.sha }}
+
+      # `git rev-parse HEAD` rather than github.sha, so a rollback dispatch and
+      # a push produce the tag the same way and a short SHA typed into the
+      # dispatch form still yields the full one.
+      - name: resolve the commit being deployed
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          echo "deploying ${sha}"
+          echo "IMAGE_TAG=${sha}" >> "$GITHUB_ENV"
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: assume the deploy role
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          # Shows up in CloudTrail against every call this job makes, so an
+          # audit trail leads back to a specific workflow run.
+          role-session-name: deploy-${{ github.run_id }}
+
+      # One read, and everything the rest of the job needs. The manifest is
+      # non-secret metadata written by Terraform; its shape is the object type
+      # of var.deploy_manifest in infra/terraform/modules/cicd/variables.tf.
+      - name: read the deploy manifest
+        env:
+          MANIFEST_PARAMETER: ${{ vars.DEPLOY_MANIFEST_PARAMETER }}
+        run: |
+          set -euo pipefail
+          manifest="$RUNNER_TEMP/deploy-manifest.json"
+          aws ssm get-parameter --name "$MANIFEST_PARAMETER" \
+            --query 'Parameter.Value' --output text > "$manifest"
+
+          # One redirect for the whole block: every line below is a NAME=value
+          # pair destined for the job's environment.
+          {
+            echo "MANIFEST=${manifest}"
+
+            jq -r '
+              {
+                ECR_REPOSITORY_URL:               .ecr_repository_url,
+                MIGRATIONS_IMAGE_TAG:             .migrations_image_tag,
+                ECS_CLUSTER:                      .ecs_cluster,
+                ECS_SERVICE:                      .ecs_service,
+                API_TASK_FAMILY:                  .api_task_definition_family,
+                API_CONTAINER:                    .api_container_name,
+                MIGRATIONS_TASK_FAMILY:           .migrations_task_definition_family,
+                MIGRATIONS_CONTAINER:             .migrations_container_name,
+                MIGRATIONS_NETWORK_CONFIGURATION: .migrations_network_configuration,
+                API_LOG_GROUP:                    .api_log_group,
+                MIGRATIONS_LOG_GROUP:             .migrations_log_group,
+                HEALTH_CHECK_URL:                 .health_check_url,
+                WEB_BUCKET:                       .web_bucket,
+                ADMIN_BUCKET:                     .admin_bucket,
+                WEB_DISTRIBUTION_ID:              .web_distribution_id,
+                ADMIN_DISTRIBUTION_ID:            .admin_distribution_id,
+                API_CORS_ORIGINS:                 .api_cors_origins
+              }
+              | to_entries[] | "\(.key)=\(.value)"
+            ' "$manifest"
+
+            # VITE_API_BASE_URL and VITE_WEB_APP_URL, resolved by Terraform —
+            # including the fallback to the load balancer URL when the optional
+            # CloudFront distribution in front of the API is disabled, which is
+            # the case the edge module cannot answer on its own.
+            jq -r '.frontend_env | to_entries[] | "\(.key)=\(.value)"' "$manifest"
+          } >> "$GITHUB_ENV"
+
+      # -------------------------------------------------------------------
+      # 1. Build and push both images
+      # -------------------------------------------------------------------
+
+      # The image build needs a live, MIGRATED Postgres, not merely a reachable
+      # one: `pnpm run build` for the API starts with `prisma generate --sql`,
+      # and Prisma's TypedSQL type-checks every file in apps/api/prisma/sql
+      # against real tables. Standing it up from the repository's own compose
+      # file is what ci.yml and image.yml already do — one definition of the
+      # Postgres version and port, so CI and a laptop cannot drift.
+      - run: docker compose up -d --wait postgres
+
+      - run: pnpm install --frozen-lockfile --filter "@nest-aws-starter/api..."
+
+      # BEFORE either build. A fresh runner's Postgres is empty, and a build
+      # placed before this line fails with a type error inside generated code —
+      # which reads like a source bug and is not one.
+      - run: pnpm --dir apps/api run db:migrate
+
+      - name: log in to ecr
+        run: |
+          set -euo pipefail
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "${ECR_REPOSITORY_URL%%/*}"
+
+      # `docker compose build`, not a bare `docker build`, so the build flags
+      # (network: host for the TypedSQL database, the database_url BuildKit
+      # secret) live in exactly one place — the same reasoning as image.yml.
+      # API_IMAGE is what the compose `full` profile tags with.
+      - name: build and push the runtime image
+        env:
+          API_IMAGE: ${{ env.ECR_REPOSITORY_URL }}:${{ env.IMAGE_TAG }}
+          DOCKER_BUILDKIT: "1"
+        run: |
+          set -euo pipefail
+          docker compose --profile full build api
+          docker push "$API_IMAGE"
+
+      # The migration image is the Dockerfile's `build` stage: the full
+      # workspace with dev dependencies, the Prisma CLI among them. The runtime
+      # image deliberately drops the CLI (250 MB of engines for something that
+      # runs once per deploy), so it cannot run migrations and this second image
+      # is not optional.
+      #
+      # Compose cannot express "the same build, different target", so the flags
+      # are restated here — the one place in this repository where that is true.
+      # Every layer is already in the daemon's cache from the step above, so it
+      # costs seconds.
+      #
+      # The tag is the moving `:migrations` one the migration task definition
+      # points at (Terraform owns that definition; a deployment does not
+      # re-register it). Rolling back re-runs this build from the older commit,
+      # which repoints the tag in step with the runtime image.
+      - name: build and push the migration image
+        env:
+          MIGRATIONS_IMAGE: ${{ env.ECR_REPOSITORY_URL }}:${{ env.MIGRATIONS_IMAGE_TAG }}
+          DOCKER_BUILDKIT: "1"
+        run: |
+          set -euo pipefail
+          docker build \
+            --file apps/api/Dockerfile \
+            --target build \
+            --network host \
+            --secret id=database_url,env=DATABASE_URL \
+            --tag "$MIGRATIONS_IMAGE" \
+            .
+          docker push "$MIGRATIONS_IMAGE"
+
+      # -------------------------------------------------------------------
+      # 2 and 3. Run migrations, and GATE ON THE EXIT CODE
+      #
+      # This is the step the whole ordering exists for. Migrations are applied
+      # while the OLD task definition is still serving, and the service is not
+      # touched at all unless the migration container exits 0. A stopped task is
+      # not a successful one — `wait tasks-stopped` returns for a task that
+      # crashed just as happily as for one that succeeded, so the exit code is
+      # read explicitly and anything other than 0 fails the job here, with
+      # nothing deployed and the previous revision still live.
+      #
+      # FARGATE, never FARGATE_SPOT, whatever the service runs on: a reclaimed
+      # Spot task in the middle of a DDL statement is the one interruption with
+      # no safe retry.
+      # -------------------------------------------------------------------
+      - name: run migrations and gate on the exit code
+        run: |
+          set -euo pipefail
+
+          task_arn="$(aws ecs run-task \
+            --cluster "$ECS_CLUSTER" \
+            --task-definition "$MIGRATIONS_TASK_FAMILY" \
+            --capacity-provider-strategy capacityProvider=FARGATE,weight=1 \
+            --network-configuration "$MIGRATIONS_NETWORK_CONFIGURATION" \
+            --started-by "deploy-${GITHUB_RUN_ID}" \
+            --query 'tasks[0].taskArn' --output text)"
+
+          if [ -z "$task_arn" ] || [ "$task_arn" = "None" ]; then
+            echo "::error::the migration task did not start — nothing was deployed"
+            exit 1
+          fi
+          echo "migration task ${task_arn}"
+
+          # The waiter polls for 10 minutes. A migration that legitimately takes
+          # longer needs a loop around describe-tasks, not a longer deploy
+          # timeout — and probably needs to not be run during a deploy at all.
+          aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$task_arn"
+
+          exit_code="$(aws ecs describe-tasks \
+            --cluster "$ECS_CLUSTER" --tasks "$task_arn" \
+            --query "tasks[0].containers[?name=='${MIGRATIONS_CONTAINER}'].exitCode | [0]" \
+            --output text)"
+          echo "migration container exit code: ${exit_code}"
+
+          # "None" as well as any non-zero number: a container that never ran
+          # reports no exit code at all, and that is a failure too.
+          if [ "$exit_code" != "0" ]; then
+            echo "::error::migrations failed (exit code ${exit_code}). The service was NOT updated; the previous task definition is still serving."
+            aws logs tail "$MIGRATIONS_LOG_GROUP" --since 15m || true
+            exit 1
+          fi
+
+      # -------------------------------------------------------------------
+      # 4. Register the new revision and update the service
+      #
+      # Terraform owns the task definition's shape; a deployment changes exactly
+      # one field in it. Reading the live definition and editing that field is
+      # what keeps a deploy from reverting whatever the last apply changed.
+      # -------------------------------------------------------------------
+      - name: point the service at the new image
+        id: service
+        run: |
+          set -euo pipefail
+          image="${ECR_REPOSITORY_URL}:${IMAGE_TAG}"
+
+          aws ecs describe-task-definition --task-definition "$API_TASK_FAMILY" \
+            --query 'taskDefinition' --output json > "$RUNNER_TEMP/task-definition.json"
+
+          # The del() list is not optional: describe-task-definition returns
+          # server-side fields that register-task-definition rejects as unknown
+          # parameters.
+          jq --arg image "$image" --arg container "$API_CONTAINER" '
+            .containerDefinitions |= map(if .name == $container then .image = $image else . end)
+            | del(
+                .taskDefinitionArn, .revision, .status, .requiresAttributes,
+                .compatibilities, .registeredAt, .registeredBy, .deregisteredAt
+              )
+          ' "$RUNNER_TEMP/task-definition.json" > "$RUNNER_TEMP/task-definition-next.json"
+
+          # If the container name in the manifest ever stops matching the task
+          # definition, the jq above silently changes nothing and the deploy
+          # would "succeed" while running the old image. Assert instead.
+          jq -e --arg image "$image" \
+            'any(.containerDefinitions[]; .image == $image)' \
+            "$RUNNER_TEMP/task-definition-next.json" > /dev/null
+
+          revision="$(aws ecs register-task-definition \
+            --cli-input-json "file://$RUNNER_TEMP/task-definition-next.json" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)"
+          echo "registered ${revision}"
+          echo "revision=${revision}" >> "$GITHUB_OUTPUT"
+
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --task-definition "$revision" \
+            --force-new-deployment > /dev/null
+
+      # `wait services-stable` is necessary but not sufficient. The service's
+      # deployment circuit breaker rolls back on its own when the new tasks
+      # cannot start, and the service then becomes perfectly stable — running
+      # the OLD revision. Without the comparison below, that silent rollback is
+      # reported as a successful deployment.
+      - name: wait for the service to stabilise
+        env:
+          REVISION: ${{ steps.service.outputs.revision }}
+        run: |
+          set -euo pipefail
+
+          if ! aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"; then
+            echo "::error::the service did not reach a stable state within the waiter's 10 minutes"
+            aws logs tail "$API_LOG_GROUP" --since 15m || true
+            exit 1
+          fi
+
+          live="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            --query 'services[0].taskDefinition' --output text)"
+
+          if [ "$live" != "$REVISION" ]; then
+            echo "::error::the deployment circuit breaker rolled back — the service is running ${live}, not ${REVISION}. The migration has already been applied; the code has not."
+            aws logs tail "$API_LOG_GROUP" --since 15m || true
+            exit 1
+          fi
+          echo "service is running ${live}"
+
+      # -------------------------------------------------------------------
+      # 5. Smoke test
+      #
+      # Through the LOAD BALANCER, not through the CDN in front of it. A
+      # deployment just replaced the tasks behind that load balancer, and
+      # testing through CloudFront would put a cache and a second set of failure
+      # modes between the check and the thing being checked.
+      #
+      # /api/v1/health/ready, not /health/ready: the application mounts every
+      # route under API_PREFIX with URI versioning on top. The URL is built by
+      # Terraform from the same values the ALB target group's health check uses.
+      # -------------------------------------------------------------------
+      - name: smoke-test the api through the load balancer
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if body="$(curl --fail --silent --show-error --max-time 10 "$HEALTH_CHECK_URL")"; then
+              echo "$body"
+              echo "readiness confirmed at ${HEALTH_CHECK_URL}"
+              exit 0
+            fi
+            echo "attempt ${attempt}/30: not ready yet"
+            sleep 5
+          done
+          echo "::error::${HEALTH_CHECK_URL} never returned a healthy readiness response. The tasks are running but not serving."
+          aws logs tail "$API_LOG_GROUP" --since 10m || true
+          exit 1
+
+      # -------------------------------------------------------------------
+      # 6. Build and publish both frontends
+      #
+      # After the API, deliberately: a frontend build may depend on an endpoint
+      # this release introduced, and publishing it first would break the site
+      # for as long as the rollout takes.
+      # -------------------------------------------------------------------
+
+      - name: install the frontend toolchains
+        run: |
+          pnpm install --frozen-lockfile \
+            --filter "@nest-aws-starter/web..." \
+            --filter "@nest-aws-starter/admin..."
+
+      # NOT `pnpm run build`, and this is the trap worth knowing about:
+      # Turborepo 2 runs tasks in strict environment mode, passing through only
+      # the variables listed in turbo.json's `build.env` — which is
+      # `["DATABASE_URL"]`. Every VITE_* variable would be stripped, both
+      # frontends would silently build against their localhost defaults, and the
+      # deployed site would try to call http://localhost:3000. Calling each
+      # package's own script keeps the environment intact.
+      #
+      # packages/shared first, in dependency order: both apps import it and both
+      # type-check against its emitted declarations.
+      - name: build both frontends
+        run: |
+          set -euo pipefail
+          echo "VITE_API_BASE_URL=${VITE_API_BASE_URL}"
+          echo "VITE_WEB_APP_URL=${VITE_WEB_APP_URL}"
+          pnpm --dir packages/shared run build
+          pnpm --dir apps/web run build
+          pnpm --dir apps/admin run build
+
+      # The publish order inside each site is load-bearing:
+      #
+      #   1. hashed assets first, cached for a year. Their filenames change
+      #      whenever their contents do, so they can never be served stale — and
+      #      uploading them before the shell means the new index.html never
+      #      points at an object that is not there yet.
+      #   2. index.html last, no-cache. It is the one mutable object.
+      #   3. invalidate ONLY /index.html. /assets/* is content-hashed, so
+      #      invalidating it would pay CloudFront's per-path charge to expire
+      #      objects that can never be wrong. (The distribution already serves
+      #      the shell under Managed-CachingDisabled, so this is belt and
+      #      braces — and it is the braces that survive someone deciding to
+      #      cache HTML later. `/` resolves to the same object through
+      #      default_root_object and is likewise not cached.)
+      #
+      # `sync` without --delete, also deliberate: deleting last release's hashed
+      # assets breaks every browser still holding the previous index.html, and
+      # CloudFront's 403 -> /index.html rewrite would answer those requests with
+      # HTML where a .js file is expected. The buckets carry a lifecycle rule
+      # for the cleanup instead (modules/edge/buckets.tf). The deploy role holds
+      # no s3:DeleteObject at all, so this cannot regress by accident.
+      - name: publish the frontends
+        run: |
+          set -euo pipefail
+
+          publish() {
+            dist="$1"
+            bucket="$2"
+            distribution="$3"
+
+            aws s3 sync "$dist" "s3://${bucket}" \
+              --exclude 'index.html' \
+              --cache-control 'public, max-age=31536000, immutable' \
+              --only-show-errors
+
+            aws s3 cp "${dist}/index.html" "s3://${bucket}/index.html" \
+              --cache-control 'no-cache, no-store, must-revalidate' \
+              --content-type 'text/html; charset=utf-8' \
+              --only-show-errors
+
+            invalidation="$(aws cloudfront create-invalidation \
+              --distribution-id "$distribution" \
+              --paths '/index.html' \
+              --query 'Invalidation.Id' --output text)"
+
+            aws cloudfront wait invalidation-completed \
+              --distribution-id "$distribution" --id "$invalidation"
+
+            echo "published ${dist} to ${bucket}, invalidated ${invalidation}"
+          }
+
+          publish apps/web/dist "$WEB_BUCKET" "$WEB_DISTRIBUTION_ID"
+          publish apps/admin/dist "$ADMIN_BUCKET" "$ADMIN_DISTRIBUTION_ID"
+
+      - name: summarise the deployment
+        if: always()
+        env:
+          REVISION: ${{ steps.service.outputs.revision }}
+        run: |
+          {
+            echo "### Deployment"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| commit | \`${IMAGE_TAG}\` |"
+            echo "| image | \`${ECR_REPOSITORY_URL}:${IMAGE_TAG}\` |"
+            echo "| task definition | \`${REVISION:-not registered}\` |"
+            echo "| api | ${HEALTH_CHECK_URL} |"
+            echo "| cors origins | \`${API_CORS_ORIGINS}\` |"
+            echo
+            echo "Roll back with:"
+            echo
+            echo '```'
+            echo "gh workflow run deploy.yml -f sha=<earlier-commit-sha>"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

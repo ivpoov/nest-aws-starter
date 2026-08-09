@@ -133,9 +133,10 @@ and the markers themselves.
   - line 45: `paymentTransactions     PaymentTransaction[] // <module:payment>`
   - lines 254-350 (block)
 - `apps/api/prisma/seed.ts`
-  - lines 15-40 (block)
-  - lines 48-64 (block)
-  - lines 70-74 (block)
+  - lines 380-571 (block)
+  - lines 667-684 (block)
+  - lines 795-820 (block)
+  - lines 893-895 (block)
 - `apps/web/src/App.tsx`
   - line 7: `import { BillingCanceledPage } from './pages/BillingCanceledPage'; // <module:payment>`
   - line 8: `import { BillingPage } from './pages/BillingPage'; // <module:payment>`
