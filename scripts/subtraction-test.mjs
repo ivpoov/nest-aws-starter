@@ -89,12 +89,15 @@ const SKIP_DIR_NAMES = new Set(['node_modules', 'dist', 'generated', '.git']);
 // assertFrontendFencedClaims() below enforces the assertion mechanically, so
 // the flag cannot drift away from what the entry actually says.
 export const MODULES = [
+  // The demo feature the starter ships so a fresh clone has something to run:
+  // CRUD notes behind auth, with the CASL ownership rules and cursor
+  // pagination wired end to end. `pnpm bootstrap --drop-demo` deletes it
+  // through this very entry, which is why it is fenced like any other optional
+  // module rather than special-cased in the bootstrap script — and why the
+  // entry itself sits inside a fence, so the same strip that removes the
+  // module also removes its now-stale recipe from this list.
+  // <module:note>
   {
-    // The demo feature the starter ships so a fresh clone has something to
-    // run: CRUD notes behind auth, with the CASL ownership rules and cursor
-    // pagination wired end to end. `pnpm bootstrap --drop-demo` deletes it
-    // through this very entry, which is why it is fenced like any other
-    // optional module rather than special-cased in the bootstrap script.
     id: 'note',
     summary: 'Demo notes CRUD — the feature a fresh clone has to click on before writing any code.',
     paths: [
@@ -120,7 +123,7 @@ export const MODULES = [
       ],
       [
         'apps/api/src/modules/common/dtos/error-response.dto.ts',
-        "the Swagger examples still read NOTE_NOT_FOUND and /api/v1/notes/<uuid>. They are illustrative strings in @ApiProperty examples, not references to the deleted module — repoint them at one of your own resources when you have one",
+        'the Swagger examples still read NOTE_NOT_FOUND and /api/v1/notes/<uuid>. They are illustrative strings in @ApiProperty examples, not references to the deleted module — repoint them at one of your own resources when you have one',
       ],
       [
         'apps/api/src/modules/casl/tests/casl-ability-factory.service.spec.ts',
@@ -132,6 +135,7 @@ export const MODULES = [
       ],
     ],
   },
+  // </module:note>
   {
     id: 'contact-us',
     summary: 'Public contact form + admin inbox.',
@@ -729,7 +733,7 @@ function fenceFilesUnder(treeRoot) {
 // `// <module:x>` marker, and whole blocks between own-line
 // `// <module:x>` / `// </module:x>` markers. Returns the fence hits found
 // (used by --emit-docs) and, when `write` is true, persists the stripped file.
-function stripFencesInFile(filePath, moduleId, write) {
+export function stripFencesInFile(filePath, moduleId, write) {
   // `//` fences cover .ts/.prisma; the `{/* */}` variants exist because a
   // line comment is a syntax error inside JSX children, which is exactly
   // where a frontend cross-reference lives (a <Bell /> inside a layout).
