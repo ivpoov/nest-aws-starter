@@ -35,6 +35,16 @@ const EXPECTED_INDEXES: ExpectedIndexInterface[] = [
     index: 'subscriptions_planId_idx',
     backs: 'the planId foreign key',
   },
+  {
+    table: 'users',
+    index: 'users_displayName_trgm_idx',
+    backs: "the admin user search's substring match on display name",
+  },
+  {
+    table: 'auth_methods',
+    index: 'auth_methods_email_trgm_idx',
+    backs: "the admin user search's substring match on linked emails",
+  },
 ];
 
 describe('database indexes', () => {
@@ -57,5 +67,20 @@ describe('database indexes', () => {
     `;
 
     expect(rows).toHaveLength(1);
+  });
+
+  // Naming an index "_trgm_idx" proves nothing; being a GIN index over
+  // gin_trgm_ops is what lets Postgres answer a leading wildcard at all.
+  it.each([
+    ['users', 'users_displayName_trgm_idx'],
+    ['auth_methods', 'auth_methods_email_trgm_idx'],
+  ])('builds %s.%s as a gin_trgm_ops GIN index', async (table: string, index: string) => {
+    const rows: { indexdef: string }[] = await prisma.$queryRaw`
+      SELECT indexdef FROM pg_indexes
+      WHERE schemaname = 'public' AND tablename = ${table} AND indexname = ${index}
+    `;
+
+    expect(rows[0]?.indexdef).toContain('USING gin');
+    expect(rows[0]?.indexdef).toContain('gin_trgm_ops');
   });
 });

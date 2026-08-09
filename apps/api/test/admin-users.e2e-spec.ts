@@ -140,6 +140,58 @@ describe('admin users', () => {
     expect(secondPage.body.items[0].id).toBe(middleId);
   });
 
+  // The email half of the search is resolved by its own bounded query now,
+  // so the union of "matches by display name" and "matches by linked email"
+  // has to survive both in one page and across a cursor boundary — that is
+  // precisely what a bound applied to the wrong branch would break.
+  it('unions display-name and email matches across a page boundary', async () => {
+    const marker: string = `Union${randomUUID().replace(/-/g, '')}`;
+    const prisma: PrismaService = app.get(PrismaService);
+
+    // Matches by display name only.
+    const byName = await registerUser(`${marker} named`);
+    // Matches by email only — the display name deliberately has no marker.
+    const byEmail = await registerUser('Union Email Only');
+
+    await prisma.authMethod.updateMany({
+      where: { email: byEmail.email },
+      data: { email: `${marker.toLowerCase()}@example.com` },
+    });
+
+    const byNameId: string =
+      (await prisma.authMethod.findFirst({ where: { email: byName.email } }))?.userId ?? '';
+    const byEmailId: string =
+      (
+        await prisma.authMethod.findFirst({
+          where: { email: `${marker.toLowerCase()}@example.com` },
+        })
+      )?.userId ?? '';
+
+    const all = await request(app.getHttpServer())
+      .get(`/api/v1/admin/users?search=${marker}`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(all.body.items.map((item: { id: string }): string => item.id).sort()).toEqual(
+      [byNameId, byEmailId].sort(),
+    );
+
+    // byEmail registered second, so its UUIDv7 id sorts first under id desc.
+    const firstPage = await request(app.getHttpServer())
+      .get(`/api/v1/admin/users?search=${marker}&limit=1`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(firstPage.body.items[0].id).toBe(byEmailId);
+
+    const secondPage = await request(app.getHttpServer())
+      .get(`/api/v1/admin/users?search=${marker}&limit=1&cursor=${byEmailId}`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(secondPage.body.items[0].id).toBe(byNameId);
+  });
+
   it('returns the user detail and its sessions', async () => {
     const detail = await request(app.getHttpServer())
       .get(`/api/v1/admin/users/${userId}`)

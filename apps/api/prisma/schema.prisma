@@ -49,6 +49,13 @@ model User {
 
   @@index([role, status])
   @@index([createdAt])
+  // Trigram index for the admin search's `ILIKE '%term%'`. A btree cannot
+  // serve a leading wildcard at all, so the search used to seq-scan every
+  // user row on every keystroke. Writes to this table are rare (registration,
+  // the occasional profile edit), which is what makes a GIN index the right
+  // place to spend write throughput. Patterns shorter than three characters
+  // yield no trigrams and still fall back to a scan — see AdminUsersQueryDto.
+  @@index([displayName(ops: raw("gin_trgm_ops"))], type: Gin, map: "users_displayName_trgm_idx")
   @@map("users")
 }
 
@@ -69,6 +76,9 @@ model AuthMethod {
   @@unique([type, email]) // conflict rule backbone (EMAIL row per address)
   @@index([email])
   @@index([userId])
+  // Same reasoning as users.displayName: the admin search matches emails by
+  // substring, which the btree on `email` above cannot serve.
+  @@index([email(ops: raw("gin_trgm_ops"))], type: Gin, map: "auth_methods_email_trgm_idx")
   @@map("auth_methods")
 }
 
