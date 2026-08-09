@@ -182,7 +182,14 @@ is layered — in [`docs/guides/container.md`](docs/guides/container.md).
 
 ## Going to production
 
-Every value in `apps/api/.env.example` works out of the box on a laptop, and
+For the infrastructure side of that question — what `cost_profile = "production"`
+actually flips, NAT versus VPC endpoints with real costs, backup and restore,
+secret rotation, incident basics, and an explicit list of what this starter
+deliberately does not do — see
+[`docs/guides/production.md`](./docs/guides/production.md).
+
+The rest of this section is the application side. Every value in
+`apps/api/.env.example` works out of the box on a laptop, and
 several of them would be a breach on a server. With `NODE_ENV=production` the
 API therefore refuses to start — at boot, before it listens, not on first use —
 while any of the following holds:
@@ -475,7 +482,7 @@ docker/           # compose init scripts
 docs/architecture.md # request lifecycle, event map, caching tiers, AWS surface
 docs/conventions/ # binding code conventions — read before contributing
 docs/decisions/   # architecture decision records — why, and what it cost
-docs/guides/      # walkthroughs — adding a module, building and running the API image
+docs/guides/      # walkthroughs — adding a module, the API image, going to production
 docs/removal/     # generated per-module removal recipes
 scripts/          # bootstrap rename + subtraction test + removal-recipe generator
 ```
