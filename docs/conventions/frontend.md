@@ -178,7 +178,8 @@ Three layers, three rules:
    in `index.html` sets it before first paint, reading the persisted Zustand value
    (`localStorage['theme'] → JSON.parse(raw).state.mode`) and falling back to
    `prefers-color-scheme`. That script is why there is no theme flash; if you change
-   the store's persist key or shape, that script changes with it.
+   the store's persist key or shape, that script changes with it. It is also the one
+   inline script the Content-Security-Policy has to authorise — see below.
 3. **`useThemeStore.setMode` writes the dataset attribute and the store**, in that
    order — the DOM is the source of truth for CSS, the store is the source of truth
    for React.
@@ -188,6 +189,25 @@ hardcoding it: `apps/admin/src/utils/chartColors.ts` resolves `--accent`,
 `--content-muted`, `--edge` and `--danger` through `getComputedStyle`, with
 light-mode fallbacks for the non-DOM case, and `useChartColors` recomputes them keyed
 on the store's `mode` so a live toggle repaints mounted recharts series.
+
+### Content-Security-Policy
+
+Both apps ship a CSP as a `<meta http-equiv>` in the built HTML, injected by the
+`inject-content-security-policy` plugin in each `vite.config.ts`. Three rules:
+
+1. **The policy is build-only** (`apply: 'build'`). A `<meta>` tag in the source
+   `index.html` would also govern `pnpm dev`, where Vite serves an inline
+   React-Refresh module script, injects CSS as `<style>` elements from JS, and opens
+   an HMR WebSocket — all of which a shippable policy forbids.
+2. **The hash for the theme bootstrap is computed from the HTML being emitted**,
+   never written by hand. Nothing to keep in sync; nothing to rot.
+3. **`script-src` never gains `'unsafe-inline'` or `'unsafe-eval'`.** Everything else
+   in the policy is negotiable per deployment — `img-src`/`connect-src` still allow
+   `https:` because presigned S3/CloudFront URLs are minted at request time and their
+   origin is not a build input. That directive is the one worth defending.
+
+`frame-ancestors` cannot travel in a `<meta>` tag; clickjacking cover comes from the
+edge (`X-Frame-Options`, `infra/terraform/modules/edge/`).
 
 ## 5. `apiClient` — one client, one refresh
 
