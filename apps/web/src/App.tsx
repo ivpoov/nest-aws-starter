@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { AppLayout } from './components/Layout/AppLayout';
 import { AuthGate } from './components/Layout/AuthGate';
+import { APP_HOME_ROUTE } from './constants/app-home-route.constants';
 import { NotificationSocketProvider } from './contexts/NotificationSocketContext'; // <module:notification>
 import { BillingCanceledPage } from './pages/BillingCanceledPage'; // <module:payment>
 import { BillingPage } from './pages/BillingPage'; // <module:payment>
@@ -57,7 +58,7 @@ export function App(): ReactElement {
         </Route>
         {/* </module:notification> */}
       </Route>
-      <Route path="*" element={<Navigate to="/notes" replace />} />
+      <Route path="*" element={<Navigate to={APP_HOME_ROUTE} replace />} />
     </Routes>
   );
 }

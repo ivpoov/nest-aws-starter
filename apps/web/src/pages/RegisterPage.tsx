@@ -7,6 +7,7 @@ import { ProviderButtons } from '../components/Auth/ProviderButtons';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
+import { APP_HOME_ROUTE } from '../constants/app-home-route.constants';
 import { useAuthStore } from '../stores/auth.store';
 import { toApiError } from '../utils/toApiError';
 
@@ -27,7 +28,7 @@ export function RegisterPage(): ReactElement {
       const tokens: AuthTokensResponseInterface = await register({ displayName, email, password });
 
       setTokens(tokens.accessToken, tokens.refreshToken);
-      await navigate('/notes');
+      await navigate(APP_HOME_ROUTE);
     } catch (caught) {
       setError(toApiError(caught));
     } finally {

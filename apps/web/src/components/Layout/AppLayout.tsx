@@ -1,19 +1,11 @@
 import type { ReactElement } from 'react';
 import { Link, NavLink, Outlet } from 'react-router';
+import { APP_NAV_ITEMS } from '../../constants/app-nav-items.constants';
 import { useIsImpersonating } from '../../hooks/auth/useIsImpersonating';
 import { useLogout } from '../../hooks/auth/useLogout';
 import { NotificationBell } from '../Notifications/NotificationBell'; // <module:notification>
 import { Banner } from '../ui/Banner';
 import { ThemeToggle } from '../ui/ThemeToggle';
-
-const NAV_ITEMS: ReadonlyArray<{ readonly to: string; readonly label: string }> = [
-  { to: '/notes', label: 'Notes' },
-  { to: '/profile', label: 'Profile' },
-  { to: '/settings/methods', label: 'Sign-in methods' },
-  { to: '/settings/sessions', label: 'Sessions' },
-  { to: '/settings/billing', label: 'Billing' }, // <module:payment>
-  { to: '/settings/notifications', label: 'Notifications' }, // <module:notification>
-];
 
 export function AppLayout(): ReactElement {
   const { logout } = useLogout();
@@ -24,7 +16,7 @@ export function AppLayout(): ReactElement {
       {isImpersonating ? <Banner>Viewing as this user — session started by an admin</Banner> : null}
       <header className="flex items-center justify-between border-b border-edge px-6 py-3">
         <nav className="flex gap-4 text-sm">
-          {NAV_ITEMS.map((item) => (
+          {APP_NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
