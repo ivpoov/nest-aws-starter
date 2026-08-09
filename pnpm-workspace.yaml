@@ -35,6 +35,19 @@ overrides:
   # upstream-tested pairing rather than a guess; nothing here runs
   # `prisma dev`, which is the only thing @prisma/dev provides.
   "@prisma/dev": "0.24.17"
+  # GHSA-w5hq-g745-h8pq (CVSS 7.5) against uuid 8.3.2. The path is
+  # autocannon -> hyperid -> uuid, and autocannon 8.0.0 is already the newest
+  # release there is, so the direct dependency cannot be bumped out of it.
+  # Pinning uuid forward would work, but hyperid 4.0.0 is the better answer:
+  # it deletes the dependency instead of upgrading it. hyperid's uuid call was
+  # already dead code — its uuid-node.js prefers crypto.randomUUID and only
+  # falls back to uuid.v4 on runtimes that lack it, which this repo's node
+  # >=24 engine never hits — so 4.0.0 drops the fallback and swaps uuid-parse
+  # for inline hex, removing both packages from the tree. autocannon only ever
+  # calls `hyperid({ urlSafe: true })`, which 4.0.0 keeps unchanged.
+  # Exact, not ">=4.0.0": hyperid has no 5.x today, and an open range would
+  # resolve into the next major the moment there is one.
+  hyperid: "4.0.0"
 allowBuilds:
   "@prisma/engines": true
   "@scarf/scarf": false
