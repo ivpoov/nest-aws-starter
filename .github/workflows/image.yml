@@ -1,0 +1,123 @@
+name: image
+
+# Builds apps/api/Dockerfile. Build only — nothing is pushed and no registry
+# credential is in scope, so this job stays safe to run on pull requests from
+# forks.
+#
+# It exists because a Dockerfile rots silently. Nothing in `ci.yml` compiles
+# the image, so a new workspace package, a dependency that needs a build
+# toolchain, or a `pnpm deploy` flag that stops behaving would all go green on
+# every PR and only surface on the day someone tries to deploy. This job moves
+# that failure to the PR that causes it.
+#
+# Every `uses:` is pinned to a commit SHA, with the human-readable version in
+# the trailing comment — see the header of ci.yml for why a tag is not a
+# reference.
+
+on:
+  pull_request:
+    # A container build is minutes, not seconds, so it is scoped to the things
+    # that can actually change its outcome: the API and the workspace package
+    # it depends on, anything the install resolves from, the build context
+    # definition, the compose file that drives the build, and this workflow.
+    # A README edit or a change under apps/web cannot break this image.
+    paths:
+      - 'apps/api/**'
+      - 'packages/shared/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.dockerignore'
+      - 'docker-compose.yml'
+      - '.github/workflows/image.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      # The host view of the compose Postgres. Used three times below — by the
+      # migration, by the BuildKit secret the image build consumes, and
+      # (through compose interpolation) by the build's `network: host`.
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+      # docker-compose.yml reads this for the `full` profile's tag. Set here so
+      # the build step and the inspect step below cannot disagree about which
+      # image was produced, and so a CI artefact is never mistaken for the
+      # `:dev` image a developer built.
+      API_IMAGE: nest-aws-starter-api:ci
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # The image build needs a live, migrated Postgres — see the next two
+      # steps — and this is the one the rest of the repository already
+      # describes. Standing it up from the repository's own compose file
+      # rather than from a `services:` block keeps a single definition of the
+      # Postgres version and the port, so CI and a laptop cannot drift apart.
+      # Only `postgres` is named: Redis, LocalStack and MinIO play no part in
+      # a build, and starting them would be free-tier minutes spent on nothing.
+      - run: docker compose up -d --wait postgres
+
+      # Filtered to the API and its workspace dependencies. The web and admin
+      # toolchains (Vite, React, their type packages) are several hundred
+      # megabytes that nothing in this job touches. Only the Prisma CLI is
+      # actually needed here — it is not in the runtime image, deliberately —
+      # but it comes with the rest of the API's dev dependencies.
+      - run: pnpm install --frozen-lockfile --filter "@nest-aws-starter/api..."
+
+      # BEFORE the build, and this ordering is the whole trick. `pnpm run
+      # build` for the API starts with `prisma generate --sql`, and Prisma's
+      # TypedSQL type-checks every file in apps/api/prisma/sql against a real
+      # database: a reachable port is not enough, the tables have to exist. A
+      # fresh runner's Postgres is empty until this line runs, so a build
+      # placed before it fails with a type error in generated code — which
+      # reads like a source bug and is not one. ci.yml migrates before its
+      # build for exactly the same reason.
+      - run: pnpm --dir apps/api run db:migrate
+
+      # `docker compose build`, not a bare `docker build`, so the flags live
+      # in exactly one place. docker-compose.yml's `full` profile already
+      # carries them and docs/guides/container.md already documents them:
+      #
+      #   build.network: host       lets the build container reach the compose
+      #                             Postgres on localhost:5433
+      #   build.secrets: [database_url]
+      #                             passes DATABASE_URL as a BuildKit secret
+      #                             rather than a build arg, so it is mounted
+      #                             for one RUN and never recorded in image
+      #                             history
+      #
+      # A second, hand-maintained invocation here would be a second thing to
+      # keep in step, and the first one to go stale. As a bonus this proves
+      # the `full` profile's build wiring on every PR, not just the Dockerfile.
+      #
+      # No buildx `docker-container` driver and no registry cache: the default
+      # docker driver is what permits `network: host` without an extra
+      # entitlement, and a cache export with nowhere to push it would only
+      # cost minutes.
+      - name: build the api image
+        run: docker compose --profile full build api
+        env:
+          DOCKER_BUILDKIT: "1"
+
+      # A cheap regression signal, printed into the log rather than asserted
+      # against a threshold — the figure depends on which image store the
+      # daemon uses, so a hard-coded number would only produce false failures.
+      # A jump between runs means something started shipping that the
+      # Dockerfile's prune steps used to drop. docs/guides/container.md
+      # records the measurement method and the current sizes.
+      - name: report image size
+        run: docker image inspect "${API_IMAGE}" --format 'image size {{.Size}} bytes'

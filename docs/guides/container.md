@@ -25,7 +25,9 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5433/starter?connection_l
     .
 ```
 
-The rest of this page explains why each of those flags is there.
+The rest of this page explains why each of those flags is there. If you want
+the image *running* against the compose stack rather than just built, skip to
+[the `full` compose profile](#the-full-compose-profile) — it wraps all of it.
 
 ## Building
 
@@ -190,8 +192,76 @@ guard: the app refuses to start while any development default from
 under 256 bits of measurable entropy. That is the point — a container handed
 laptop configuration should not start. Give it real values.
 
-Against the local compose stack, joining its network so the container can use
-the service names:
+### The `full` compose profile
+
+`docker-compose.yml` carries a `full` profile that does all of this for you:
+it builds the image with the right flags and runs it against the same
+Postgres, Redis, LocalStack and MinIO the dev stack already uses. "Works on my
+machine" and "works in the container" stop being two separate claims, because
+both are the same stack.
+
+```bash
+docker compose up -d --wait
+
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+pnpm --dir apps/api run db:migrate
+
+export API_JWT_SECRET="$(openssl rand -hex 48)"
+docker compose --profile full up -d --build
+```
+
+```bash
+curl -s http://localhost:3080/api/v1/health/ready
+```
+
+```json
+{ "status": "ok", "database": true, "redis": true }
+```
+
+Four things are worth knowing about that profile.
+
+**`DATABASE_URL` is for the build, not the container.** It is exposed to the
+build as a BuildKit secret (`build.secrets`), and the build runs with
+`network: host` so it can reach the compose Postgres on its *published* port.
+The running container gets a different URL entirely — `postgres:5432`, the
+service name on the compose network. That is also why `db:migrate` has to come
+first: TypedSQL needs the tables, not just the port.
+
+**`API_JWT_SECRET` has no default, deliberately.** A committed value strong
+enough to pass the 256-bit entropy check would be a development default in
+everything but name, and the guard could not tell it from a real secret. So
+the profile ships without one, and the container refuses to boot until you
+export one:
+
+```
+ERROR [ProductionGuardConfig] Refusing to boot with NODE_ENV=production:
+  - [PRODUCTION_WEAK_JWT_SECRET] AUTH_JWT_SECRET is 0 characters carrying at
+    most ~0 bits of entropy, below the 256 bits (32 bytes) required — ...
+```
+
+That refusal is the profile doing its job. Every *other* value in it is already
+chosen to clear the guard: deployed-looking CORS and web origins, LocalStack
+credentials that are not the literal `test`, and a MinIO credential of the
+API's own rather than the public `minioadmin` default — `minio-init`
+provisions the `starter-api` user, which is why `api` waits for it to complete.
+
+**The image does not run migrations.** The `prisma` CLI is deliberately not in
+it, so the `db:migrate` above is doing double duty: it prepares the database
+for the build *and* for the container that follows.
+
+**Port 3080, not 3000**, so the containerized API and a `pnpm start:dev` on the
+host can run side by side and be compared. Override with `API_PORT`.
+
+Tear down just the API and leave the services running:
+
+```bash
+docker compose --profile full stop api
+```
+
+### By hand
+
+The profile is only wrapping a `docker run`. The long form, joining the compose
+network so the container can use the service names:
 
 ```bash
 docker run -d --name api-smoke --network nest-aws-starter_default -p 3080:3000 \
@@ -274,6 +344,41 @@ Tear down:
 ```bash
 docker rm -f api-smoke
 ```
+
+## CI
+
+`.github/workflows/image.yml` builds this image on every pull request that
+touches `apps/api/**`, `packages/shared/**`, the lockfile or workspace
+manifests, `.dockerignore`, or `docker-compose.yml`. Build only — nothing is
+pushed, so no registry credential is ever in scope and the job is safe on
+pull requests from forks.
+
+It exists because a Dockerfile rots quietly. Nothing in `ci.yml` compiles the
+image, so a new workspace package, a dependency that needs a build toolchain,
+or a `pnpm deploy` flag that changes behaviour would all go green on every PR
+and surface for the first time on the day someone tries to deploy.
+
+The job is the local flow, in order:
+
+```yaml
+- run: docker compose up -d --wait postgres
+- run: pnpm install --frozen-lockfile --filter "@nest-aws-starter/api..."
+- run: pnpm --dir apps/api run db:migrate
+- run: docker compose --profile full build api
+```
+
+Postgres comes from this repository's own compose file rather than a GitHub
+`services:` block, so the version and the port have one definition instead of
+two that can drift. Only `postgres` is named — Redis, LocalStack and MinIO
+play no part in a build. The install is filtered to the API and its workspace
+dependencies, because the Vite and React toolchains are hundreds of megabytes
+this job never touches; the Prisma CLI is what it is actually after.
+
+The build step is `docker compose --profile full build api` rather than a
+hand-written `docker build`, so `--network=host` and the `database_url` secret
+live in exactly one place — the `full` profile — instead of in a second copy
+that would be the first thing to go stale. It also means every PR exercises
+that profile's build wiring, not just the Dockerfile.
 
 ## Notes for deployment
 

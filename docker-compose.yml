@@ -62,15 +62,132 @@ services:
     image: minio/mc:latest
     # One-shot; profiled so `up -d --wait` (CI) isn't tripped by its exit-0.
     # Local: docker compose --profile init up minio-init
-    profiles: ["init"]
+    # The `full` profile runs it too, as a service_completed_successfully
+    # dependency of `api` — that profile has to be self-contained.
+    profiles: ["init", "full"]
     depends_on:
       minio: { condition: service_healthy }
+    # The second half exists for the `full` profile. That profile runs the
+    # image with NODE_ENV=production, and the boot guard rejects
+    # S3_ACCESS_KEY/S3_SECRET_KEY=minioadmin as a shipped development default
+    # — correctly, they are the public MinIO defaults. So the API is given a
+    # credential of its own instead of the root one. `|| true` on the add:
+    # re-running against a persisted miniodata volume would otherwise fail on
+    # the existing user and take the whole profile down with it.
     entrypoint:
       - sh
       - -c
       - >
         mc alias set local http://minio:9000 minioadmin minioadmin &&
-        mc mb --ignore-existing local/starter
+        mc mb --ignore-existing local/starter &&
+        { mc admin user add local starter-api starter-api-local-secret || true; } &&
+        mc admin policy attach local readwrite --user starter-api || true
+
+  # --------------------------------------------------------------------------
+  # full — the built image, against the same Postgres/Redis/LocalStack/MinIO
+  # the dev stack already runs.
+  #
+  # The point is to collapse "works on my machine" and "works in the
+  # container" into one claim. `pnpm start:dev` runs the API on the host,
+  # against published host ports, with NODE_ENV=development. This profile runs
+  # the artefact that actually ships: the production image, on the compose
+  # network, under NODE_ENV=production.
+  #
+  #   docker compose up -d --wait                          # the services
+  #   DATABASE_URL=postgresql://postgres:postgres@localhost:5433/starter \
+  #     pnpm --dir apps/api run db:migrate                  # see build.secrets
+  #   export API_JWT_SECRET="$(openssl rand -hex 48)"
+  #   DATABASE_URL=postgresql://postgres:postgres@localhost:5433/starter \
+  #     docker compose --profile full up -d --build
+  #   curl -s localhost:3080/api/v1/health/ready
+  #
+  # See docs/guides/container.md.
+  # --------------------------------------------------------------------------
+  api:
+    profiles: ["full"]
+    image: ${API_IMAGE:-nest-aws-starter-api:dev}
+    build:
+      # The repository root, not apps/api: a pnpm workspace build needs the
+      # root manifest, the lockfile and packages/shared.
+      context: .
+      dockerfile: apps/api/Dockerfile
+      # `prisma generate --sql` type-checks every TypedSQL query in
+      # apps/api/prisma/sql against a *live, migrated* database, so the build
+      # container has to reach one. network: host puts it on the host's stack,
+      # where the compose Postgres is published on ${POSTGRES_PORT:-5433} —
+      # the same trick, and the same reason, as the `docker build
+      # --network=host` in docs/guides/container.md.
+      network: host
+      # A BuildKit secret, not a build arg: build args are recorded in image
+      # history where anyone who can pull the image can read them.
+      secrets:
+        - database_url
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      localstack: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+    ports:
+      # 3080, not 3000 — so the containerized API and a `pnpm start:dev` on
+      # the host can be compared side by side instead of fighting for a port.
+      - "${API_PORT:-3080}:3000"
+    environment:
+      # NODE_ENV=production is baked into the image and deliberately not
+      # overridden here. It arms the boot guard, which refuses to start while
+      # any value from apps/api/.env.example is still in place — so every
+      # variable below has to differ from the development default. That is the
+      # profile earning its keep: it exercises the refusal path on a laptop
+      # instead of on a first deploy.
+      #
+      # Service names and native ports, not the shifted host ports: inside the
+      # compose network Postgres is postgres:5432, not localhost:5433.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-starter}?connection_limit=10
+      REDIS_URL: redis://redis:6379
+      # Deliberately without a working default:
+      #
+      #   export API_JWT_SECRET="$(openssl rand -hex 48)"
+      #
+      # A committed value strong enough to satisfy the 256-bit entropy check
+      # would be a development default in everything but name — the guard
+      # could not tell it from a real secret, which is precisely the failure
+      # this repository refuses to ship. And a compose-level `:?` is not an
+      # option either: interpolation runs over the whole file, so a required
+      # variable here would break plain `docker compose up` for everyone who
+      # never asked for this profile. So it falls through empty, and the
+      # container's own guard rejects it by name and by measured entropy. That
+      # refusal is the demonstration, not a rough edge.
+      AUTH_JWT_SECRET: ${API_JWT_SECRET:-}
+      # Deployed-looking origins: the guard rejects wildcards and loopback.
+      CORS_ORIGINS: https://app.example.com
+      WEB_APP_BASE_URL: https://app.example.com
+      TRUST_PROXY: "true"
+      # LocalStack accepts any credential; these only have to not be the
+      # literal "test" that .env.example ships.
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ACCESS_KEY_ID: AKIAIOSFODNN7LOCALSTK
+      AWS_SECRET_ACCESS_KEY: wJalrXUtnFEMILocalStackOnlyNotARealKey
+      # The dedicated MinIO credential minio-init provisions above.
+      S3_ENABLED: "true"
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET_NAME: starter
+      S3_ACCESS_KEY: starter-api
+      S3_SECRET_KEY: starter-api-local-secret
+      SQS_ENABLED: "true"
+      SNS_ENABLED: "true"
+      LAMBDA_ENABLED: "true"
+      # docker/localstack/init-aws.sh verifies this identity as well as the
+      # .env.example one, so SES sends work here too.
+      MAIL_ENABLED: "true"
+      MAIL_FROM_ADDRESS: no-reply@api.example.com
+      SQS_PAYMENT_WEBHOOK_QUEUE_URL: http://localstack:4566/000000000000/starter-payment-webhook-queue
+      # Off by default: this profile is for proving the image boots and serves,
+      # and background pollers only add noise to its logs. Flip either to true
+      # to exercise them.
+      SCHEDULER_ENABLED: "${API_SCHEDULER_ENABLED:-false}"
+      PAYMENT_WEBHOOK_CONSUMER_ENABLED: "${API_PAYMENT_WEBHOOK_CONSUMER_ENABLED:-false}"
+      WEBSOCKET_ENABLED: "true"
 
   redis-cluster-0: &redis-cluster-node
     image: redis:8
@@ -121,6 +238,20 @@ services:
       - >
         redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 127.0.0.1:7003
         --cluster-replicas 0 --cluster-yes || true
+
+secrets:
+  # Only consumed by the `full` profile's image build (see api.build.secrets).
+  # Point it at the *host* view of the compose Postgres — the build runs with
+  # network: host — and migrate that database first, because TypedSQL is
+  # type-checked against real tables, not just a reachable port:
+  #
+  #   DATABASE_URL=postgresql://postgres:postgres@localhost:5433/starter \
+  #     pnpm --dir apps/api run db:migrate
+  #
+  # Compose only resolves this when a selected service references it, so the
+  # default stack still comes up with DATABASE_URL unset.
+  database_url:
+    environment: DATABASE_URL
 
 volumes:
   pgdata:

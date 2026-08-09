@@ -106,6 +106,33 @@ docker compose --profile init up minio-init    # create the S3 bucket once
 docker compose --profile cluster up -d         # 4-node Redis cluster on 7000-7003
 ```
 
+### Running the built image locally (`full` profile)
+
+The `full` profile builds `apps/api/Dockerfile` and runs it against the very
+same Postgres, Redis, LocalStack and MinIO — so "works on my machine" and
+"works in the container" are one claim, not two. The image runs with
+`NODE_ENV=production`, which means the boot guard below is armed, so the
+profile supplies deployment-shaped configuration and expects a real secret
+from you.
+
+```bash
+docker compose up -d --wait
+
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+pnpm --dir apps/api run db:migrate          # the image build needs migrated tables
+
+export API_JWT_SECRET="$(openssl rand -hex 48)"
+docker compose --profile full up -d --build
+
+curl -s http://localhost:3080/api/v1/health/ready
+# {"status":"ok","database":true,"redis":true}
+```
+
+`.github/workflows/image.yml` runs the same build on every PR that touches the
+API, so the Dockerfile cannot rot unnoticed. Full walkthrough — why the build
+needs a live database, what the profile does and does not set, how the image
+is layered — in [`docs/guides/container.md`](docs/guides/container.md).
+
 ## Going to production
 
 Every value in `apps/api/.env.example` works out of the box on a laptop, and
