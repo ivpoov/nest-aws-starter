@@ -117,13 +117,17 @@ export class SubscriptionPrismaRepository implements SubscriptionRepositoryInter
     return this.toDomain(updated);
   }
 
-  public async findOverdue(cutoff: Date): Promise<SubscriptionInterface[]> {
+  public async findOverdue(cutoff: Date, limit: number): Promise<SubscriptionInterface[]> {
     const subscriptions: SubscriptionWithPlan[] = await this.prisma.subscription.findMany({
       where: {
         status: { in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE] },
         currentPeriodEndsAt: { lt: cutoff },
       },
       include: { plan: true },
+      // Oldest first, so a capped run always drains the longest-overdue rows
+      // and never starves them — served by [status, currentPeriodEndsAt].
+      orderBy: { currentPeriodEndsAt: 'asc' },
+      take: limit,
     });
 
     return subscriptions.map(
