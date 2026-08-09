@@ -49,6 +49,48 @@ workspaces + Turborepo · Biome · Vitest + supertest.
 - **pnpm 11** via corepack: `corepack enable && corepack install`
 - **Docker** with the compose plugin
 
+## Make it yours
+
+A starter you cloned is still called `nest-aws-starter` in about 490 places —
+every `package.json`, every `@nest-aws-starter/shared` import, the compose
+project, the database, the Swagger title, the Terraform `project_name`, the
+image tag. Renaming that by hand is an afternoon of grep. One command instead:
+
+```bash
+pnpm bootstrap --name my-app --scope @my-app --author "Jane Doe"
+```
+
+It rewrites every file git tracks, then regenerates `pnpm-lock.yaml`. Add
+`--dry-run` first if you want to see the list before anything is written.
+
+| flag | what it does |
+| --- | --- |
+| `--name` | project name. Required, lowercase kebab-case. |
+| `--scope` | workspace scope for `packages/shared` and friends. Defaults to `@<name>`. |
+| `--author` | `LICENSE` copyright holder, plus `author` in the root `package.json`. |
+| `--repo` | `owner/repo` for the absolute GitHub URLs (see below). Defaults to this clone's `origin`. |
+| `--db` | Postgres database name. Defaults to `<name>`. |
+| `--drop-demo` | also delete the `note` demo module — and this script. |
+| `--dry-run` | report, write nothing. |
+
+`--drop-demo` does not reimplement the deletion: it calls straight into
+`scripts/subtraction-test.mjs`, deleting the `note` module's paths and
+stripping its `// <module:note>` fences with the same code CI proves nightly
+([see below](#modular-by-subtraction)). It then regenerates `docs/removal/` and
+removes itself, because a rename script has one job and you have now done it.
+
+**About `--repo`.** GitHub issue forms do not resolve relative links, so
+`SECURITY.md` and `.github/ISSUE_TEMPLATE/` carry absolute `github.com` URLs.
+Left alone, a fork's "report a security vulnerability" link points at *this*
+repository's inbox rather than yours — silently. `--repo` is what fixes it; if
+you omit it the value is read from your clone's `origin` remote, and if that is
+still the upstream you get an obvious `your-org/...` placeholder and a warning
+rather than a wrong link.
+
+Two things it deliberately leaves alone: your untracked `.env` files (re-copy
+`apps/api/.env.example` afterwards — its `DATABASE_URL` carries the database
+name) and any `version` field.
+
 ## Local development
 
 ```bash
@@ -56,7 +98,7 @@ git clone git@github.com:ivpoov/nest-aws-starter.git
 cd nest-aws-starter
 nvm use                       # Node 24
 corepack enable               # activates the pinned pnpm
-pnpm install
+pnpm install                  # or `pnpm bootstrap ...` first — see above
 
 # environment
 cp apps/api/.env.example apps/api/.env   # works as-is against the compose stack
@@ -404,15 +446,17 @@ node scripts/subtraction-test.mjs --module payment  # just one
 ```
 
 To drop a module, follow its recipe — e.g.
-[`docs/removal/notification.md`](./docs/removal/notification.md).
+[`docs/removal/notification.md`](./docs/removal/notification.md). The `note`
+demo module has a recipe too, which is what `pnpm bootstrap --drop-demo` runs
+for you.
 
 One honest caveat, spelled out per module in
-[`docs/removal/README.md`](./docs/removal/README.md): the fence markers cover
-`apps/api` completely, but the frontend and `packages/shared` halves of the
-bigger modules are still documented as by-hand steps rather than fenced. Those
-recipes list every file involved, and the script deletes what it safely can, but
-it can only *prove* the API half — so run each recipe's own verify block after
-following it.
+[`docs/removal/README.md`](./docs/removal/README.md): every module is fenced
+across `apps/api` (`src` *and* `test`), both frontends and `packages/shared`, so
+each removal is type-checked and unit-tested end to end — but the e2e suite is
+only ever type-checked, never executed. It needs a live
+Postgres/Redis/LocalStack, and a throwaway worktree has none. Run each recipe's
+own `test:e2e` line yourself after following it.
 
 ## Repository layout
 
@@ -426,7 +470,7 @@ docker/           # compose init scripts
 docs/conventions/ # binding code conventions — read before contributing
 docs/guides/      # operational guides — building and running the API image
 docs/removal/     # generated per-module removal recipes
-scripts/          # subtraction test + removal-recipe generator
+scripts/          # bootstrap rename + subtraction test + removal-recipe generator
 ```
 
 **Read `docs/conventions/backend.md` before writing any backend code** — it is
