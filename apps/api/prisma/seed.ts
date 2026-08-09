@@ -782,7 +782,7 @@ interface NotificationSeedInterface {
   readonly createdDaysAgo: number;
 }
 
-// Titles, bodies and meta mirror the dispatcher's builders (see
+// Titles, bodies and meta mirror the event subscriber's builders (see
 // modules/notification/builders) so seeded rows are indistinguishable from
 // dispatched ones. USER rows carry the eager reader receipt the repository
 // writes; ADMIN rows carry none — their receipts are created lazily on read,
@@ -870,8 +870,8 @@ const NOTIFICATIONS: readonly NotificationSeedInterface[] = [
     receiptId: null,
     readDaysAgo: null,
     type: 'CONTACT_MESSAGE',
-    title: 'New contact message',
-    body: 'A new contact message was received.',
+    title: 'Contact form submission received',
+    body: 'Someone submitted the public contact form.',
     meta: { contactMessageId: demoId(203), ip: '203.0.113.44' },
     createdDaysAgo: 1,
   },
