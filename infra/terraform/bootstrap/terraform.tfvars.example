@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars and edit. terraform.tfvars is gitignored — never
+# commit real account ids, profile names, or domains to this repository.
+
+project_name = "nest-aws-starter"
+aws_region   = "us-east-1"
+
+# Named AWS CLI profile, or remove the line to use the ambient credential chain.
+# profile = "your-aws-profile"
+
+# Keep superseded state versions for this many days.
+noncurrent_version_retention_days = 90
+
+# Leave false unless this is a throwaway account you intend to tear down.
+force_destroy = false
