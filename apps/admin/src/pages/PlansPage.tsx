@@ -9,18 +9,7 @@ import { ErrorMessage } from '../components/ui/ErrorMessage';
 import { Table } from '../components/ui/Table';
 import { useAdminPlans } from '../hooks/plans/useAdminPlans';
 import type { TableColumnInterface } from '../interfaces/table-column.interface';
-
-function formatAmount(amountCents: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(
-      amountCents / 100,
-    );
-  } catch {
-    // An admin can type a currency code Intl doesn't recognize before the
-    // backend rejects it — fall back rather than crash the row.
-    return `${(amountCents / 100).toFixed(2)} ${currency}`;
-  }
-}
+import { formatMoney } from '../utils/formatMoney';
 
 export function PlansPage(): ReactElement {
   const { plans, hasMore, isLoading, error, loadMore, reload } = useAdminPlans();
@@ -32,7 +21,7 @@ export function PlansPage(): ReactElement {
     {
       key: 'amount',
       header: 'Amount',
-      render: (row): string => formatAmount(row.amountCents, row.currency),
+      render: (row): string => formatMoney(row.amountCents, row.currency),
     },
     { key: 'interval', header: 'Interval', render: (row): string => `${row.intervalDays}d` },
     {
