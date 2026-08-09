@@ -9,6 +9,12 @@ locals {
     : "https://${aws_cloudfront_distribution.site[name].domain_name}"
   }
 
+  api_url = var.api_distribution_enabled ? (
+    local.custom_domain_enabled && length(var.api_hostnames) > 0
+    ? "https://${var.api_hostnames[0]}"
+    : "https://${one(aws_cloudfront_distribution.api[*].domain_name)}"
+  ) : null
+
   # Every origin a browser can legitimately load a frontend from, including the
   # *.cloudfront.net hostnames — those keep working after a domain is attached,
   # and an API that rejects them turns "let me check the raw CloudFront URL"
@@ -47,6 +53,21 @@ output "site_urls" {
 output "cors_origins" {
   description = "Every browser origin the frontends are served from. Feeds the API's CORS_ORIGINS."
   value       = local.cors_origins
+}
+
+output "api_distribution_id" {
+  description = "Id of the distribution in front of the ALB, or null when it is disabled."
+  value       = one(aws_cloudfront_distribution.api[*].id)
+}
+
+output "api_distribution_domain_name" {
+  description = "AWS-assigned hostname of the API distribution, or null when it is disabled."
+  value       = one(aws_cloudfront_distribution.api[*].domain_name)
+}
+
+output "api_url" {
+  description = "Origin the API is reachable on through the edge — the custom hostname when one is configured, the CloudFront hostname otherwise. Null when the API distribution is disabled, in which case the API is reached at the load balancer directly."
+  value       = local.api_url
 }
 
 output "certificate_arn" {

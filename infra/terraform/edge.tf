@@ -44,6 +44,17 @@ locals {
     web   = "${local.name_prefix}-web-${local.bucket_suffix}"
     admin = "${local.name_prefix}-admin-${local.bucket_suffix}"
   }
+
+  # Put CloudFront in front of the ALB as well? Off, deliberately — the full
+  # trade-off is written out at the top of modules/edge/api.tf. The short
+  # version: it buys HTTPS on the API without owning a domain and lets the ALB
+  # be closed to everything but CloudFront, and it costs a hop, per-request
+  # charges on uncacheable traffic, and the API's direct view of client IPs.
+  #
+  # Turning it on is two edits: flip this to true, and set edge_alb_dns_name to
+  # the load balancer's DNS name from the compute module.
+  edge_api_distribution_enabled = false
+  edge_alb_dns_name             = null
 }
 
 module "edge" {
@@ -73,6 +84,10 @@ module "edge" {
   price_class = local.profile.cloudfront_price_class
 
   logging_enabled = local.profile.cloudfront_logs_enabled
+
+  api_distribution_enabled = local.edge_api_distribution_enabled
+  alb_dns_name             = local.edge_alb_dns_name
+  api_hostnames            = local.edge_hostnames.api
 
   # A disposable stack has to be disposable: on the demo profile the buckets are
   # emptied on destroy, so `terraform destroy` does not stop on a bucket full of
@@ -126,6 +141,35 @@ output "edge_certificate_arn" {
 output "edge_hosted_zone_name_servers" {
   description = "Name servers of the hosted zone this stack created. Delegate to these at your registrar — certificate validation cannot complete until you do."
   value       = module.edge.hosted_zone_name_servers
+}
+
+output "api_distribution_id" {
+  description = "Distribution in front of the ALB, or null when it is disabled."
+  value       = module.edge.api_distribution_id
+}
+
+output "api_edge_url" {
+  description = "Origin the API is reachable on through the edge, or null when the API distribution is disabled — in which case the API is reached at the load balancer directly."
+  value       = module.edge.api_url
+}
+
+output "frontend_build_env" {
+  description = <<-EOT
+    Build-time environment for both Vite frontends. The deploy workflow reads
+    this and exports it before `pnpm build`; nothing here is ever pasted by
+    hand. VITE_API_BASE_URL is null when the API distribution is disabled — the
+    workflow then falls back to the load balancer URL the compute module
+    exports, which is the one URL this module cannot know.
+  EOT
+
+  value = {
+    # API_PREFIX defaults to "api" and URI versioning defaults to v1, so the
+    # frontends' base URL is the origin plus /api/v1.
+    VITE_API_BASE_URL = module.edge.api_url == null ? null : "${module.edge.api_url}/api/v1"
+
+    # apps/admin links back to the public site.
+    VITE_WEB_APP_URL = module.edge.site_urls["web"]
+  }
 }
 
 output "api_cors_origins" {

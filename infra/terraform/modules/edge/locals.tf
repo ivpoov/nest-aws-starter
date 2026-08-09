@@ -3,7 +3,12 @@ locals {
   # which is what switches the whole custom-domain path off.
   site_hostnames = sort(distinct(flatten([for name, site in var.sites : site.hostnames])))
 
-  certificate_names = local.site_hostnames
+  # The API hostnames only belong on the certificate when something is actually
+  # serving them — otherwise the certificate would carry a name whose validation
+  # record points at nothing.
+  api_certificate_names = var.api_distribution_enabled ? var.api_hostnames : []
+
+  certificate_names = sort(distinct(concat(local.site_hostnames, local.api_certificate_names)))
 
   custom_domain_enabled = var.domain_name != null && length(local.certificate_names) > 0
 

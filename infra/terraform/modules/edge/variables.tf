@@ -91,3 +91,37 @@ variable "comment_prefix" {
   description = "Prefix for every distribution comment, from the caller's local.names."
   type        = string
 }
+
+variable "api_distribution_enabled" {
+  description = "Whether to put a third distribution in front of the ALB. Off by default — see the trade-off written out at the top of api.tf."
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = !var.api_distribution_enabled || var.alb_dns_name != null
+    error_message = "api_distribution_enabled requires alb_dns_name — there is nothing to put a distribution in front of."
+  }
+}
+
+variable "alb_dns_name" {
+  description = "DNS name of the load balancer to use as the API origin, from the compute module. Null when there is nothing to front."
+  type        = string
+  default     = null
+}
+
+variable "api_hostnames" {
+  description = "Custom hostnames for the API distribution. Empty to serve on the AWS-assigned CloudFront hostname."
+  type        = list(string)
+  default     = []
+}
+
+variable "alb_origin_protocol_policy" {
+  description = "How CloudFront reaches the ALB. http-only is the default because an ALB's own *.elb.amazonaws.com hostname has no certificate CloudFront can validate; move to https-only once the listener carries an ACM certificate for a verifiable name."
+  type        = string
+  default     = "http-only"
+
+  validation {
+    condition     = contains(["http-only", "https-only", "match-viewer"], var.alb_origin_protocol_policy)
+    error_message = "alb_origin_protocol_policy must be http-only, https-only or match-viewer."
+  }
+}
