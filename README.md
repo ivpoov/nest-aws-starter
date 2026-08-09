@@ -342,6 +342,25 @@ that reuses an existing container instead of recreating it). Fix:
 docker compose up -d --force-recreate localstack
 ```
 
+## Containers
+
+`apps/api/Dockerfile` builds the production API image — a multi-stage,
+pnpm-aware build on a digest-pinned Node 24 Alpine base, 268 MB uncompressed and
+73 MB compressed, running as a non-root user with a `HEALTHCHECK` against
+`/health/live`. It expects the repository root as its build context, and it
+needs a migrated Postgres to reach, because `prisma generate --sql` type-checks
+the TypedSQL queries against a live database.
+
+```bash
+DATABASE_URL="postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10" \
+  docker build --network=host -f apps/api/Dockerfile -t nest-aws-starter-api:dev \
+    --secret id=database_url,env=DATABASE_URL .
+```
+
+[`docs/guides/container.md`](./docs/guides/container.md) covers the layer-cache
+design, what is pruned out of the image and why, and how to run it against the
+compose stack.
+
 ## Modular by subtraction
 
 This is a starter, so the parts you don't want should come out cleanly. Optional
@@ -378,6 +397,7 @@ packages/shared/  # wire contracts shared by API and frontends
 lambdas/example/  # echo Lambda demonstrating the invoker pattern
 docker/           # compose init scripts
 docs/conventions/ # binding code conventions — read before contributing
+docs/guides/      # operational guides — building and running the API image
 docs/removal/     # generated per-module removal recipes
 scripts/          # subtraction test + removal-recipe generator
 ```
