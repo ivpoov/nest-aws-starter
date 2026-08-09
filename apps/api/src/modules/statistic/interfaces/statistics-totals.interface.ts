@@ -5,6 +5,6 @@ export interface StatisticsTotalsInterface {
   readonly newToday: number;
   // Null when the payment module is absent (subtraction-removable) — see
   // StatisticService.composeOverview.
-  readonly revenue: number | null;
+  readonly revenueCents: number | null;
   readonly mrrCents: number | null;
 }

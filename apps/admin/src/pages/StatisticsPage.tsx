@@ -41,7 +41,7 @@ export function StatisticsPage(): ReactElement {
         days={revenueDays}
         onDaysChange={setRevenueDays}
         onRetry={revenue.reload}
-        isAvailable={overview.overview?.totals.revenue !== null}
+        isAvailable={overview.overview?.totals.revenueCents !== null}
       />
       <RevenueByPlanBreakdown
         items={overview.overview?.revenueByPlan ?? []}
