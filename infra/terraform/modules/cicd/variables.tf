@@ -145,3 +145,58 @@ variable "cloudfront_distribution_ids" {
   description = "Distributions the workflow may invalidate. Invalidation only — no cloudfront:UpdateDistribution."
   type        = list(string)
 }
+
+# ---------------------------------------------------------------------------
+# The deploy manifest
+# ---------------------------------------------------------------------------
+
+variable "deploy_manifest" {
+  description = <<-EOT
+    Everything .github/workflows/deploy.yml needs to know about this stack, in
+    one place. Terraform writes it to an SSM parameter and the workflow reads it
+    back with a single `aws ssm get-parameter`.
+
+    This object type IS the contract with the workflow: a field the workflow
+    reads must exist here, and a field removed here breaks the workflow at the
+    jq that reads it rather than three steps later.
+
+    Why a parameter and not `terraform output` in CI: reading an output means
+    giving the workflow the backend configuration (which embeds an account id)
+    and read access to the state file (which holds the database password and
+    every other secret the stack knows). One SSM parameter of non-secret
+    metadata is a far smaller thing to hand a CI job.
+  EOT
+
+  type = object({
+    # Registry and images
+    ecr_repository_url   = string
+    migrations_image_tag = string
+
+    # ECS
+    ecs_cluster                       = string
+    ecs_service                       = string
+    api_task_definition_family        = string
+    api_container_name                = string
+    migrations_task_definition_family = string
+    migrations_container_name         = string
+    migrations_network_configuration  = string
+
+    # Logs, for the failure paths
+    api_log_group        = string
+    migrations_log_group = string
+
+    # Smoke test — the load balancer directly, not the CDN in front of it
+    health_check_url = string
+
+    # Frontends
+    web_bucket            = string
+    admin_bucket          = string
+    web_distribution_id   = string
+    admin_distribution_id = string
+    frontend_env          = map(string)
+
+    # Informational: what the API was told to accept. Printed in the job summary
+    # so a CORS failure after a deploy is one scroll away from its cause.
+    api_cors_origins = string
+  })
+}
