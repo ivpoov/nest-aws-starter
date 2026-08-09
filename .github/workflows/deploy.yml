@@ -16,10 +16,21 @@ name: deploy
 # NO AWS ACCESS KEY. There is one AWS-related secret in this repository and it
 # is a role ARN, not a credential: AWS_DEPLOY_ROLE_ARN. GitHub mints a
 # short-lived OIDC token for each run and STS exchanges it for a session that
-# expires with the job. The trust policy admits exactly one repository on one
-# ref — see infra/terraform/modules/cicd/README.md. `AWS_ACCESS_KEY_ID` must
-# never be added here: it does not expire, it works from anywhere, and this is a
-# public repository.
+# expires with the job. The trust policy admits exactly one repository, and only
+# a job running in the `production` environment declared below — see
+# infra/terraform/modules/cicd/README.md, which also covers the deployment
+# branch rule that has to be attached to that environment by hand.
+# `AWS_ACCESS_KEY_ID` must never be added here: it does not expire, it works
+# from anywhere, and this is a public repository.
+#
+# WHAT WILL NOT TRIGGER THIS. GitHub suppresses workflow triggers for events
+# created with the default `github.token`, so a push to main made by
+# release.yml running on that fallback token starts no deployment. release.yml
+# uses `secrets.RELEASE_PAT || github.token` for exactly this class of reason;
+# without RELEASE_PAT configured, a release lands on main and nothing deploys
+# until someone dispatches this workflow. That is a safe failure — it deploys
+# nothing rather than something unreviewed — but it is silent, so it is written
+# down here.
 #
 # NOTHING IS HAND-COPIED. Every cluster name, family, bucket, distribution id
 # and URL below comes out of one SSM parameter that Terraform writes from the
@@ -69,10 +80,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
-    # Where to attach required reviewers, a wait timer, or a branch restriction.
-    # An environment with no protection rules is a no-op, which is the right
-    # starting point for a starter — the hook is here so adding the gate later
-    # is a settings change rather than a workflow change.
+    # LOAD-BEARING, in two directions.
+    #
+    # Declaring an environment changes the OIDC token this job is issued: the
+    # `sub` claim becomes `repo:<owner>/<name>:environment:production` and the
+    # ref form disappears from it entirely. The deploy role's trust policy
+    # matches that exact string (modules/cicd/oidc.tf), so this name and
+    # var.github_deploy_environment must stay equal — Terraform checks it, and
+    # a mismatch is an AccessDenied on the first AWS call.
+    #
+    # It is also where the actual gate lives. Required reviewers, a wait timer
+    # and — the one that matters here — the deployment branch rule attach to
+    # this environment, and GitHub enforces them BEFORE it mints the token.
+    # An environment with no rules enforces nothing, and GitHub creates exactly
+    # that on first reference, so configuring it is a documented manual step:
+    # `terraform output github_actions_setup`.
     environment: production
 
     permissions:
@@ -89,6 +111,30 @@ jobs:
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
 
     steps:
+      # Fails loudly when the environment's deployment branch rule is missing.
+      #
+      # This is NOT a security boundary and must not be read as one: a
+      # workflow_dispatch from another branch runs that branch's copy of this
+      # file, with this step edited out if the person wanted it gone. The
+      # boundary is the deployment branch rule on the `production` environment,
+      # which GitHub evaluates before the job starts. This step exists so that
+      # a repository where that rule was never configured fails here — visibly,
+      # having deployed nothing — instead of quietly deploying whatever branch
+      # the dispatch was started from.
+      #
+      # `-f sha=` is how you deploy an older commit. The ref is not.
+      - name: refuse to deploy from anything but the default branch
+        env:
+          REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [ "$REF" != "refs/heads/${DEFAULT_BRANCH}" ]; then
+            echo "::error::this run was started from ${REF}, not refs/heads/${DEFAULT_BRANCH}. Nothing has been deployed. If you meant to deploy an older commit, dispatch from ${DEFAULT_BRANCH} with -f sha=<commit>. If a dispatch from another branch reached this step at all, the production environment has no deployment branch rule — see infra/terraform/modules/cicd/README.md."
+            exit 1
+          fi
+          echo "started from ${REF}"
+
       - name: check out the commit being deployed
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
