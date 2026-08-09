@@ -289,6 +289,17 @@ model Plan {
   @@map("plans")
 }
 
+// Financial records outlive the account they belong to. The same retention
+// reasoning the Activity audit trail already documents applies here with more
+// force: a subscription and its charges are what a chargeback, a tax audit or
+// a revenue reconciliation is argued from, and `onDelete: Cascade` quietly
+// destroyed all of it the first time anyone deleted a user row. The relations
+// below are Restrict instead, so Postgres refuses the delete rather than
+// silently erasing the money trail. There is deliberately no user-erasure
+// endpoint in this starter (users are BLOCKED, never deleted); whoever adds
+// one must decide explicitly what happens here — the intended shape is to
+// anonymize the payment rows (drop the FK, keep amounts, dates and provider
+// refs) and only then delete the user, never to cascade.
 model Subscription {
   id                  String               @id @default(uuid(7))
   userId              String
@@ -301,7 +312,7 @@ model Subscription {
   canceledAt          DateTime?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
-  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
   plan                Plan                 @relation(fields: [planId], references: [id])
   transactions        PaymentTransaction[]
 
@@ -321,7 +332,8 @@ model PaymentTransaction {
   provider       String            @db.VarChar(30)
   providerRef    String            @db.VarChar(255) // payment_intent / charge id
   createdAt      DateTime          @default(now())
-  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Restrict, for the retention reasons documented on Subscription above.
+  user           User              @relation(fields: [userId], references: [id], onDelete: Restrict)
   subscription   Subscription?     @relation(fields: [subscriptionId], references: [id])
 
   @@unique([provider, providerRef])
