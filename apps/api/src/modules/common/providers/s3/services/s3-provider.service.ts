@@ -20,10 +20,10 @@ export class S3ProviderService implements S3ProviderInterface {
   constructor(private readonly config: EnabledS3ConfigType) {
     this.client = new S3Client({
       region: config.region,
-      credentials: {
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
-      },
+      // Omitted when no static keys are configured, so the SDK falls back to its
+      // default credential provider chain and a deployed task signs with its own
+      // IAM role — no long-lived key pair to store or rotate.
+      ...(config.credentials && { credentials: config.credentials }),
       // MinIO (and most non-AWS endpoints) require path-style addressing.
       ...(config.endpoint && { endpoint: config.endpoint, forcePathStyle: true }),
     });

@@ -1,0 +1,47 @@
+# The API image is built with the repository root as its context, because a
+# pnpm workspace build needs the root manifest, the lockfile and the workspace
+# packages the API depends on — not just apps/api.
+#
+# Everything listed here is excluded from the tarball the daemon receives, so
+# it can neither slow the build down nor invalidate a layer. The rule of thumb:
+# if it is generated, secret, or only meaningful on a developer's machine, it
+# does not belong in the context.
+
+# Generated, and regenerated inside the image anyway. Copying a host build in
+# would also mix glibc-linked native artifacts into a musl image.
+node_modules
+**/node_modules
+dist
+**/dist
+apps/api/src/generated
+coverage
+**/coverage
+.turbo
+**/.turbo
+
+# History and tooling state. .git alone is tens of megabytes and changes on
+# every commit, which would bust the context hash for no benefit.
+.git
+.github
+.husky
+.claude
+.superpowers
+
+# Secrets never belong in a build context: anything here would land in an
+# image layer, readable by anyone who can pull the image.
+.env
+.env.*
+!.env.example
+
+# Local infrastructure and documentation — not inputs to the runtime image.
+docker
+docker-compose.yml
+docs
+scripts
+**/*.md
+
+# Editor / OS noise
+.DS_Store
+*.log
+.vscode
+.idea
