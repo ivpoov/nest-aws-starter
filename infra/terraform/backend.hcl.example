@@ -1,0 +1,20 @@
+# Copy to backend.hcl and fill in from the bootstrap stack's `backend_config`
+# output. backend.hcl is gitignored — the bucket name contains an AWS account
+# id and this repository is public.
+#
+#   terraform init -backend-config=backend.hcl
+
+bucket = "nest-aws-starter-tfstate-000000000000" # placeholder account id
+
+# One state file per environment, one bucket for all of them.
+key = "dev/terraform.tfstate"
+
+region = "us-east-1"
+
+encrypt = true
+
+# Native S3 locking (Terraform >= 1.10). Not a DynamoDB table.
+use_lockfile = true
+
+# Named AWS CLI profile used to reach the state bucket, if you use one.
+# profile = "your-aws-profile"
