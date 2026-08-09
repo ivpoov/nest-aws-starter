@@ -7,12 +7,30 @@ name: deploy
 #
 #   gh workflow run deploy.yml -f sha=<earlier-commit-sha>
 #
-# That is the entire procedure. It works because every image is tagged with the
-# commit SHA that produced it — the runtime image as `<sha>`, the migration
-# image as `migrations-<sha>` — so an earlier SHA names exactly one artefact.
+# That is the entire procedure. Every image is tagged with the commit SHA that
+# produced it — the runtime image as `<sha>`, the migration image as
+# `migrations-<sha>` — so an earlier SHA names one unambiguous SOURCE revision.
 # `latest` would name whichever build happened to finish last, and "roll back to
-# latest" is not a sentence. Start the dispatch from the default branch: the
-# commit to deploy is the `sha` input, not the ref the run is started from.
+# latest" is not a sentence.
+#
+# BE PRECISE ABOUT WHAT THAT GUARANTEES. This workflow REBUILDS from source; it
+# does not re-tag a stored artefact. So `:<sha>` is a stable NAME whose CONTENT
+# is replaced by each rollback to that SHA, and two builds of one commit are
+# only bit-identical if every input was — base image digest, registry state,
+# apt/npm mirrors, build timestamps. They are not, in general. What a SHA
+# guarantees is the source revision, not the bytes. If you need the bytes, pull
+# and keep the digest (`docker buildx imagetools inspect <repo>:<sha>`) before
+# the rollback, because the tag will move off it.
+#
+# Nor is it forever. Both images live under the api repository's lifecycle
+# policy (infra/terraform/modules/compute/ecr.tf), whose second rule expires
+# everything beyond the most recent N pushes regardless of tag — `<sha>` and
+# `migrations-<sha>` included. Rollback range is that retention window, not the
+# whole history.
+#
+# Start the dispatch from the default branch: the commit to deploy is the `sha`
+# input, not the ref the run is started from — and it must already be an
+# ancestor of the default branch (enforced below).
 # ---------------------------------------------------------------------------
 #
 # NO AWS ACCESS KEY. There is one AWS-related secret in this repository and it
@@ -355,10 +373,16 @@ jobs:
       # A moving tag is not an artefact, though. `:migrations` alone answers
       # "which schema is live?" with "whichever build pushed last", and after a
       # rollback it answers wrongly. The second tag, `:migrations-<sha>`, is the
-      # same manifest under an immutable name: it makes the image that produced
-      # a given schema addressable forever, exactly as `:<sha>` does for the
-      # runtime image, and it costs nothing — one manifest, two tags, so ECR
+      # same manifest under a name that identifies a commit: it makes the image
+      # that produced a given schema addressable, exactly as `:<sha>` does for
+      # the runtime image, and it costs nothing — one manifest, two tags, so ECR
       # stores one image and the retention policy counts one.
+      #
+      # "Addressable", not "immutable" and not "forever". Redeploying the same
+      # SHA rebuilds and re-points this tag at fresh bytes (the repository is
+      # MUTABLE by design — see modules/compute/ecr.tf), and the lifecycle
+      # policy's `imageCountMoreThan` rule expires it along with everything else
+      # once enough pushes follow. It bounds ambiguity; it is not an archive.
       #
       # Rolling back re-runs this build from the older commit, which repoints
       # `:migrations` in step with the runtime image and re-tags the same
