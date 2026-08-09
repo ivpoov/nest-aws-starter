@@ -147,8 +147,8 @@ describe('admin statistics', () => {
     // The payment module is present in this suite, so revenue/mrr are real
     // numbers (>= 0) rather than the v0.3 null stub — see the dedicated
     // revenue-fixture test below for the exact-delta proof.
-    expect(typeof response.body.totals.revenue).toBe('number');
-    expect(response.body.totals.revenue).toBeGreaterThanOrEqual(0);
+    expect(typeof response.body.totals.revenueCents).toBe('number');
+    expect(response.body.totals.revenueCents).toBeGreaterThanOrEqual(0);
     expect(typeof response.body.totals.mrrCents).toBe('number');
     expect(response.body.totals.mrrCents).toBeGreaterThanOrEqual(0);
     expect(Array.isArray(response.body.revenueByPlan)).toBe(true);
@@ -180,7 +180,9 @@ describe('admin statistics', () => {
     // Exact deltas: e2e specs run sequentially in this suite
     // (fileParallelism: false) and nothing else writes payment_transactions
     // between the two calls above, so the fixture's contribution is isolated.
-    expect(after.body.totals.revenue - before.body.totals.revenue).toBe(fixture.amountCents);
+    expect(after.body.totals.revenueCents - before.body.totals.revenueCents).toBe(
+      fixture.amountCents,
+    );
     expect(after.body.totals.mrrCents - before.body.totals.mrrCents).toBe(fixture.amountCents);
 
     const planRow = after.body.revenueByPlan.find(

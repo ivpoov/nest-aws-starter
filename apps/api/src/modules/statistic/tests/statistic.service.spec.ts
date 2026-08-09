@@ -83,7 +83,7 @@ describe('StatisticService', () => {
 
     const overview = await service.getOverview();
 
-    expect(overview.totals.revenue).toBe(1500);
+    expect(overview.totals.revenueCents).toBe(1500);
     expect(overview.totals.mrrCents).toBe(4_900);
     expect(overview.revenueByPlan).toEqual(revenueByPlanRows);
   });
@@ -108,7 +108,7 @@ describe('StatisticService', () => {
 
     const overview = await service.getOverview();
 
-    expect(overview.totals.revenue).toBeNull();
+    expect(overview.totals.revenueCents).toBeNull();
     expect(overview.totals.mrrCents).toBeNull();
     expect(overview.revenueByPlan).toEqual([]);
   });

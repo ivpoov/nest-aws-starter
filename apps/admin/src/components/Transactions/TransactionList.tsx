@@ -5,6 +5,7 @@ import type {
 import { TransactionStatusEnum } from '@nest-aws-starter/shared';
 import type { ReactElement } from 'react';
 import type { TableColumnInterface } from '../../interfaces/table-column.interface';
+import { formatMoney } from '../../utils/formatMoney';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { ErrorMessage } from '../ui/ErrorMessage';
@@ -31,18 +32,6 @@ function truncate(value: string, visibleChars: number): string {
   return value.length > visibleChars ? `${value.slice(0, visibleChars)}…` : value;
 }
 
-function formatAmount(amountCents: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(
-      amountCents / 100,
-    );
-  } catch {
-    // Same defensive fallback as PlansPage — a currency code Intl doesn't
-    // recognize should never crash the row.
-    return `${(amountCents / 100).toFixed(2)} ${currency}`;
-  }
-}
-
 const COLUMNS: Array<TableColumnInterface<AdminTransactionResponseInterface>> = [
   {
     key: 'createdAt',
@@ -66,7 +55,7 @@ const COLUMNS: Array<TableColumnInterface<AdminTransactionResponseInterface>> = 
   {
     key: 'amount',
     header: 'Amount',
-    render: (row): string => formatAmount(row.amountCents, row.currency),
+    render: (row): string => formatMoney(row.amountCents, row.currency),
   },
   { key: 'provider', header: 'Provider', render: (row): string => row.provider },
   {

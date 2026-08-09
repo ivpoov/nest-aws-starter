@@ -49,8 +49,10 @@ Controller  →  Service  →  RepositoryInterface  ←implements←  PrismaRepo
 - Modules **export services only**. Repositories, tokens, and implementations are
   module-private. If another module needs data, it asks the service (or listens to an
   event) — never the repository.
-- `@prisma/client` may be imported only inside `*-prisma.repository.ts` files and
-  Prisma infrastructure. Anywhere else it is a lint error.
+- The generated Prisma client (`@generated/prisma/client.js`, `.../models.js`,
+  `.../enums.js`, `.../sql.js`) may be imported only inside `*-prisma.repository.ts`
+  files, their unit specs, and Prisma infrastructure (`PrismaService`). Anywhere else
+  it is a review rejection — no lint rule encodes this one.
 - Repository methods accept scalars/domain inputs and return domain interfaces —
   never ORM models, never ORM generics, never query fragments.
 - Repositories expose named, intention-revealing methods (`findActiveByUserId`), not
@@ -113,10 +115,11 @@ at the assignment, not three layers away.
 
 ```typescript
 // interfaces/note.interface.ts
-import { NoteStatusEnum } from '@modules/note/enums/note-status.enum';
+import { NoteStatusEnum } from '@nest-aws-starter/shared';
 
 export interface NoteInterface {
   readonly id: string;
+  readonly userId: string;
   readonly title: string;
   readonly body: string;
   readonly status: NoteStatusEnum;
@@ -124,6 +127,9 @@ export interface NoteInterface {
   readonly updatedAt: Date;
 }
 ```
+
+`NoteStatusEnum` travels on the wire, so it lives in `packages/shared` and is imported
+from there — see §12 and [`shared-contracts.md`](./shared-contracts.md).
 
 ```typescript
 // interfaces/note-created-payload.interface.ts  (event payloads are interfaces too)
@@ -135,8 +141,8 @@ export interface NoteCreatedPayloadInterface {
 ### Type — only what an interface cannot express
 
 ```typescript
-// types/redis-client.type.ts — union of two classes
-import { Cluster, Redis } from 'ioredis';
+// providers/redis/types/redis-client.type.ts — union of two classes
+import type { Cluster, Redis } from 'ioredis';
 
 export type RedisClientType = Redis | Cluster;
 ```
@@ -148,7 +154,7 @@ export type NoteSortFieldType = 'createdAt' | 'title' | 'status';
 
 ```typescript
 // types/update-note-data.type.ts — utility composition (when derived, not authored)
-import { CreateNoteDataInterface } from '@modules/note/interfaces/create-note-data.interface';
+import type { CreateNoteDataInterface } from '@modules/note/interfaces/create-note-data.interface.js';
 
 export type UpdateNoteDataType = Partial<CreateNoteDataInterface>;
 ```
@@ -158,14 +164,16 @@ If it has named properties you are writing by hand — it is an `interface`, ful
 ### Enum
 
 ```typescript
-// enums/note-status.enum.ts
-export enum NoteStatusEnum {
-  ACTIVE = 'ACTIVE',
-  ARCHIVED = 'ARCHIVED',
+// modules/oauth/enums/oauth-intent.enum.ts
+export enum OauthIntentEnum {
+  LOGIN = 'login',
+  LINK = 'link',
 }
 ```
 
-String-valued, PascalCase name with `Enum` suffix, one per file.
+String-valued, PascalCase name with `Enum` suffix, one per file. A module's `enums/`
+folder holds only enums that never leave the API; anything that travels on the wire
+(`NoteStatusEnum`, `UserRoleEnum`) is declared in `packages/shared` instead — §12.
 
 ## 3. Size limits (enforced in review, no exceptions without a stated reason)
 
@@ -202,21 +210,26 @@ src/modules/note/
 │   ├── note.interface.ts                 # domain model
 │   ├── note-repository.interface.ts      # repository contract
 │   ├── create-note-data.interface.ts
-│   └── update-note-data.interface.ts
+│   └── note-list.interface.ts
+├── types/
+│   └── update-note-data.type.ts          # derived shape → `type`, not `interface`
 ├── dtos/
 │   ├── create-note.dto.ts
 │   ├── update-note.dto.ts
 │   └── responses/
-│       └── note-response.dto.ts
+│       ├── note-response.dto.ts
+│       └── note-list-response.dto.ts
 ├── entities/
-│   └── note.entity.ts                    # CASL subject / record-as-is responses
+│   └── note.entity.ts                    # CASL subject class
 ├── permissions/
 │   └── note.permissions.ts               # CASL rules for this module
-├── enums/
-│   └── note-status.enum.ts
 └── tests/
     └── note.service.spec.ts               # unit specs only
 ```
+
+The sample module has no `enums/` folder: its only enum (`NoteStatusEnum`) travels on
+the wire and therefore lives in `packages/shared` (§12). Add `enums/` when the module
+gains an enum that stays inside the API.
 
 E2E specs are the one artifact that does **not** live in the module: they boot the
 whole app against real Postgres/Redis/LocalStack, so they sit together in
@@ -231,12 +244,15 @@ one kind per folder, even for a single file:
 | `gateways/` | WebSocket gateways — transport concerns only (handshake auth, room joins, revalidation), no domain logic, no repository access (§11b) | `notification` |
 | `adapters/` | Transport adapters installed at bootstrap (e.g. the Redis-backed Socket.IO adapter and its disabled twin) (§11b) | `notification` |
 | `builders/` | Pure event-payload → persisted-content mappers — no I/O, no DI (§11a) | `notification` |
+| `listeners/` | `@OnDomainEvent` subscribers — contained handlers that never break the emitter (§11a) | `activity`, `user`, `suspicious-activity` |
 | `templates/` | Mail/render templates — pure functions returning content shapes | `auth`, `suspicious-activity`, `notification` |
 | `helpers/` | Module-owned free functions needed outside DI (e.g. bootstrap wiring) | `notification` |
 
 Registered by exactly one line in `AppModule`. Feature modules never import other
 feature modules — cross-feature communication goes through the event bus or core
-modules (`user`, `auth`) and providers only; a dependency rule in CI enforces it.
+modules (`user`, `auth`) and providers only. Nothing lints this: it holds by review,
+and `scripts/subtraction-test.mjs` is the closest automated proxy — it deletes a
+module inside its removal fences and checks the rest still builds.
 
 ## 5. Contract + token
 
@@ -247,76 +263,107 @@ export const NOTE_REPOSITORY = Symbol('NOTE_REPOSITORY');
 
 ```typescript
 // interfaces/note-repository.interface.ts
-import { NoteInterface } from '@modules/note/interfaces/note.interface';
-import { CreateNoteDataInterface } from '@modules/note/interfaces/create-note-data.interface';
-import { UpdateNoteDataInterface } from '@modules/note/interfaces/update-note-data.interface';
-import { PaginationInterface } from '@interfaces/pagination.interface';
+import type { CursorPaginationInterface } from '@interfaces/cursor-pagination.interface.js';
+import type { CreateNoteDataInterface } from '@modules/note/interfaces/create-note-data.interface.js';
+import type { NoteInterface } from '@modules/note/interfaces/note.interface.js';
+import type { UpdateNoteDataType } from '@modules/note/types/update-note-data.type.js';
 
 export interface NoteRepositoryInterface {
   create(data: CreateNoteDataInterface): Promise<NoteInterface>;
   findById(id: string): Promise<NoteInterface | null>;
-  findMany(pagination: PaginationInterface): Promise<NoteInterface[]>;
-  update(id: string, data: UpdateNoteDataInterface): Promise<NoteInterface>;
-  deleteById(id: string): Promise<void>;
+  findManyAfter(userId: string, pagination: CursorPaginationInterface): Promise<NoteInterface[]>;
+  update(id: string, data: UpdateNoteDataType): Promise<NoteInterface | null>;
+  deleteById(id: string): Promise<boolean>;
 }
 ```
 
-Nothing in this contract knows a database exists. That is the point.
+Nothing in this contract knows a database exists. That is the point. Note the return
+types: a missing row is `null`/`false`, not a thrown `NotFoundError` — the repository
+reports facts and the service decides what they mean (§7).
 
 ## 6. Repository implementation (the only Prisma zone)
 
+The Prisma client is generated into `apps/api/src/generated/prisma` and imported
+through the `@generated/*` alias — never from the `@prisma/client` package path.
+Models live in `@generated/prisma/models.js` (`NoteModel`), DB-level enums in
+`@generated/prisma/enums.js` (`NoteStatus`), the namespace with the error classes in
+`@generated/prisma/client.js` (`Prisma`), and TypedSQL functions in
+`@generated/prisma/sql.js`.
+
 ```typescript
 // repositories/note-prisma.repository.ts
+import { Prisma } from '@generated/prisma/client.js';
+import { NoteStatus } from '@generated/prisma/enums.js';
+import type { NoteModel } from '@generated/prisma/models.js';
+import type { CursorPaginationInterface } from '@interfaces/cursor-pagination.interface.js';
+import type { CreateNoteDataInterface } from '@modules/note/interfaces/create-note-data.interface.js';
+import type { NoteInterface } from '@modules/note/interfaces/note.interface.js';
+import type { NoteRepositoryInterface } from '@modules/note/interfaces/note-repository.interface.js';
+import { PrismaService } from '@modules/prisma/services/prisma.service.js';
+import { NoteStatusEnum } from '@nest-aws-starter/shared';
 import { Injectable } from '@nestjs/common';
-import { Note } from '@prisma/client';
-import { PrismaService } from '@modules/prisma/prisma.service';
-import { NoteRepositoryInterface } from '@modules/note/interfaces/note-repository.interface';
-import { NoteInterface } from '@modules/note/interfaces/note.interface';
-import { CreateNoteDataInterface } from '@modules/note/interfaces/create-note-data.interface';
-import { PaginationInterface } from '@interfaces/pagination.interface';
 
 @Injectable()
 export class NotePrismaRepository implements NoteRepositoryInterface {
   constructor(private readonly prisma: PrismaService) {}
 
   public async create(data: CreateNoteDataInterface): Promise<NoteInterface> {
-    const note: Note = await this.prisma.note.create({ data });
+    const note: NoteModel = await this.prisma.note.create({
+      data: {
+        userId: data.userId,
+        title: data.title,
+        ...(data.body !== undefined && { body: data.body }),
+        ...(data.status !== undefined && { status: this.toPrismaStatus(data.status) }),
+      },
+    });
 
     return this.toDomain(note);
   }
 
   public async findById(id: string): Promise<NoteInterface | null> {
-    const note: Note | null = await this.prisma.note.findUnique({ where: { id } });
+    const note: NoteModel | null = await this.prisma.note.findUnique({ where: { id } });
 
     return note ? this.toDomain(note) : null;
   }
 
-  public async findMany(pagination: PaginationInterface): Promise<NoteInterface[]> {
-    const notes: Note[] = await this.prisma.note.findMany({
-      orderBy: { createdAt: 'desc' },
-      skip: pagination.offset,
-      take: pagination.limit,
-    });
+  public async deleteById(id: string): Promise<boolean> {
+    try {
+      await this.prisma.note.delete({ where: { id } });
 
-    return notes.map((note: Note): NoteInterface => this.toDomain(note));
+      return true;
+    } catch (caught) {
+      if (this.isRecordNotFound(caught)) return false;
+
+      throw caught;
+    }
   }
 
-  private toDomain(note: Note): NoteInterface {
+  private isRecordNotFound(caught: unknown): boolean {
+    return caught instanceof Prisma.PrismaClientKnownRequestError && caught.code === 'P2025';
+  }
+
+  private toDomain(note: NoteModel): NoteInterface {
     return {
       id: note.id,
+      userId: note.userId,
       title: note.title,
       body: note.body,
-      status: note.status,
+      status: NoteStatusEnum[note.status],
       createdAt: note.createdAt,
       updatedAt: note.updatedAt,
     };
   }
+
+  private toPrismaStatus(status: NoteStatusEnum): NoteStatus {
+    return NoteStatus[status];
+  }
 }
 ```
 
-Prisma model types appear only here, only as local variable types. A future
-`NoteMongooseRepository` implements the same contract in a sibling file; the module
-binding is the only other line that changes.
+Prisma model types appear only here, only as local variable types, and the DB enum is
+translated to the shared wire enum on the way out — a `NoteStatus` value never escapes
+this file. A future `NoteMongooseRepository` implements the same contract in a sibling
+file; the module binding is the only other line that changes.
 
 The only Prisma error codes a repository may branch on are `P2025` (not-found
 signal, e.g. `update`/`delete` on a missing row) and `P2002` (idempotent-replay
@@ -329,29 +376,38 @@ When the query builder is the wrong tool (aggregations, reports, window function
 use Prisma TypedSQL — never string-built `$queryRaw`:
 
 - The SQL lives in `prisma/sql/<name>.sql`; `prisma generate --sql` produces a fully
-  typed function.
+  typed function, exported from `@generated/prisma/sql.js`.
 - TypedSQL functions are called **only inside repositories**, and their rows are
   mapped to domain interfaces like any other result — the contract never reveals
   that raw SQL exists.
+- TypedSQL columns are nullable in the generated `Result` type; coalesce at the
+  mapping boundary so the domain interface stays total.
+
+The reference implementation is `StatisticTypedSqlRepository`:
 
 ```sql
--- prisma/sql/countNotesByStatus.sql
-SELECT status, COUNT(*)::int AS count
-FROM notes
-GROUP BY status;
+-- prisma/sql/usersByStatus.sql
+SELECT
+  status::text AS status,
+  COUNT(*)::int AS count
+FROM users
+GROUP BY status
+ORDER BY status;
 ```
 
 ```typescript
-// repositories/note-prisma.repository.ts
-import { countNotesByStatus } from '@prisma/client/sql';
+// repositories/statistic-typed-sql.repository.ts
+import { usersByStatus } from '@generated/prisma/sql.js';
 
-public async countByStatus(): Promise<NoteStatusCountInterface[]> {
-  const rows: countNotesByStatus.Result[] = await this.prisma.$queryRawTyped(countNotesByStatus());
+public async findUsersByStatus(): Promise<StatisticsCountRowInterface[]> {
+  const rows: usersByStatus.Result[] = await this.prisma.$queryRawTyped(usersByStatus());
 
-  return rows.map((row: countNotesByStatus.Result): NoteStatusCountInterface => ({
-    status: row.status,
-    count: row.count,
-  }));
+  return rows.map(
+    (row: usersByStatus.Result): StatisticsCountRowInterface => ({
+      key: row.status ?? 'UNKNOWN',
+      count: row.count ?? 0,
+    }),
+  );
 }
 ```
 
@@ -361,7 +417,7 @@ Offset pagination (`OFFSET n`) scans and discards `n` rows — it degrades linea
 and is forbidden for public/high-volume endpoints. The standard is cursor-based:
 
 ```typescript
-// interfaces/cursor-pagination.interface.ts (common)
+// modules/common/interfaces/cursor-pagination.interface.ts — the `@interfaces/*` alias
 export interface CursorPaginationInterface {
   readonly cursor: string | null;   // id of the last item of the previous page
   readonly limit: number;
@@ -369,14 +425,19 @@ export interface CursorPaginationInterface {
 ```
 
 ```typescript
-public async findManyAfter(pagination: CursorPaginationInterface): Promise<NoteInterface[]> {
-  const notes: Note[] = await this.prisma.note.findMany({
+public async findManyAfter(
+  userId: string,
+  pagination: CursorPaginationInterface,
+): Promise<NoteInterface[]> {
+  const notes: NoteModel[] = await this.prisma.note.findMany({
+    where: { userId },
     take: pagination.limit,
     ...(pagination.cursor && { cursor: { id: pagination.cursor }, skip: 1 }),
-    orderBy: { id: 'desc' },        // UUIDv7 ids are time-ordered — id order IS creation order
+    // UUIDv7 ids are time-ordered — id order IS creation order.
+    orderBy: { id: 'desc' },
   });
 
-  return notes.map((note: Note): NoteInterface => this.toDomain(note));
+  return notes.map((note: NoteModel): NoteInterface => this.toDomain(note));
 }
 ```
 
@@ -420,16 +481,20 @@ array with no cursor — `/billing/plans`, `/sessions`, `/auth/methods`,
 
 ```typescript
 // services/note.service.ts
+import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
+import { NotFoundError } from '@modules/common/errors/not-found.error.js';
+import { NOTE_CREATED_EVENT } from '@modules/event/constants/event-names.constants.js';
+import { EventBusService } from '@modules/event/services/event-bus.service.js';
+import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
+import { NOTE_REPOSITORY } from '@modules/note/constants/note.constants.js';
+import {
+  NOTE_ACCESS_DENIED,
+  NOTE_NOT_FOUND,
+} from '@modules/note/constants/note-errors.constants.js';
+import type { CreateNoteDataInterface } from '@modules/note/interfaces/create-note-data.interface.js';
+import type { NoteInterface } from '@modules/note/interfaces/note.interface.js';
+import type { NoteRepositoryInterface } from '@modules/note/interfaces/note-repository.interface.js';
 import { Inject, Injectable } from '@nestjs/common';
-import { NOTE_REPOSITORY } from '@modules/note/constants/note.constants';
-import { NOTE_NOT_FOUND } from '@modules/note/constants/note-errors.constants';
-import { NoteRepositoryInterface } from '@modules/note/interfaces/note-repository.interface';
-import { NoteInterface } from '@modules/note/interfaces/note.interface';
-import { CreateNoteDto } from '@modules/note/dtos/create-note.dto';
-import { EventBusService } from '@modules/event/services/event-bus.service';
-import { CustomLoggerService } from '@modules/logger/services/custom-logger.service';
-import { NotFoundError } from '@modules/common/errors/not-found.error';
-import { PaginationInterface } from '@interfaces/pagination.interface';
 
 @Injectable()
 export class NoteService {
@@ -441,34 +506,45 @@ export class NoteService {
     private readonly eventBus: EventBusService,
   ) {}
 
-  public async create(dto: CreateNoteDto): Promise<NoteInterface> {
-    const note: NoteInterface = await this.noteRepository.create({ ...dto });
+  public async create(data: CreateNoteDataInterface): Promise<NoteInterface> {
+    const note: NoteInterface = await this.noteRepository.create(data);
 
     this.logger.log(`Note created: ${note.id}`);
-    this.eventBus.emit('note.created', { noteId: note.id });
+    this.eventBus.emit(NOTE_CREATED_EVENT, { noteId: note.id });
 
     return note;
   }
 
-  public async findByIdOrThrow(id: string): Promise<NoteInterface> {
+  public async deleteById(id: string, userId: string): Promise<void> {
+    await this.findOwnedOrThrow(id, userId);
+
+    const isDeleted: boolean = await this.noteRepository.deleteById(id);
+
+    if (!isDeleted) throw new NotFoundError(NOTE_NOT_FOUND);
+
+    this.logger.log(`Note deleted: ${id}`);
+  }
+
+  // 404 for a missing note, 403 for someone else's — existence is not leaked
+  // the other way around because note ids are not guessable (UUIDv7).
+  private async findOwnedOrThrow(id: string, userId: string): Promise<NoteInterface> {
     const note: NoteInterface | null = await this.noteRepository.findById(id);
 
     if (!note) throw new NotFoundError(NOTE_NOT_FOUND);
 
+    if (note.userId !== userId) throw new ForbiddenError(NOTE_ACCESS_DENIED);
+
     return note;
-  }
-
-  public async deleteById(id: string): Promise<void> {
-    await this.findByIdOrThrow(id);
-    await this.noteRepository.deleteById(id);
-
-    this.logger.log(`Note deleted: ${id}`);
   }
 }
 ```
 
 - Existence checks, ownership checks, throws — in the service. Controllers never
   pre-check, cast, or compensate.
+- Services take **domain inputs**, not DTOs. The controller merges the validated DTO
+  with the authenticated user id (`{ ...dto, userId }`) and hands over a
+  `CreateNoteDataInterface`; the service never imports a DTO class.
+- Event names are constants from the core `event` module, never inline strings.
 - Logger is a class field, never constructor-injected.
 
 ## 8. Controller (the perfect endpoint)
@@ -690,7 +766,7 @@ Feature code → CacheService → [ MemoryCacheStore (L1) ] → [ RedisCacheStor
 ```
 
 ```typescript
-// providers/cache/interfaces/cache-store.interface.ts — the contract every tier implements
+// modules/common/providers/cache/interfaces/cache-store.interface.ts — every tier implements it
 export interface CacheStoreInterface {
   get<T>(key: string): Promise<T | null>;
   set<T>(key: string, value: T, ttlMs: number): Promise<void>;
@@ -700,17 +776,19 @@ export interface CacheStoreInterface {
 ```
 
 ```typescript
-// providers/cache/services/cache.service.ts — the only entry point for features
+// modules/common/providers/cache/services/cache.service.ts — the only entry point
 public async wrap<T>(key: string, ttlMs: number, factory: () => Promise<T>): Promise<T> {
-  const cached: T | null = await this.getFromTiers<T>(key);
+  const cached: T | null = await this.getWithBackfill<T>(key, ttlMs);
 
   if (cached !== null) return cached;
 
-  const value: T = await this.singleFlight(key, factory);
+  return this.singleFlight<T>(key, async (): Promise<T> => {
+    const value: T = await factory();
 
-  await this.setToTiers(key, value, ttlMs);
+    await this.set(key, value, ttlMs);
 
-  return value;
+    return value;
+  });
 }
 ```
 
@@ -749,17 +827,23 @@ string codes prefixed with the module name:
 
 ```typescript
 // modules/note/constants/note-errors.constants.ts
-import { ErrorArgsInterface } from '@interfaces/error-args.interface';
+import type { ErrorArgsInterface } from '@interfaces/error-args.interface.js';
 
 export const NOTE_NOT_FOUND: ErrorArgsInterface = {
   code: 'NOTE_NOT_FOUND',
   details: 'Note not found',
 };
+
+export const NOTE_ACCESS_DENIED: ErrorArgsInterface = {
+  code: 'NOTE_ACCESS_DENIED',
+  details: 'This note belongs to another user',
+};
 ```
 
-Deleting a module deletes its codes — nothing central to edit. The `error-codes`
-spec is the registry: it collects every `*errors.constants.ts` and fails CI on a
-duplicate code or a code that differs from its constant name.
+Deleting a module deletes its codes — nothing central to edit. The registry check is a
+unit spec, `modules/common/errors/tests/error-codes.spec.ts`: it collects every
+`*errors.constants.ts` and fails on a duplicate code or a code that differs from its
+constant name, so `pnpm run test` catches both in CI.
 
 **Domain errors — services throw meaning, not transport.** `AppError` subclasses
 in `common/errors/` carry a semantic category; the thrown class is the category:
@@ -876,13 +960,11 @@ Required fields use `@ApiProperty`, optional use `@ApiPropertyOptional` and are 
 
 ```typescript
 // dtos/create-note.dto.ts
+import { type CreateNoteRequestInterface, NoteStatusEnum } from '@nest-aws-starter/shared';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
-import { NoteStatusEnum } from '@modules/note/enums/note-status.enum';
-import { NoteTagDto } from '@modules/note/dtos/note-tag.dto';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
-export class CreateNoteDto {
+export class CreateNoteDto implements CreateNoteRequestInterface {
   @ApiProperty({ type: String, example: 'My note', maxLength: 255 })
   @IsNotEmpty()
   @IsString()
@@ -898,44 +980,56 @@ export class CreateNoteDto {
   @IsOptional()
   @IsEnum(NoteStatusEnum)
   readonly status?: NoteStatusEnum | undefined;
+}
+```
 
-  @ApiPropertyOptional({ type: Boolean, example: true })
-  @IsOptional()
-  @IsBoolean()
-  @Type(() => Boolean)
-  readonly isPinned?: boolean | undefined;
+The `implements` clause is the drift check: change the shared request contract and this
+DTO stops compiling until it catches up. Body scalars need no `@Type()` — the global
+`ValidationPipe({ whitelist: true, transform: true })` handles them. `@Type()` earns its
+place in exactly two spots: numeric **query** params (`@Type(() => Number)`, see
+`CursorPaginationQueryDto`) and nested objects/arrays, where it pairs with
+`@ValidateNested`:
 
+```typescript
   @ApiPropertyOptional({ type: [NoteTagDto] })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => NoteTagDto)
   readonly tags?: NoteTagDto[] | undefined;
-}
 ```
+
+**Never `@Type(() => Boolean)` on a query flag** — `Boolean('false')` is `true`, so the
+filter can never be switched off. Boolean query params use an explicit
+`@Transform(({ value }) => value === 'true' || value === true)`, the pattern in
+`NotificationsQueryDto` and `RevokeSessionsQueryDto`.
 
 ```typescript
 // dtos/update-note.dto.ts — composition, never a hand-copied field list
+import { CreateNoteDto } from '@modules/note/dtos/create-note.dto.js';
+import type { UpdateNoteRequestInterface } from '@nest-aws-starter/shared';
 import { PartialType } from '@nestjs/swagger';
-import { CreateNoteDto } from '@modules/note/dtos/create-note.dto';
 
-export class UpdateNoteDto extends PartialType(CreateNoteDto) {}
+export class UpdateNoteDto
+  extends PartialType(CreateNoteDto)
+  implements UpdateNoteRequestInterface {}
 ```
 
 **Response DTO** — `@Exclude()` at class level, `@Expose()` per visible field
-(allowlist, never blocklist), implements the domain interface, `@Type(() => X)` for
-nested objects/arrays/dates:
+(allowlist, never blocklist), and it `implements` the **shared wire interface**, not
+the domain interface. That distinction is load-bearing: the domain model carries
+`Date`, the wire carries ISO-8601 strings, so dates are `string` here and are rendered
+with `@Transform`, never `@Type(() => Date)`:
 
 ```typescript
 // dtos/responses/note-response.dto.ts
+import { type NoteResponseInterface, NoteStatusEnum } from '@nest-aws-starter/shared';
 import { ApiProperty } from '@nestjs/swagger';
-import { Exclude, Expose, Type } from 'class-transformer';
-import { NoteInterface } from '@modules/note/interfaces/note.interface';
-import { NoteStatusEnum } from '@modules/note/enums/note-status.enum';
+import { Exclude, Expose, Transform } from 'class-transformer';
 
 @Exclude()
-export class NoteResponseDto implements NoteInterface {
-  @ApiProperty({ type: String, example: '6d3d19c1-9e6a-4a5b-8f21-0f1d2c3b4a5e' })
+export class NoteResponseDto implements NoteResponseInterface {
+  @ApiProperty({ type: String, example: '01890a5d-ac96-774b-bcce-b302099a8057' })
   @Expose()
   readonly id: string;
 
@@ -951,65 +1045,78 @@ export class NoteResponseDto implements NoteInterface {
   @Expose()
   readonly status: NoteStatusEnum;
 
-  @ApiProperty({ type: Date, example: '2026-08-02T12:00:00.000Z' })
+  @ApiProperty({ type: String, example: '2026-08-02T12:00:00.000Z' })
   @Expose()
-  @Type(() => Date)
-  readonly createdAt: Date;
+  @Transform(({ value }: { value: Date }): string => value.toISOString())
+  readonly createdAt: string;
 
-  @ApiProperty({ type: Date, example: '2026-08-02T12:00:00.000Z' })
+  @ApiProperty({ type: String, example: '2026-08-02T12:00:00.000Z' })
   @Expose()
-  @Type(() => Date)
-  readonly updatedAt: Date;
+  @Transform(({ value }: { value: Date }): string => value.toISOString())
+  readonly updatedAt: string;
 }
 ```
 
-**Entity** — the CASL permission subject (and DB-record response shape when the
-response is the record as-is). Same decorator rules as response DTOs; sensitive
-fields get `@Exclude()` explicitly even though the class-level `@Exclude()` already
-hides them (defense in depth, and it documents intent):
+List responses wrap the item DTO and are their own file
+(`dtos/responses/note-list-response.dto.ts`); that is the one place `@Type(() => X)`
+appears in a response DTO, to build the nested array.
+
+**Entity** — a CASL permission subject, and nothing else. It is never serialized and
+never returned, so it carries **no decorators at all**: no `@Exclude()`, no `@Expose()`,
+no `@ApiProperty`. It is a bare class whose only jobs are to give CASL a metadata target
+and to `implements` the domain interface so the ability conditions (`{ userId: … }`)
+are type-checked against real fields. Fields use `declare readonly` — they are never
+assigned, because instances are never constructed:
 
 ```typescript
 // entities/note.entity.ts
-import { ApiProperty } from '@nestjs/swagger';
-import { Exclude, Expose } from 'class-transformer';
-import { NoteInterface } from '@modules/note/interfaces/note.interface';
+import type { NoteInterface } from '@modules/note/interfaces/note.interface.js';
+import type { NoteStatusEnum } from '@nest-aws-starter/shared';
 
-@Exclude()
+// CASL subject class — the ability metadata target for note permissions.
 export class NoteEntity implements NoteInterface {
-  @ApiProperty({ type: String })
-  @Expose()
-  readonly id: string;
-
-  /* ...same field pattern as NoteResponseDto */
+  declare readonly id: string;
+  declare readonly userId: string;
+  declare readonly title: string;
+  declare readonly body: string;
+  declare readonly status: NoteStatusEnum;
+  declare readonly createdAt: Date;
+  declare readonly updatedAt: Date;
 }
 ```
 
+If you ever reach for `@Serialize(SomeEntity)`, you want a response DTO instead — no
+endpoint in this codebase serializes an entity.
+
 **Permissions** — one file per module in `permissions/`, registered in the module
-via `CaslModule.forFeature`. Roles come from our own enum — never from
-`@prisma/client`:
+via `CaslModule.forFeature`. Roles come from the shared `UserRoleEnum` — never from the
+generated Prisma enums. The shape is `PermissionsType` (a
+`Partial<Record<UserRoleEnum, (context: PermissionContextInterface) => void>>`), the
+actions come from `ActionsEnum`, and each handler is an explicitly typed arrow keyed by
+the enum member:
 
 ```typescript
 // permissions/note.permissions.ts
-import { InferSubjects } from '@casl/ability';
-import { Actions, Permissions } from '@modules/casl';
-import { UserRoleEnum } from '@modules/user/enums/user-role.enum';
-import { NoteEntity } from '@modules/note/entities/note.entity';
+import { ActionsEnum } from '@modules/casl/enums/actions.enum.js';
+import type { PermissionContextInterface } from '@modules/casl/interfaces/permission-context.interface.js';
+import type { PermissionsType } from '@modules/casl/types/permissions.type.js';
+import { NoteEntity } from '@modules/note/entities/note.entity.js';
+import { UserRoleEnum } from '@nest-aws-starter/shared';
 
-type Subjects = InferSubjects<typeof NoteEntity>;
-
-export const notePermissions: Permissions<UserRoleEnum, Subjects, Actions> = {
-  USER({ can, user }) {
-    can(Actions.read, NoteEntity);
-    can(Actions.create, NoteEntity);
-    can(Actions.update, NoteEntity, { userId: user.id });
-    can(Actions.delete, NoteEntity, { userId: user.id });
+export const notePermissions: PermissionsType = {
+  [UserRoleEnum.USER]: ({ can }: PermissionContextInterface): void => {
+    can(ActionsEnum.MANAGE, NoteEntity);
   },
-
-  ADMIN({ can }) {
-    can(Actions.manage, NoteEntity);
+  [UserRoleEnum.ADMIN]: ({ can }: PermissionContextInterface): void => {
+    can(ActionsEnum.MANAGE, NoteEntity);
   },
 };
 ```
+
+The context also carries `user` and `cannot`, so per-owner rules are written
+`can(ActionsEnum.UPDATE, NoteEntity, { userId: user.id })`. The note module grants
+`MANAGE` outright because `NoteService` already enforces ownership itself (§7) —
+authorization lives in exactly one place per resource, never half in each.
 
 ```typescript
 // note.module.ts — registration line
@@ -1033,12 +1140,17 @@ first `sendMessage` explodes") is forbidden.
 
 ```typescript
 // src/configs/sqs.config.ts
+import { validateScheme } from '@helpers/validate-scheme.helper.js';
+import { Logger } from '@nestjs/common';
+import { registerAs } from '@nestjs/config';
+import { z } from 'zod';
+
 const scheme = z.discriminatedUnion('isEnabled', [
   z.object({ isEnabled: z.literal(false) }),
   z.object({
     isEnabled: z.literal(true),
     region: z.string().min(1),
-    queueUrl: z.string().url(),
+    endpoint: z.url().optional(),
   }),
 ]);
 
@@ -1051,15 +1163,21 @@ export const sqsConfig = registerAs('sqs', (): SqsConfig => {
     ? {
         isEnabled: true,
         region: process.env.AWS_REGION ?? '',
-        queueUrl: process.env.SQS_QUEUE_URL ?? '',
+        ...(process.env.AWS_ENDPOINT_URL && { endpoint: process.env.AWS_ENDPOINT_URL }),
       }
     : { isEnabled: false };
 
-  validateScheme(scheme, config, new CustomLoggerService('SqsConfig'));
+  validateScheme(scheme, config, new Logger('SqsConfig'));
 
   return config;
 });
 ```
+
+Config files take Nest's plain `Logger`, not `CustomLoggerService` — they are evaluated
+at module-registration time, before DI exists. This is also the one file kind where an
+exported `type` sits next to its `registerAs` (§2): `SqsConfig` is inferred from the
+schema and inseparable from it. Zod 4 spells URL validation `z.url()`, not
+`z.string().url()`.
 
 When a provider is disabled, its module binds a `Disabled<X>Provider` implementing
 the same contract — every method throws a coded 500 (`"SQS provider is disabled —
@@ -1067,27 +1185,39 @@ set SQS_ENABLED=true"`). Consumers keep compiling; misuse fails loudly and
 explains itself. `/health/ready` reports only enabled providers. `.env.example`
 groups variables per provider under its `<X>_ENABLED` flag.
 
+A config that is **not** an optional provider — one the app cannot boot without — needs
+no discriminated union, just a flat schema with defaults:
+
 ```typescript
-// src/configs/s3.config.ts
+// src/configs/app.config.ts
+import { validateScheme } from '@helpers/validate-scheme.helper.js';
+import { Logger } from '@nestjs/common';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
-import { validateScheme } from '@helpers/validate-scheme.helper';
-import { CustomLoggerService } from '@modules/logger/services/custom-logger.service';
 
 const scheme = z.object({
-  region: z.string(),
-  bucketName: z.string(),
+  port: z.number(),
+  env: z.enum(['development', 'test', 'production']),
+  apiPrefix: z.string(),
+  trustProxy: z.boolean(),
+  corsOrigins: z.array(z.url()),
 });
 
-export type S3Config = Required<z.infer<typeof scheme>>;
+export type AppConfig = Required<z.infer<typeof scheme>>;
 
-export const s3Config = registerAs('s3', (): S3Config => {
-  const config: S3Config = {
-    region: process.env.AWS_REGION ?? 'us-east-1',
-    bucketName: process.env.S3_BUCKET_NAME ?? '',
+export const appConfig = registerAs('app', (): AppConfig => {
+  const config: AppConfig = {
+    port: Number(process.env.PORT ?? 3000),
+    env: (process.env.NODE_ENV ?? 'development') as AppConfig['env'],
+    apiPrefix: process.env.API_PREFIX ?? 'api',
+    trustProxy: process.env.TRUST_PROXY === 'true',
+    corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:5174')
+      .split(',')
+      .map((origin: string): string => origin.trim())
+      .filter((origin: string): boolean => origin.length > 0),
   };
 
-  validateScheme(scheme, config, new CustomLoggerService('S3Config'));
+  validateScheme(scheme, config, new Logger('AppConfig'));
 
   return config;
 });
@@ -1111,7 +1241,19 @@ No module merges untested; tests land in the same commit series.
 - Empty line between adjacent variable declarations; empty line before
   `return`/`continue`/`break` inside blocks.
 - Minimal comments — only *why*, never *what*.
-- Path aliases only (`@modules/...`); relative imports are lint-blocked.
+- Path aliases only (`@modules/...`, `@interfaces/...`, `@src/...`); relative imports in
+  `apps/api/src` are blocked by Biome (`style/noRestrictedImports`, configured in the
+  root `biome.json` override for `apps/api/src/**`), so `pnpm exec biome ci .` fails on
+  one. Two deliberate exclusions: `apps/api/test`, whose specs import their own harness
+  siblings (`./app.factory.js`) and which declares no alias of its own, and the two
+  frontends, which import relatively by design (see [`frontend.md`](./frontend.md)).
+- **Every intra-project import ends in `.js`**, aliases included
+  (`@modules/note/services/note.service.js`). `apps/api` is native ESM under
+  `module: nodenext`, so the runtime specifier is what ships; TypeScript resolves the
+  `.ts` behind it. Package imports (`@nestjs/common`, `@nest-aws-starter/shared`) take
+  no extension.
+- Imports are sorted by Biome's organizer (`biome check --write`); do not hand-order
+  them.
 - Always `await` — no floating promises.
 
 ## 15. Anti-patterns (forbidden)
@@ -1121,7 +1263,7 @@ No module merges untested; tests land in the same commit series.
 | Loose `*.controller.ts`/`*.service.ts` at module root | Dedicated folder per artifact kind, even for a single file (`controllers/`, `services/`, `repositories/`, `constants/`) |
 | Service depending on a concrete repository class | Contract interface via injection token |
 | Module exporting a repository | Export the service; others ask the service |
-| `@prisma/client` outside `*-prisma.repository.ts` | New named contract method |
+| `@generated/prisma/*` outside `*-prisma.repository.ts` | New named contract method |
 | Repository returning an ORM model or response DTO | `toDomain()` → domain interface |
 | Business logic in a controller (pre-checks, casts) | Service method (`deleteById` owns the 404) |
 | `type` for an object shape | `interface` in `interfaces/` |

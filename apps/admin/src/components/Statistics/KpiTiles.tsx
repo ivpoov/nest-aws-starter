@@ -22,12 +22,12 @@ function renderTiles(totals: StatisticsTotalsInterface): ReactElement {
       <StatTile label="Active sessions" value={totals.activeSessions.toLocaleString()} />
       <StatTile label="Online now" value={totals.onlineNow.toLocaleString()} />
       <StatTile label="New today" value={totals.newToday.toLocaleString()} />
-      {totals.revenue === null ? (
+      {totals.revenueCents === null ? (
         <StatTile label="Revenue (30d)" value="—" hint="Requires the payment module" />
       ) : (
         <StatTile
           label="Revenue (30d)"
-          value={formatMoney(totals.revenue, STATISTICS_REPORTING_CURRENCY)}
+          value={formatMoney(totals.revenueCents, STATISTICS_REPORTING_CURRENCY)}
         />
       )}
       {totals.mrrCents === null ? (

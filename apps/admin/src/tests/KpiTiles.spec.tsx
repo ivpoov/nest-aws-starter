@@ -33,7 +33,7 @@ describe('KpiTiles', () => {
       activeSessions: 2,
       onlineNow: 1,
       newToday: 1,
-      revenue: null,
+      revenueCents: null,
       mrrCents: null,
     };
 
@@ -49,7 +49,7 @@ describe('KpiTiles', () => {
       activeSessions: 2,
       onlineNow: 1,
       newToday: 1,
-      revenue: 12_500,
+      revenueCents: 12_500,
       mrrCents: 4_900,
     };
 
