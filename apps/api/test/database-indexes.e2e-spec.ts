@@ -26,6 +26,7 @@ const EXPECTED_INDEXES: ExpectedIndexInterface[] = [
     index: 'activities_createdAt_id_idx',
     backs: 'admin activity list filtered by dateFrom/dateTo alone',
   },
+  // <module:payment>
   {
     table: 'payment_transactions',
     index: 'payment_transactions_status_id_idx',
@@ -41,6 +42,7 @@ const EXPECTED_INDEXES: ExpectedIndexInterface[] = [
     index: 'subscriptions_planId_idx',
     backs: 'the planId foreign key',
   },
+  // </module:payment>
   {
     table: 'users',
     index: 'users_displayName_trgm_idx',
