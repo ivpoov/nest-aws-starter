@@ -199,6 +199,39 @@ describe('auth (email + password)', () => {
       .expect(401);
   });
 
+  // Deploy compatibility, against a real Redis rather than a fake: keys
+  // written by the previous release hold the token verbatim. They have to keep
+  // working once — otherwise shipping this signs every logged-in user out —
+  // and be rewritten as a digest with their remaining TTL intact.
+  // Asserted on the access key rather than the refresh key: a refresh would
+  // rotate and overwrite the value anyway, so it could not tell an upgrade
+  // apart from a fresh write. Reading /users/me only ever compares.
+  it('accepts a pre-digest allowlist key once and upgrades it in place', async () => {
+    const tokens = await register(uniqueEmail());
+    const redis = app.get<RedisClientType>(REDIS_CLIENT);
+    const claims: { sub: string; sessionId: string } = decodeJwtPayload(tokens.accessToken);
+    const accessKey = `users:${claims.sub}:sessions:${claims.sessionId}:access`;
+
+    // Put the key back the way the previous release wrote it.
+    await redis.set(accessKey, tokens.accessToken, 'EX', 900);
+
+    await request(app.getHttpServer())
+      .get('/api/v1/users/me')
+      .set('authorization', `Bearer ${tokens.accessToken}`)
+      .expect(200);
+
+    expect(await redis.get(accessKey)).toMatch(/^[0-9a-f]{64}$/);
+    // KEEPTTL: the upgrade must not resurrect an expiring session.
+    expect(await redis.ttl(accessKey)).toBeGreaterThan(0);
+    expect(await redis.ttl(accessKey)).toBeLessThanOrEqual(900);
+
+    // And still a working credential after the rewrite.
+    await request(app.getHttpServer())
+      .get('/api/v1/users/me')
+      .set('authorization', `Bearer ${tokens.accessToken}`)
+      .expect(200);
+  });
+
   // The stolen-token tripwire: a signed refresh token matching neither the
   // current allowlist entry nor the grace window means reuse, and takes the
   // whole session down. Digesting the allowlist must not blunt it.
