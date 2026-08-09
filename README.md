@@ -472,11 +472,17 @@ apps/admin/       # admin panel — same stack, role-gated
 packages/shared/  # wire contracts shared by API and frontends
 lambdas/example/  # echo Lambda demonstrating the invoker pattern
 docker/           # compose init scripts
+docs/architecture.md # request lifecycle, event map, caching tiers, AWS surface
 docs/conventions/ # binding code conventions — read before contributing
+docs/decisions/   # architecture decision records — why, and what it cost
 docs/guides/      # operational guides — building and running the API image
 docs/removal/     # generated per-module removal recipes
 scripts/          # bootstrap rename + subtraction test + removal-recipe generator
 ```
+
+Start with [`docs/architecture.md`](./docs/architecture.md) for how the pieces
+fit together, and [`docs/decisions/`](./docs/decisions) for why they fit that
+way.
 
 **Read the conventions before writing code** — they are the law of this
 repository, and reviewers apply them literally:
