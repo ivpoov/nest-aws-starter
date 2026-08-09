@@ -1,0 +1,5 @@
+# Astro's build output and its type/content cache. Both are derived from
+# docs/** and this workspace's config, and both are rebuilt from scratch by
+# `pnpm run docs:build`.
+dist/
+.astro/

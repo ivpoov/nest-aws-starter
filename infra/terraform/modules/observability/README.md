@@ -95,16 +95,32 @@ and "tasks that never became healthy", which is why it is the one with
 
 ## Access-log bucket
 
-Created only when the profile asks for CloudFront access logs. **ACLs are
-enabled on it**, uniquely in this stack — every other bucket sets
+Created only when the profile sets `access_logs_enabled`, and consumed by two
+writers under two prefixes:
+
+- `cloudfront/<site>/` — the edge module's distributions, wired through
+  `access_logs_bucket_domain_name` into `log_bucket_domain_name`;
+- `alb/` — the compute module's load balancer, wired through the
+  `alb_access_logs` output into its `access_logs` input.
+
+**ACLs are enabled on it**, uniquely in this stack — every other bucket sets
 `BucketOwnerEnforced`. CloudFront standard logging predates that setting and
 delivers by writing objects with an ACL grant to the `awslogsdelivery` canonical
 user; a `BucketOwnerEnforced` bucket rejects the write and surfaces the failure
 nowhere in CloudFront. `BucketOwnerPreferred` plus a full public access block is
 the weakest configuration that still works.
 
-The bucket is not yet consumed: `edge.tf` still passes
-`log_bucket_domain_name = null`, and pointing its
-`local.edge_log_bucket_domain_name` at
-`module.observability.access_logs_bucket_domain_name` is the one line that
-finishes it. The root `check` in `observability.tf` keeps that visible.
+The ALB does not use ACLs at all. It delivers as an AWS-owned identity and needs
+a **bucket policy** naming it — the per-Region ELB account in a Region launched
+before August 2022, or the `logdelivery.elasticloadbalancing.amazonaws.com`
+service principal in one launched since. `alb_log_delivery_uses_regional_account`
+picks between them; the service-principal statement is granted either way.
+
+Two things about that policy are worth knowing before an apply:
+
+1. **It cannot be verified from a plan.** ELB validates the policy by writing a
+   test object while the load balancer is being created. A wrong policy is an
+   apply-time `Access Denied for bucket`, and nothing before that says so.
+2. **Ordering runs through the `alb_access_logs` output**, which carries a
+   `depends_on` on the bucket policy. Depending on the bucket alone would let
+   Terraform create the load balancer first, and it would fail that write test.

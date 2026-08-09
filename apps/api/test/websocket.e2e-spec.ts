@@ -83,8 +83,25 @@ describe('websocket notification gateway', () => {
     });
   }
 
-  function waitForEvent<T>(socket: Socket, event: string): Promise<T> {
-    return new Promise((resolve) => socket.once(event, (payload: T) => resolve(payload)));
+  // `match` exists because a socket receives every notification addressed to
+  // any room it is in, not just the synthetic one a test emits — see the
+  // admins-room test below. Without it this is `once()`: the first payload to
+  // arrive wins, whatever it is.
+  function waitForEvent<T>(
+    socket: Socket,
+    event: string,
+    match?: (payload: T) => boolean,
+  ): Promise<T> {
+    return new Promise((resolve) => {
+      const listener = (payload: T): void => {
+        if (match && !match(payload)) return;
+
+        socket.off(event, listener);
+        resolve(payload);
+      };
+
+      socket.on(event, listener);
+    });
   }
 
   // handleConnection joins rooms asynchronously (it awaits TokenService
@@ -153,7 +170,15 @@ describe('websocket notification gateway', () => {
     await waitForConnect(socket);
     await waitForRoomMember(ADMIN_ROOM);
 
-    const received: Promise<{ broadcast: boolean }> = waitForEvent(socket, NOTIFICATION_EVENT);
+    // Filtered for the same reason notification-dispatcher.e2e-spec.ts's
+    // admin fan-out test is: this socket is in its own user room too, and
+    // registerAdmin()'s second login produces a real NEW_DEVICE_LOGIN
+    // notification that can land here first on a slow database.
+    const received: Promise<{ broadcast: boolean }> = waitForEvent(
+      socket,
+      NOTIFICATION_EVENT,
+      (payload: { broadcast: boolean }): boolean => payload.broadcast === true,
+    );
 
     app
       .get(NotificationGateway)

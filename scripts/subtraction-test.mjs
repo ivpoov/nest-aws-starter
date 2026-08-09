@@ -183,7 +183,9 @@ export const MODULES = [
       'apps/admin/src/interfaces/use-statistics-series-result.interface.ts',
       'apps/admin/src/pages/StatisticsPage.tsx',
       'apps/admin/src/utils/chartColors.ts',
-      'apps/admin/src/utils/formatMoney.ts',
+      // formatMoney.ts deliberately stays: it is a module-agnostic cents →
+      // currency-string helper shared by the Statistics tiles/charts AND by
+      // payment's PlansPage and TransactionList, so neither module owns it.
       'apps/admin/src/tests/AuthMethodBreakdown.spec.tsx',
       'apps/admin/src/tests/KpiTiles.spec.tsx',
       'apps/admin/src/tests/RegistrationsChart.spec.tsx',
@@ -734,10 +736,23 @@ function fenceFilesUnder(treeRoot) {
   return FENCE_SCAN_ROOTS.flatMap((relRoot) => listFilesRecursive(path.join(treeRoot, relRoot)));
 }
 
+// A malformed fence is silent data loss, not a cosmetic problem: an unclosed
+// `// <module:x>` leaves the stripper inside a block until EOF, so every
+// remaining line of the file is deleted and the subtraction run "proves"
+// removability of a file that was simply truncated. A stray `// </module:x>`
+// is the same mistake seen from the other end and would record a block hit
+// starting at line -1 in the generated removal doc. Both abort the run,
+// naming the file and the offending line, rather than being repaired
+// silently — only the author knows where the missing marker belongs.
+function fenceError(filePath, line, message) {
+  return new Error(`${filePath}:${line}: ${message}`);
+}
+
 // Deletes every line fenced for `moduleId`: single lines carrying a trailing
 // `// <module:x>` marker, and whole blocks between own-line
 // `// <module:x>` / `// </module:x>` markers. Returns the fence hits found
 // (used by --emit-docs) and, when `write` is true, persists the stripped file.
+// Throws on an unbalanced marker — see fenceError above.
 export function stripFencesInFile(filePath, moduleId, write) {
   // `//` fences cover .ts/.prisma; the `{/* */}` variants exist because a
   // line comment is a syntax error inside JSX children, which is exactly
@@ -753,17 +768,30 @@ export function stripFencesInFile(filePath, moduleId, write) {
 
   lines.forEach((line, index) => {
     const trimmed = line.trim();
+    const lineNumber = index + 1;
 
     if (startMarkers.includes(trimmed)) {
+      if (inBlock) {
+        throw fenceError(
+          filePath,
+          lineNumber,
+          `nested <module:${moduleId}> fence — the one opened at line ${blockStartLine} is still open`,
+        );
+      }
+
       inBlock = true;
-      blockStartLine = index + 1;
+      blockStartLine = lineNumber;
 
       return;
     }
 
     if (endMarkers.includes(trimmed)) {
+      if (!inBlock) {
+        throw fenceError(filePath, lineNumber, `</module:${moduleId}> without a matching opener`);
+      }
+
       inBlock = false;
-      hits.push({ kind: 'block', startLine: blockStartLine, endLine: index + 1 });
+      hits.push({ kind: 'block', startLine: blockStartLine, endLine: lineNumber });
 
       return;
     }
@@ -771,13 +799,21 @@ export function stripFencesInFile(filePath, moduleId, write) {
     if (inBlock) return;
 
     if (startMarkers.some((marker) => line.includes(marker))) {
-      hits.push({ kind: 'line', startLine: index + 1, endLine: index + 1, preview: line.trim() });
+      hits.push({ kind: 'line', startLine: lineNumber, endLine: lineNumber, preview: line.trim() });
 
       return;
     }
 
     kept.push(line);
   });
+
+  if (inBlock) {
+    throw fenceError(
+      filePath,
+      blockStartLine,
+      `unclosed <module:${moduleId}> fence — everything to the end of the file would be deleted`,
+    );
+  }
 
   if (write && hits.length > 0) writeFileSync(filePath, kept.join('\n'));
 

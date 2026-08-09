@@ -101,8 +101,25 @@ describe('notification dispatcher (persist-first, e2e)', () => {
     });
   }
 
-  function waitForEvent<T>(socket: Socket, event: string): Promise<T> {
-    return new Promise((resolve) => socket.once(event, (payload: T) => resolve(payload)));
+  // `match` exists because a socket receives every notification addressed to
+  // any room it is in, not just the one a test is about — see the admin
+  // fan-out test below. Without it this is `once()`: the first notification
+  // to arrive wins, whatever it is.
+  function waitForEvent<T>(
+    socket: Socket,
+    event: string,
+    match?: (payload: T) => boolean,
+  ): Promise<T> {
+    return new Promise((resolve) => {
+      const listener = (payload: T): void => {
+        if (match && !match(payload)) return;
+
+        socket.off(event, listener);
+        resolve(payload);
+      };
+
+      socket.on(event, listener);
+    });
   }
 
   // See websocket.e2e-spec.ts's identical helper — room joins happen
@@ -243,9 +260,20 @@ describe('notification dispatcher (persist-first, e2e)', () => {
     expect(new Date(payload.createdAt).toISOString()).toBe(payload.createdAt);
   });
 
+  // An admin socket joins the admins room *and* its own user room, so it
+  // legitimately receives USER-audience notifications addressed to the admin
+  // themself — including the NEW_DEVICE_LOGIN that registerAdmin()'s own
+  // second login produces. That write is the slower of the two (it persists
+  // an eager reader receipt alongside the row, which an ADMIN write skips),
+  // so on a slow enough database it lands after the room join rather than
+  // before it, and an unfiltered listener resolves with the admin's own
+  // notification instead of the fan-out under test. Correlating on the id
+  // this test generated — the same marker technique the ADMIN-row test above
+  // uses — waits for *this* fan-out and nothing else.
   it('a connected admin socket in the admins room receives an ADMIN-audience fan-out', async () => {
     const admin = await registerAdmin();
     const socket: Socket = connect(admin.accessToken);
+    const contactMessageId: string = randomUUID();
 
     await waitForConnect(socket);
     await waitForRoomMember(ADMIN_ROOM);
@@ -253,9 +281,11 @@ describe('notification dispatcher (persist-first, e2e)', () => {
     const received: Promise<NotificationResponseInterface> = waitForEvent(
       socket,
       NOTIFICATION_EVENT,
+      (payload: NotificationResponseInterface): boolean =>
+        payload.meta.contactMessageId === contactMessageId,
     );
 
-    eventBus.emit(CONTACT_RECEIVED_EVENT, { contactMessageId: randomUUID(), ip: '198.51.100.8' });
+    eventBus.emit(CONTACT_RECEIVED_EVENT, { contactMessageId, ip: '198.51.100.8' });
 
     const payload: NotificationResponseInterface = await received;
 

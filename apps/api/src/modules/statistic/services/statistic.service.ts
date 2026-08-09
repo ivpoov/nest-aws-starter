@@ -77,13 +77,13 @@ export class StatisticService {
     // Defaults match the v0.3 stub — payment is a subtraction-removable
     // module (see scripts/subtraction-test.mjs); without it these stay
     // null/empty and the wire contract is unchanged.
-    let revenue: number | null = null;
+    let revenueCents: number | null = null;
     let mrrCents: number | null = null;
     let revenueByPlan: StatisticsRevenueByPlanRowInterface[] = [];
 
     // <module:payment>
     if (this.revenueAvailable) {
-      [revenue, mrrCents, revenueByPlan] = await this.fetchRevenueData();
+      [revenueCents, mrrCents, revenueByPlan] = await this.fetchRevenueData();
     }
     // </module:payment>
 
@@ -93,7 +93,7 @@ export class StatisticService {
         activeSessions,
         onlineNow,
         newToday: today[0]?.count ?? 0,
-        revenue,
+        revenueCents,
         mrrCents,
       },
       usersByStatus,

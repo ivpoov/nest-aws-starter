@@ -21,7 +21,7 @@ interface RevenueChartPropsInterface {
   readonly days: number;
   readonly onDaysChange: (days: number) => void;
   readonly onRetry: () => void;
-  // Mirrors KpiTiles' totals.revenue === null check — true while the
+  // Mirrors KpiTiles' totals.revenueCents === null check — true while the
   // overview hasn't loaded yet (so the loading/chart state isn't skipped),
   // false once the overview confirms the payment module is absent. Renders
   // the same "—" placeholder KpiTiles uses instead of the chart, so a

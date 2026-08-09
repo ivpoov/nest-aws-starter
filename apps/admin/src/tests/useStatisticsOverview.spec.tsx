@@ -11,7 +11,7 @@ const OVERVIEW: Record<string, unknown> = {
     activeSessions: 3,
     onlineNow: 1,
     newToday: 2,
-    revenue: null,
+    revenueCents: null,
     mrrCents: null,
   },
   usersByStatus: [{ key: 'ACTIVE', count: 9 }],
