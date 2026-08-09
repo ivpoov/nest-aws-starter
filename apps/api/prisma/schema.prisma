@@ -83,8 +83,9 @@ model AuthMethod {
 }
 
 // Metadata only — powers the sessions pages. No token material lives in
-// Postgres, ever: all tokens are TTL'd Redis allowlist keys (see token module);
-// a session is alive iff its Redis refresh key exists.
+// Postgres, ever: the allowlist is a set of TTL'd Redis keys holding SHA-256
+// digests of the tokens, never the tokens (see token module); a session is
+// alive iff its Redis refresh key exists.
 model Session {
   id              String   @id @default(uuid(7))
   userId          String
