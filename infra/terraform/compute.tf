@@ -51,12 +51,9 @@ variable "api_extra_environment" {
 # ---------------------------------------------------------------------------
 # Names
 #
-# The compute names in local.names cover the cluster, the repositories, the API
-# task definition, the service, the ALB and the target group. The three below —
-# the migration task family, its log group and the scaling policy — are not in
-# that map and this file does not own locals.tf, so they are derived from the
-# same local.name_prefix in the way network.tf derives its security-group names.
-# They belong in local.names the next time that file is touched.
+# Every one of them comes from local.names; this block only reshapes the flat
+# map into the object the module's variable declares. Nothing here builds a
+# string out of local.name_prefix.
 #
 # The migration log group deliberately sits under the same /aws/ecs/<prefix>
 # path as the API's: that is the prefix the execution role's CreateLogStream
@@ -71,9 +68,9 @@ locals {
     alb                    = local.names.alb
     target_group_api       = local.names.target_group_api
     api_log_group          = local.names.api_log_group
-    migrations_task        = "${local.name_prefix}-migrations"
-    migrations_log_group   = "${local.ecs_log_group_prefix}/migrations"
-    autoscaling_cpu_policy = "${local.name_prefix}-api-cpu"
+    migrations_task        = local.names.migrations_task
+    migrations_log_group   = local.names.migrations_log_group
+    autoscaling_cpu_policy = local.names.autoscaling_cpu_policy
   }
 
   # One repository, not two. local.names carries an ecr_web name, but apps/web

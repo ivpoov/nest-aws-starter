@@ -37,12 +37,11 @@ locals {
     api   = ["api.${var.domain_name}"]
   }
 
-  # Site bucket names follow local.names' convention — <prefix>-<role>-<account>
-  # — built from local.name_prefix the same way the per-instance names in
-  # locals.tf are.
+  # Keyed by site so the `sites` map below can be walked; the names themselves
+  # come from local.names like everything else in this stack.
   edge_site_buckets = {
-    web   = "${local.name_prefix}-web-${local.bucket_suffix}"
-    admin = "${local.name_prefix}-admin-${local.bucket_suffix}"
+    web   = local.names.web_bucket
+    admin = local.names.admin_bucket
   }
 
   # Put CloudFront in front of the ALB as well? Off, deliberately — the full

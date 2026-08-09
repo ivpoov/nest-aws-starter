@@ -76,18 +76,16 @@ locals {
   # Interface endpoints need both the profile's blessing and an explicit list.
   network_interface_endpoints = local.profile.vpc_endpoints_enabled ? var.interface_endpoints : []
 
-  # Security-group and IAM names are not in local.names (which this file does
-  # not own), so they are derived from the same local.name_prefix here. They
-  # belong in local.names the next time that file is touched.
+  # Reshaped from local.names, not derived here. The module wants one object per
+  # concern and local.names is deliberately flat, so this is the only thing that
+  # happens between the two — no string is built in this file.
   network_security_group_names = {
-    alb           = "${local.name_prefix}-alb-sg"
-    api           = "${local.name_prefix}-api-sg"
-    database      = "${local.name_prefix}-db-sg"
-    cache         = "${local.name_prefix}-cache-sg"
-    vpc_endpoints = "${local.name_prefix}-vpce-sg"
+    alb           = local.names.security_group_alb
+    api           = local.names.security_group_api
+    database      = local.names.security_group_database
+    cache         = local.names.security_group_cache
+    vpc_endpoints = local.names.security_group_vpc_endpoints
   }
-
-  network_flow_log_role_name = "${local.name_prefix}-vpc-flow-logs"
 }
 
 module "network" {
@@ -102,7 +100,7 @@ module "network" {
     flow_log_group   = local.names.flow_log_group
   }
   security_group_names = local.network_security_group_names
-  flow_log_role_name   = local.network_flow_log_role_name
+  flow_log_role_name   = local.names.flow_log_role
 
   vpc_cidr = var.vpc_cidr
   azs      = local.azs

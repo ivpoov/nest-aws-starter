@@ -24,11 +24,6 @@ locals {
   # local part here if your transactional mail should come from something other
   # than no-reply@.
   mail_from_address = var.domain_name == null ? null : "no-reply@${var.domain_name}"
-
-  # local.names has one log group per service (api_log_group, web_log_group);
-  # the execution role is scoped to their shared prefix so it does not need
-  # widening every time a service is added.
-  ecs_log_group_prefix = "/aws/ecs/${local.name_prefix}"
 }
 
 module "services" {
@@ -52,8 +47,11 @@ module "services" {
   task_role_name           = local.names.task_role
   task_execution_role_name = local.names.task_execution_role
   ecr_repository_names     = [local.names.ecr_api, local.names.ecr_web]
-  log_group_name_prefix    = local.ecs_log_group_prefix
-  ssm_parameter_prefix     = local.secret_prefix
+
+  # One prefix rather than a list of groups: the execution role is scoped to it
+  # with a trailing wildcard, so adding a service does not mean widening IAM.
+  log_group_name_prefix = local.ecs_log_group_prefix
+  ssm_parameter_prefix  = local.secret_prefix
 }
 
 # ---------------------------------------------------------------------------

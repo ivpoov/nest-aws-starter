@@ -50,11 +50,8 @@ variable "create_github_oidc_provider" {
 # ---------------------------------------------------------------------------
 # Names
 #
-# local.names already carries `github_oidc_role`. The manifest parameter is not
-# in that map and this file does not own locals.tf, so it is derived from
-# local.secret_prefix the way compute.tf derives its migration names — under the
-# same /<project>/<environment> path everything else in this stack uses. It
-# belongs in local.names the next time that file is touched.
+# Both from local.names. The manifest parameter lives under the same
+# /<project>/<environment> path as every other parameter this stack writes.
 #
 # local.names.deploy_role and local.names.artifacts_bucket are deliberately not
 # used. There is no second deploy role (the OIDC role is the deploy identity)
@@ -66,7 +63,7 @@ variable "create_github_oidc_provider" {
 locals {
   cicd_names = {
     oidc_role          = local.names.github_oidc_role
-    manifest_parameter = "${local.secret_prefix}/cicd/deploy-manifest"
+    manifest_parameter = local.names.deploy_manifest_parameter
   }
 
   cicd_enabled = var.github_repository != null

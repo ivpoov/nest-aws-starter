@@ -41,24 +41,24 @@ variable "monthly_budget_amount_usd" {
 }
 
 locals {
-  # Alarm and budget names are not in local.names (which this file does not own)
-  # and neither is the custom metric namespace, so they are derived from the same
-  # local.name_prefix the way network.tf and compute.tf derive theirs. They
-  # belong in local.names the next time that file is touched.
+  # Reshaped from local.names, not derived here — the module wants the alarm
+  # names grouped and local.names is deliberately flat. The custom metric
+  # namespace below is the one thing in this file that is not a resource name,
+  # which is why it is not in that map.
   observability_names = {
     alerts_topic        = local.names.alerts_topic
-    budget              = "${local.name_prefix}-monthly"
-    error_metric_filter = "${local.name_prefix}-api-errors"
+    budget              = local.names.budget
+    error_metric_filter = local.names.error_metric_filter
     access_logs_bucket  = local.names.logs_bucket
 
     alarms = {
-      api_no_healthy_hosts  = "${local.name_prefix}-api-no-healthy-hosts"
-      ecs_no_running_tasks  = "${local.name_prefix}-api-no-running-tasks"
-      alb_5xx_rate          = "${local.name_prefix}-api-5xx-rate"
-      api_error_logs        = "${local.name_prefix}-api-error-logs"
-      database_cpu          = "${local.name_prefix}-database-cpu"
-      database_free_storage = "${local.name_prefix}-database-free-storage"
-      webhook_dlq_depth     = "${local.name_prefix}-webhook-dlq-depth"
+      api_no_healthy_hosts  = local.names.alarm_api_no_healthy_hosts
+      ecs_no_running_tasks  = local.names.alarm_ecs_no_running_tasks
+      alb_5xx_rate          = local.names.alarm_alb_5xx_rate
+      api_error_logs        = local.names.alarm_api_error_logs
+      database_cpu          = local.names.alarm_database_cpu
+      database_free_storage = local.names.alarm_database_free_storage
+      webhook_dlq_depth     = local.names.alarm_webhook_dlq_depth
     }
   }
 

@@ -179,13 +179,19 @@ locals {
 locals {
   names = {
     # network
-    vpc              = "${local.name_prefix}-vpc"
-    internet_gateway = "${local.name_prefix}-igw"
-    nat_gateway      = "${local.name_prefix}-nat"
-    public_subnet    = "${local.name_prefix}-public"
-    private_subnet   = "${local.name_prefix}-private"
-    isolated_subnet  = "${local.name_prefix}-isolated"
-    flow_log_group   = "/aws/vpc/${local.name_prefix}"
+    vpc                          = "${local.name_prefix}-vpc"
+    internet_gateway             = "${local.name_prefix}-igw"
+    nat_gateway                  = "${local.name_prefix}-nat"
+    public_subnet                = "${local.name_prefix}-public"
+    private_subnet               = "${local.name_prefix}-private"
+    isolated_subnet              = "${local.name_prefix}-isolated"
+    flow_log_group               = "/aws/vpc/${local.name_prefix}"
+    flow_log_role                = "${local.name_prefix}-vpc-flow-logs"
+    security_group_alb           = "${local.name_prefix}-alb-sg"
+    security_group_api           = "${local.name_prefix}-api-sg"
+    security_group_database      = "${local.name_prefix}-db-sg"
+    security_group_cache         = "${local.name_prefix}-cache-sg"
+    security_group_vpc_endpoints = "${local.name_prefix}-vpce-sg"
 
     # data
     database_identifier      = "${local.name_prefix}-db"
@@ -199,13 +205,15 @@ locals {
     logs_bucket              = "${local.name_prefix}-logs-${local.bucket_suffix}"
 
     # compute
-    ecs_cluster         = "${local.name_prefix}-cluster"
-    ecr_api             = "${local.name_prefix}/api"
-    ecr_web             = "${local.name_prefix}/web"
-    task_definition_api = "${local.name_prefix}-api"
-    ecs_service_api     = "${local.name_prefix}-api"
-    alb                 = substr("${local.name_prefix}-alb", 0, 32)    # ELBv2: 32
-    target_group_api    = substr("${local.name_prefix}-api-tg", 0, 32) # ELBv2: 32
+    ecs_cluster            = "${local.name_prefix}-cluster"
+    ecr_api                = "${local.name_prefix}/api"
+    ecr_web                = "${local.name_prefix}/web"
+    task_definition_api    = "${local.name_prefix}-api"
+    ecs_service_api        = "${local.name_prefix}-api"
+    alb                    = substr("${local.name_prefix}-alb", 0, 32)    # ELBv2: 32
+    target_group_api       = substr("${local.name_prefix}-api-tg", 0, 32) # ELBv2: 32
+    migrations_task        = "${local.name_prefix}-migrations"
+    autoscaling_cpu_policy = "${local.name_prefix}-api-cpu"
 
     # services (queues, notifications, mail)
     events_queue    = "${local.name_prefix}-events"
@@ -216,22 +224,45 @@ locals {
     # edge
     cloudfront_comment = "${local.name_prefix} distribution"
     waf_web_acl        = "${local.name_prefix}-waf"
+    web_bucket         = "${local.name_prefix}-web-${local.bucket_suffix}"
+    admin_bucket       = "${local.name_prefix}-admin-${local.bucket_suffix}"
 
     # observability
-    alerts_topic  = "${local.name_prefix}-alerts"
-    dashboard     = "${local.name_prefix}-overview"
-    api_log_group = "/aws/ecs/${local.name_prefix}/api"
-    web_log_group = "/aws/ecs/${local.name_prefix}/web"
+    #
+    # Every log group under local.ecs_log_group_prefix on purpose: that is the
+    # prefix the execution role's CreateLogStream statement is scoped to, and a
+    # group outside it fails to open a stream.
+    alerts_topic         = "${local.name_prefix}-alerts"
+    dashboard            = "${local.name_prefix}-overview"
+    api_log_group        = "${local.ecs_log_group_prefix}/api"
+    web_log_group        = "${local.ecs_log_group_prefix}/web"
+    migrations_log_group = "${local.ecs_log_group_prefix}/migrations"
+    budget               = "${local.name_prefix}-monthly"
+    error_metric_filter  = "${local.name_prefix}-api-errors"
+
+    alarm_api_no_healthy_hosts  = "${local.name_prefix}-api-no-healthy-hosts"
+    alarm_ecs_no_running_tasks  = "${local.name_prefix}-api-no-running-tasks"
+    alarm_alb_5xx_rate          = "${local.name_prefix}-api-5xx-rate"
+    alarm_api_error_logs        = "${local.name_prefix}-api-error-logs"
+    alarm_database_cpu          = "${local.name_prefix}-database-cpu"
+    alarm_database_free_storage = "${local.name_prefix}-database-free-storage"
+    alarm_webhook_dlq_depth     = "${local.name_prefix}-webhook-dlq-depth"
 
     # ci/cd
-    artifacts_bucket    = "${local.name_prefix}-artifacts-${local.bucket_suffix}"
-    deploy_role         = "${local.name_prefix}-deploy"
-    github_oidc_role    = "${local.name_prefix}-github-actions"
-    task_execution_role = "${local.name_prefix}-task-execution"
-    task_role           = "${local.name_prefix}-task"
+    artifacts_bucket          = "${local.name_prefix}-artifacts-${local.bucket_suffix}"
+    deploy_role               = "${local.name_prefix}-deploy"
+    github_oidc_role          = "${local.name_prefix}-github-actions"
+    deploy_manifest_parameter = "${local.secret_prefix}/cicd/deploy-manifest"
+    task_execution_role       = "${local.name_prefix}-task-execution"
+    task_role                 = "${local.name_prefix}-task"
   }
 
   # Namespace for SSM parameters and Secrets Manager secrets. Leading slash,
   # no trailing slash — consumers append "/name".
   secret_prefix = "/${var.project_name}/${var.environment}"
+
+  # Prefix every ECS log group hangs off. Named once here because two things
+  # depend on it agreeing with itself: the group names above, and the wildcard
+  # the task execution role's CreateLogStream statement is scoped to.
+  ecs_log_group_prefix = "/aws/ecs/${local.name_prefix}"
 }
