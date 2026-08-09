@@ -32,9 +32,20 @@ deliberately not patchable.
 Before you start:
 
 ```bash
-docker compose up -d --wait     # Postgres, Redis, LocalStack, MinIO
+docker compose up -d --wait          # Postgres, Redis, LocalStack, MinIO
 pnpm install
+pnpm --dir apps/api run db:migrate    # apply the existing migrations
+pnpm --dir apps/api run db:generate   # write apps/api/src/generated/prisma
 ```
+
+Those last two are not optional and there is no `postinstall` that runs them for
+you. The Prisma client is **generated** into `apps/api/src/generated/prisma` and
+is git-ignored, so on a fresh clone that folder does not exist: every
+`@generated/prisma/...` import — and therefore most of `apps/api` — is red in
+your editor until `db:generate` has run once. `db:generate` reads the live
+database (`prisma generate --sql` type-checks the TypedSQL queries against it),
+which is why `db:migrate` comes first. §3 adds this module's own migration with
+`prisma migrate dev`, which regenerates the client for you from then on.
 
 ## 0. Think in contracts before you think in tables
 

@@ -9,12 +9,13 @@ import type { UserService } from '@modules/user/services/user.service.js';
 import type { MailTransportInterface } from '@providers/mail/interfaces/mail-transport.interface.js';
 import { describe, expect, it, vi } from 'vitest';
 
-const CHROME_LINUX_USER_AGENT =
+const CHROME_LINUX_USER_AGENT: string =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
 
 // The fixture device must be produced by the same parseDevice() the service
 // calls — asserting against a hand-typed string would silently drift the
-// moment ua-parser-js's output format changes.
+// moment that helper's output format changes. What the label looks like is
+// parse-device.helper.spec.ts's business, not this suite's.
 const knownSession: SessionForUserInterface = {
   id: 'session-1',
   userId: 'user-1',

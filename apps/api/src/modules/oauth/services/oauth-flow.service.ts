@@ -11,6 +11,7 @@ import {
 import { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import {
+  OAUTH_ALLOWED_REDIRECT_PATHS,
   OAUTH_EXCHANGE_TTL_SEC,
   OAUTH_STATE_TTL_SEC,
   OAUTH_STORE_REPOSITORY,
@@ -68,10 +69,7 @@ export class OauthFlowService {
     authorizationHeader: string | undefined,
   ): Promise<string> {
     const provider: OauthProviderInterface = this.providerOrThrow(type);
-
-    if (!redirect.startsWith(this.webApp.baseUrl)) {
-      throw new ValidationError(OAUTH_REDIRECT_NOT_ALLOWED);
-    }
+    const target: string = this.allowedRedirectOrThrow(redirect);
 
     const userId: string | null =
       intent === OauthIntentEnum.LINK ? await this.requireUserId(authorizationHeader) : null;
@@ -79,7 +77,7 @@ export class OauthFlowService {
 
     await this.store.setState(
       state,
-      { provider: type, intent, userId, redirect },
+      { provider: type, intent, userId, redirect: target },
       OAUTH_STATE_TTL_SEC,
     );
 
@@ -256,6 +254,38 @@ export class OauthFlowService {
     }
 
     return owner;
+  }
+
+  // Never prefix-match a URL. WEB_APP_BASE_URL is an origin with no trailing
+  // slash, so `startsWith` also accepts `https://app.example.com.evil.tld` and
+  // `https://app.example.com@evil.tld` — both resolve to the attacker's host
+  // while carrying the one-time exchange code, which is a full account
+  // takeover. Origins are compared exactly, the path against a fixed
+  // allowlist, and only the canonical `origin + path` is stored: a query or
+  // fragment smuggled in here would otherwise ride along to the callback.
+  private allowedRedirectOrThrow(redirect: string): string {
+    const target: URL = this.parseRedirectOrThrow(redirect);
+    const isSameOrigin: boolean = target.origin === new URL(this.webApp.baseUrl).origin;
+    const isAllowedPath: boolean = OAUTH_ALLOWED_REDIRECT_PATHS.includes(target.pathname);
+    const hasCredentials: boolean = target.username.length > 0 || target.password.length > 0;
+
+    if (!isSameOrigin || !isAllowedPath || hasCredentials) {
+      this.logger.warn(`OAuth redirect rejected: ${target.origin}${target.pathname}`);
+
+      throw new ValidationError(OAUTH_REDIRECT_NOT_ALLOWED);
+    }
+
+    return `${target.origin}${target.pathname}`;
+  }
+
+  private parseRedirectOrThrow(redirect: string): URL {
+    try {
+      return new URL(redirect);
+    } catch {
+      this.logger.warn('OAuth redirect rejected: not an absolute URL');
+
+      throw new ValidationError(OAUTH_REDIRECT_NOT_ALLOWED);
+    }
   }
 
   private providerOrThrow(type: AuthMethodTypeEnum): OauthProviderInterface {
