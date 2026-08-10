@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { SwaggerConfig } from '@configs/swagger.config.js';
+import { API_KEY_SECURITY_SCHEME } from '@constants/swagger.constants.js';
 import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, type OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
@@ -45,10 +46,25 @@ export function setupSwagger(app: NestFastifyApplication): void {
 
   relaxContentSecurityPolicyForDocs(app);
 
+  // Two schemes, because two credentials reach this API: the bearer access
+  // token every user-facing route takes, and the long-lived API key that
+  // ApiKeyGuard reads off `x-api-key` for service-to-service routes. Declaring
+  // only the first left the API-key routes with no box to type a credential
+  // into under "Try it out", and no `securitySchemes` entry for a client
+  // generator to emit.
   const document: Omit<OpenAPIObject, 'paths'> = new DocumentBuilder()
     .setTitle('nest-aws-starter')
     .setVersion('0.1')
     .addBearerAuth()
+    .addApiKey(
+      {
+        type: 'apiKey',
+        name: 'X-Api-Key',
+        in: 'header',
+        description: 'Long-lived key issued by an admin. Sent instead of a bearer token.',
+      },
+      API_KEY_SECURITY_SCHEME,
+    )
     .build();
 
   SwaggerModule.setup(SWAGGER_PATH, app, SwaggerModule.createDocument(app, document));
