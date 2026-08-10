@@ -31,6 +31,27 @@ describe('AppLayout impersonation banner', () => {
     localStorage.clear();
   });
 
+  // The footer must sit at the bottom on short pages. `min-h-screen` alone only
+  // makes the wrapper tall — without a flex column and a growing main, the
+  // footer renders directly under the content and leaves dead space below it.
+  it('lays the shell out so the footer is pushed to the bottom', () => {
+    render(
+      <MemoryRouter>
+        <AppLayout />
+      </MemoryRouter>,
+    );
+
+    const footer: HTMLElement = screen.getByRole('contentinfo');
+    const main: HTMLElement = screen.getByRole('main');
+    const shell: HTMLElement | null = footer.parentElement;
+
+    expect(shell).not.toBeNull();
+    expect(shell?.className).toContain('flex');
+    expect(shell?.className).toContain('flex-col');
+    expect(shell?.className).toContain('min-h-screen');
+    expect(main.className).toContain('grow');
+  });
+
   it('shows the banner when the access token carries actAsBy', () => {
     const token: string = fakeJwt({ sessionId: 's-1', role: 'USER', actAsBy: 'admin-1' });
 
