@@ -186,3 +186,19 @@ describe('LockoutRedisRepository.findAllLockouts', () => {
   });
 });
 
+describe('LockoutRedisRepository.release', () => {
+  // The lock and the counter carry different prefixes, so they hash to
+  // different slots: `DEL lock counter` as one command is CROSSSLOT in cluster
+  // mode and the release endpoint would fail outright.
+  it('deletes the lock and the counter as separate single-key commands', async () => {
+    const del = vi.fn().mockResolvedValue(1);
+    const redis = { del } as unknown as RedisClientType;
+    const repository: LockoutRedisRepository = new LockoutRedisRepository(redis);
+
+    await repository.release(LockoutScopeEnum.EMAIL, 'user@example.com');
+
+    expect(del).toHaveBeenCalledTimes(2);
+    expect(del).toHaveBeenCalledWith('suspicious:lockout:EMAIL:user@example.com');
+    expect(del).toHaveBeenCalledWith('suspicious:fail:EMAIL:user@example.com');
+  });
+});

@@ -81,8 +81,16 @@ export class LockoutRedisRepository implements LockoutRepositoryInterface {
     await this.redis.del(this.counterKey(scope, value));
   }
 
+  // Two DELs, not one multi-key DEL: the lock and the counter carry different
+  // prefixes, so they hash to different slots and a single `DEL lock counter`
+  // is a CROSSSLOT error in cluster mode. There is nothing to co-locate them
+  // for — no operation ever reads or writes the pair as a unit — so releasing
+  // is two independent deletes rather than a hash tag over the key layout.
   public async release(scope: LockoutScopeEnum, value: string): Promise<void> {
-    await this.redis.del(this.lockKey(scope, value), this.counterKey(scope, value));
+    await Promise.all([
+      this.redis.del(this.lockKey(scope, value)),
+      this.redis.del(this.counterKey(scope, value)),
+    ]);
   }
 
   // Capped: GET /admin/account-security/lockouts takes no `limit`, and a
