@@ -131,8 +131,39 @@ cost_profile = "demo"
 # IAM user and no access key anywhere in this repository, deliberately.
 # github_repository = "your-org/your-repo"
 
+# The GitHub Actions environment the deploy job runs in. This is what the trust
+# policy matches — GitHub swaps the ref out of the OIDC `sub` claim for the
+# environment whenever a job declares one — so it must equal the `environment:`
+# value in .github/workflows/deploy.yml exactly.
+# github_deploy_environment = "production"
+
+# WHICH SPELLING of that subject GitHub mints for you. "mutable" is
+# repo:owner/name:environment:<env>; "immutable" is
+# repo:owner@<owner-id>/name@<repo-id>:environment:<env> and applies to
+# repositories created after 2026-07-15 or renamed or transferred since. "both"
+# trusts the two strings at once — still StringEquals, but wider, and it keeps
+# the name-squatting exposure the immutable format exists to close. Terraform
+# cannot detect which you get; verify with the commands in
+# modules/cicd/README.md. Getting it wrong is AccessDenied, never a wider grant.
+# github_subject_format = "mutable"
+
+# Required when github_subject_format is "immutable" or "both". Read them with:
+#   gh api repos/<owner>/<name> --jq '{owner: .owner.id, repository: .id}'
+# github_repository_ids = {
+#   owner      = 12345678
+#   repository = 987654321
+# }
+
+# Escape hatch: the complete `sub` claim to trust, replacing everything the
+# module computes. For a customised subject-claim template. Paste the exact
+# string a run was issued — deploy.yml prints it when assume-role fails.
+# github_deploy_subject_override = null
+
 # The only ref deployments may run from. A branch, because a branch is the only
-# ref protected by review; a tag can be moved by anyone with push access.
+# ref protected by review; a tag can be moved by anyone with push access. This
+# is NOT in the trust policy: it is the branch you must attach to the
+# environment above as its deployment branch rule, which Terraform cannot do —
+# `terraform output github_actions_setup` prints the command.
 # github_deploy_ref = "refs/heads/main"
 
 # Set to false when the account already has a GitHub OIDC provider — an account

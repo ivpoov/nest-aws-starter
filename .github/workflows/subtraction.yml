@@ -16,6 +16,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Read only, and declared rather than inherited: this workflow deletes modules
+# in a throwaway worktree and type-checks what is left. It never writes anything
+# back, and a scheduled job holding a write token is a standing offer to anyone
+# who lands a dependency that runs at install time.
+permissions:
+  contents: read
+
 jobs:
   subtraction:
     runs-on: ubuntu-latest
