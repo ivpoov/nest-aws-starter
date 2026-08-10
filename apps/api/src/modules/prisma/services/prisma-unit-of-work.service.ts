@@ -1,9 +1,7 @@
-import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@generated/prisma/client.js';
 import type { TransactionContextInterface } from '@interfaces/transaction-context.interface.js';
 import type { UnitOfWorkInterface } from '@interfaces/unit-of-work.interface.js';
-import { PRISMA_TRANSACTION_CLIENT } from '@modules/prisma/constants/prisma-transaction.constants.js';
-import type { PrismaTransactionContextInterface } from '@modules/prisma/interfaces/prisma-transaction-context.interface.js';
+import { openPrismaTransactionContext } from '@modules/prisma/helpers/prisma-transaction-registry.helper.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import { Injectable } from '@nestjs/common';
 
@@ -29,14 +27,8 @@ export class PrismaUnitOfWorkService implements UnitOfWorkInterface {
     if (parent) return work(parent);
 
     return this.prisma.$transaction(
-      async (client: Prisma.TransactionClient): Promise<ResultType> => {
-        const context: PrismaTransactionContextInterface = {
-          id: randomUUID(),
-          [PRISMA_TRANSACTION_CLIENT]: client,
-        };
-
-        return work(context);
-      },
+      async (client: Prisma.TransactionClient): Promise<ResultType> =>
+        work(openPrismaTransactionContext(client)),
     );
   }
 }

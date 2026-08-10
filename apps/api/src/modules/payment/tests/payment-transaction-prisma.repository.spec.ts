@@ -3,8 +3,7 @@ import type { CursorPaginationInterface } from '@interfaces/cursor-pagination.in
 import type { TransactionContextInterface } from '@interfaces/transaction-context.interface.js';
 import type { TransactionFiltersInterface } from '@modules/payment/interfaces/transaction-filters.interface.js';
 import { PaymentTransactionPrismaRepository } from '@modules/payment/repositories/payment-transaction-prisma.repository.js';
-import { PRISMA_TRANSACTION_CLIENT } from '@modules/prisma/constants/prisma-transaction.constants.js';
-import type { PrismaTransactionContextInterface } from '@modules/prisma/interfaces/prisma-transaction-context.interface.js';
+import { openPrismaTransactionContext } from '@modules/prisma/helpers/prisma-transaction-registry.helper.js';
 import type { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import { TransactionStatusEnum } from '@nest-aws-starter/shared';
 import { describe, expect, it, vi } from 'vitest';
@@ -96,14 +95,11 @@ describe('PaymentTransactionPrismaRepository.createIdempotent', () => {
       createMany: vi.fn().mockResolvedValue({ count: 1 }),
       findUniqueOrThrow: vi.fn().mockResolvedValue(row),
     };
-    const context: PrismaTransactionContextInterface = {
-      id: 'tx-1',
-      [PRISMA_TRANSACTION_CLIENT]: {
-        paymentTransaction: transactionalPaymentTransaction,
-      } as unknown as Prisma.TransactionClient,
-    };
+    const context: TransactionContextInterface = openPrismaTransactionContext({
+      paymentTransaction: transactionalPaymentTransaction,
+    } as unknown as Prisma.TransactionClient);
 
-    const result = await repository.createIdempotent(data, context as TransactionContextInterface);
+    const result = await repository.createIdempotent(data, context);
 
     expect(transactionalPaymentTransaction.createMany).toHaveBeenCalledTimes(1);
     expect(transactionalPaymentTransaction.findUniqueOrThrow).toHaveBeenCalledTimes(1);

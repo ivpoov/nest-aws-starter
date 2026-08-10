@@ -8,7 +8,7 @@ import type { CreatePaymentTransactionResultInterface } from '@modules/payment/i
 import type { PaymentTransactionInterface } from '@modules/payment/interfaces/payment-transaction.interface.js';
 import type { PaymentTransactionRepositoryInterface } from '@modules/payment/interfaces/payment-transaction-repository.interface.js';
 import type { TransactionFiltersInterface } from '@modules/payment/interfaces/transaction-filters.interface.js';
-import { resolvePrismaClient } from '@modules/prisma/helpers/resolve-prisma-client.helper.js';
+import { resolvePrismaClient } from '@modules/prisma/helpers/prisma-transaction-registry.helper.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import { TransactionStatusEnum } from '@nest-aws-starter/shared';
 import { Injectable } from '@nestjs/common';

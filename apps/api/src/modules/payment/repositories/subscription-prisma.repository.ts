@@ -6,7 +6,7 @@ import type { CreateSubscriptionDataInterface } from '@modules/payment/interface
 import type { CreateSubscriptionResultInterface } from '@modules/payment/interfaces/create-subscription-result.interface.js';
 import type { SubscriptionInterface } from '@modules/payment/interfaces/subscription.interface.js';
 import type { SubscriptionRepositoryInterface } from '@modules/payment/interfaces/subscription-repository.interface.js';
-import { resolvePrismaClient } from '@modules/prisma/helpers/resolve-prisma-client.helper.js';
+import { resolvePrismaClient } from '@modules/prisma/helpers/prisma-transaction-registry.helper.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import { SubscriptionStatusEnum } from '@nest-aws-starter/shared';
 import { Injectable } from '@nestjs/common';

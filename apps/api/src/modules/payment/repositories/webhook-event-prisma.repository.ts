@@ -6,7 +6,7 @@ import type { ProviderEventInterface } from '@modules/payment/interfaces/provide
 import type { UpsertWebhookEventResultInterface } from '@modules/payment/interfaces/upsert-webhook-event-result.interface.js';
 import type { WebhookEventInterface } from '@modules/payment/interfaces/webhook-event.interface.js';
 import type { WebhookEventRepositoryInterface } from '@modules/payment/interfaces/webhook-event-repository.interface.js';
-import { resolvePrismaClient } from '@modules/prisma/helpers/resolve-prisma-client.helper.js';
+import { resolvePrismaClient } from '@modules/prisma/helpers/prisma-transaction-registry.helper.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import { Injectable } from '@nestjs/common';
 
