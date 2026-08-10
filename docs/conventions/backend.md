@@ -1012,6 +1012,54 @@ public async wrap<T>(key: string, ttlMs: number, factory: () => Promise<T>): Pro
   in via explicit `Cache-Control` headers; the API defaults to `no-store` on
   authenticated endpoints.
 
+## 10c. Redis in cluster mode
+
+`REDIS_IS_CLUSTER=true` swaps the shared client from `Redis` to `Cluster`, and the two
+are **not** interchangeable at the command level. The default is `false`, so cluster
+mode is the path least likely to have been executed — write for it anyway, because the
+failures it produces are the quiet kind.
+
+- **A command with no key is routed to one arbitrary node.** `SCAN` is the one that
+  matters: a bare `redis.scan(...)` on a `Cluster` client walks a single master and
+  silently returns a *partial* keyspace — no error, just missing rows. Every key walk
+  fans out instead:
+
+  ```typescript
+  if (this.redis instanceof Cluster) {
+    const masters: Redis[] = await resolveClusterMasters(this.redis);
+    // …walk each master, merge the results…
+  }
+  ```
+
+  Use `resolveClusterMasters` (`@providers/redis/helpers/...`) rather than
+  `nodes('master')` directly: the client is built with `lazyConnect`, so before its
+  first command the slot map is empty and `nodes('master')` returns `[]` — a fan-out
+  over nothing, reported as success.
+
+- **A capped walk spends its cap across the merged result**, and walks the masters in
+  sequence so a filled cap stops the remaining nodes from being contacted at all. A
+  parallel fan-out reads `limit` keys per master and discards all but the first.
+
+- **Multi-key commands need every key in one slot.** `DEL a b`, `MGET`, and any Lua
+  script with `numkeys > 1` are `CROSSSLOT` errors unless the keys share a slot. Two
+  ways out, and the choice is about whether the keys are *one thing*:
+  - Keys that are read or written as a unit get a **hash tag** so they co-locate —
+    `users:{userId}:sessions:…`, which is what makes the token rotation script atomic.
+  - Keys that merely happen to be adjacent get **separate single-key commands**. The
+    lockout repository releases its lock and its counter as two `DEL`s for exactly
+    this reason: nothing ever treats the pair as one unit, so there is no atomicity to
+    buy with a hash tag.
+
+- **`rediss://` and URL credentials do not reach discovered nodes on their own.**
+  ioredis applies a seed URL to the seed connection; nodes learned from
+  `CLUSTER SLOTS` are rebuilt from host and port and merged with `redisOptions` only.
+  Build every client through `createRedisClient` — never `new Cluster([url])` at a
+  call site.
+
+- **There is only db 0**, so `SELECT` and logical-database isolation are unavailable
+  (the e2e helpers skip their `FLUSHDB` accordingly), and non-sharded pub/sub is
+  broadcast over the cluster bus, so `PUBLISH`/`SUBSCRIBE` work unchanged.
+
 ## 11. Errors
 
 Errors are **coded, module-owned, and transport-agnostic**. Never inline strings,
