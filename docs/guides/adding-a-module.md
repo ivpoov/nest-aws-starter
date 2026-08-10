@@ -152,7 +152,9 @@ export interface BookmarkListResponseInterface {
 
 Finally, the barrel. `packages/shared/src/index.ts` is the only entry point, its
 lines are alphabetised, and every export belonging to an **optional** module
-carries a `// <module:x>` fence marker (section 14 explains what those do). Add
+carries a **fence marker** — a `// <module:x>` comment meaning *delete this line
+when module `x` is removed*, which is what makes removal mechanical rather than a
+search. Section 15 covers them properly, including the block form. Add
 these six lines between the `auth/…` block and the `common/…` block:
 
 ```typescript
@@ -277,8 +279,8 @@ pnpm --dir apps/api exec prisma migrate deploy
 
 `migrate deploy` only applies pending migrations and never resets anything, so
 the scratch database ends up structurally identical to your dev one. Now
-`migrate dev --name add_bookmark` has nothing shared to damage, and the whole
-test suite in section 12 runs against the scratch database too. When you are
+`migrate dev --name add_bookmark` has nothing shared to damage, and the e2e suite
+in section 14 runs against the scratch database too. When you are
 done, point `DATABASE_URL` back and `DROP DATABASE starter_scratch;`.
 
 If you would rather work directly against your dev database, know how to reverse
