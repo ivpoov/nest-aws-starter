@@ -163,7 +163,7 @@ export const MODULES = [
     cosmeticSteps: [
       [
         'packages/shared/src/notifications/enums/notification-type.enum.ts',
-        "the CONTACT_MESSAGE member stays on purpose, for the same reason as payment's types: apps/api's notification dispatcher keeps its contact-message builder and handler, which compile against the core event bus and simply never fire once nothing emits contact.message.created. Keeping the member keeps apps/web's NOTIFICATION_TYPE_LABELS (a total Record over the enum) valid. Dropping it means dropping the member, the label line, USER_NOTIFICATION_TYPES and the dispatcher handler together",
+        "the CONTACT_MESSAGE member stays on purpose, for the same reason as payment's types: apps/api's notification event subscriber keeps its contact-message builder and handler, which compile against the core event bus and simply never fire once nothing emits contact.message.created. Keeping the member keeps apps/web's NOTIFICATION_TYPE_LABELS (a total Record over the enum) valid. Dropping it means dropping the member, the label line, USER_NOTIFICATION_TYPES and the event subscriber handler together",
       ],
     ],
   },
@@ -419,7 +419,7 @@ export const MODULES = [
     cosmeticSteps: [
       [
         'packages/shared/src/notifications/enums/notification-type.enum.ts',
-        "the four payment notification types stay on purpose. apps/api's notification dispatcher keeps its payment builders and @OnDomainEvent handlers — they compile against the core event bus and simply never fire once nothing emits subscription.* — so the wire enum stays total, and apps/web's NOTIFICATION_TYPE_LABELS (a total Record over it) stays valid. The visible leftover is four rows in the preferences grid that can never be triggered; dropping them means dropping the enum members, the label lines, USER_NOTIFICATION_TYPES in apps/api and the dispatcher handlers together",
+        "the four payment notification types stay on purpose. apps/api's notification event subscriber keeps its payment builders and @OnDomainEvent handlers — they compile against the core event bus and simply never fire once nothing emits subscription.* — so the wire enum stays total, and apps/web's NOTIFICATION_TYPE_LABELS (a total Record over it) stays valid. The visible leftover is four rows in the preferences grid that can never be triggered; dropping them means dropping the enum members, the label lines, USER_NOTIFICATION_TYPES in apps/api and the event subscriber handlers together",
       ],
       [
         'apps/admin/src/components/Statistics/KpiTiles.tsx',
@@ -433,17 +433,17 @@ export const MODULES = [
     // included here in the same commit series (see task-1-report.md's note
     // for PR 2-5 implementers: v0.4's payment entry missed this once and
     // briefly broke the subtracted tree). Tasks 3-5 extend `paths` further
-    // as the dispatcher/history API/email digest land in the same folder.
+    // as the event subscriber/history API/email digest land in the same folder.
     id: 'notification',
     summary:
-      'Notification/receipt/preference schema, WS gateway, the persist-first dispatcher (IN_APP + ' +
+      'Notification/receipt/preference schema, WS gateway, the persist-first event subscriber (IN_APP + ' +
       'the per-type/per-channel EMAIL gate, PR 5), the history API ' +
       '(list/unread-count/mark-read/read-all), and the preferences API (GET/PUT matrix).',
     paths: [
       'apps/api/src/modules/notification',
       'apps/api/src/configs/websocket.config.ts',
       'apps/api/test/websocket.e2e-spec.ts',
-      'apps/api/test/notification-dispatcher.e2e-spec.ts',
+      'apps/api/test/notification-event-subscriber.e2e-spec.ts',
       'apps/api/test/notification-api.e2e-spec.ts',
       'apps/api/test/notification-preferences.e2e-spec.ts',
       'apps/web/src/apis/notifications',
@@ -524,7 +524,7 @@ export const MODULES = [
 // found not (currently) cleanly removable. Not exercised by the script.
 const NON_REMOVABLE = [
   {
-    id: 'suspicious-activity',
+    id: 'account-security',
     reason:
       'Fenceable in principle — multi-line/block fences exist elsewhere in this PR — ' +
       'but disproportionately invasive here: it is a synchronous security gate inside ' +
@@ -600,7 +600,7 @@ const DEFERRED_PROVIDERS = [
     id: 'mail',
     note:
       'Coupled into core auth: `EmailFlowService` (verify/reset emails, `auth` module) calls ' +
-      '`MAIL_TRANSPORT` unconditionally; `NewDeviceService` (`suspicious-activity`) also ' +
+      '`MAIL_TRANSPORT` unconditionally; `NewDeviceService` (`account-security`) also ' +
       "injects it directly, gated only by its own `newDeviceEmailEnabled` flag, not by mail's " +
       "own `isEnabled`. `NotificationEmailService` (`notification`, PR 5) checks mail's own " +
       '`isEnabled` before every send, so it degrades cleanly — but it is still a removable ' +
@@ -1250,7 +1250,7 @@ Two couplings were not mechanical and are worth knowing before adding a module:
 - \`apps/web\`'s \`NOTIFICATION_TYPE_LABELS\` is a total \`Record\` over
   \`NotificationTypeEnum\`, so a payment- or contact-us-shaped enum member cannot be
   fenced out on its own. Those members stay by design: \`apps/api\`'s notification
-  dispatcher keeps the matching builders and handlers, which compile against the core
+  event subscriber keeps the matching builders and handlers, which compile against the core
   event bus and simply never fire. What is fenced instead is the *link target* — a
   notification pointing at \`/settings/billing\` after that route is gone would be a real
   dead end.

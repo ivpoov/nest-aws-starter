@@ -244,8 +244,8 @@ one kind per folder, even for a single file:
 | `gateways/` | WebSocket gateways — transport concerns only (handshake auth, room joins, revalidation), no domain logic, no repository access (§11b) | `notification` |
 | `adapters/` | Transport adapters installed at bootstrap (e.g. the Redis-backed Socket.IO adapter and its disabled twin) (§11b) | `notification` |
 | `builders/` | Pure event-payload → persisted-content mappers — no I/O, no DI (§11a) | `notification` |
-| `listeners/` | `@OnDomainEvent` subscribers — contained handlers that never break the emitter (§11a) | `activity`, `user`, `suspicious-activity` |
-| `templates/` | Mail/render templates — pure functions returning content shapes | `auth`, `suspicious-activity`, `notification` |
+| `listeners/` | `@OnDomainEvent` subscribers — contained handlers that never break the emitter (§11a) | `activity`, `user`, `account-security` |
+| `templates/` | Mail/render templates — pure functions returning content shapes | `auth`, `account-security`, `notification` |
 | `helpers/` | Module-owned free functions needed outside DI (e.g. bootstrap wiring) | `notification` |
 
 Registered by exactly one line in `AppModule`. Feature modules never import other
@@ -466,7 +466,7 @@ always with a hard `limit` cap.
 `MAX_PAGE_SIZE` / `DEFAULT_PAGE_SIZE` (`@constants/pagination.constants.js`) are the
 `@Max` and the default on both pagination DTOs. A list whose wire contract is a plain
 array with no cursor — `/billing/plans`, `/sessions`, `/auth/methods`,
-`/admin/suspicious/lockouts` — still passes `take: MAX_PAGE_SIZE` in its repository:
+`/admin/account-security/lockouts` — still passes `take: MAX_PAGE_SIZE` in its repository:
 "the table is small today" is a property of the data, not of the query, and
 `/billing/plans` is public and unauthenticated. Never write a per-endpoint cap.
 
@@ -875,7 +875,7 @@ Cross-feature reactions (audit rows, notifications, digests) subscribe to the
 event bus with `@OnDomainEvent(EVENT_NAME)` — never by importing the emitting
 feature module. Event names are constants in the core `event` module; payloads
 are interfaces in the subscribing module. The reference implementation is
-`notification`'s `NotificationDispatcherService` (one subscriber per module: a
+`notification`'s `NotificationEventSubscriberService` (one subscriber per module: a
 thin event → content mapping that funnels every handler into one dispatch path);
 `ActivityListener.safeRecord` is the same pattern one size smaller.
 
@@ -1123,8 +1123,14 @@ authorization lives in exactly one place per resource, never half in each.
 imports: [CaslModule.forFeature({ permissions: notePermissions })],
 ```
 
-**Config** — Zod schema → inferred type → `registerAs` with `validateScheme` at the
-end; consumed via `configService.getOrThrow<XConfig>('x')`.
+**Config** — Zod schema → inferred type → `registerAs` returning
+`validateConfigSchema(configSchema, { … })`; consumed via
+`configService.getOrThrow<XConfig>('x')`. The validator returns the *parsed* value, so
+the factory never holds an unvalidated object: there is no separate `const config`
+to forget to check. The schema is always named `configSchema` — one file, one schema,
+so a qualifier would say nothing — and the exported type is a plain
+`z.infer<typeof configSchema>`: Zod already yields required keys, so wrapping it in
+`Required<>` claims a guarantee it is not adding.
 
 **Optional providers are enabled, never half-configured.** Every optional provider
 (S3, SQS, SNS, SES, Lambda, …) has an `<X>_ENABLED` flag, and its config is a Zod
@@ -1140,12 +1146,11 @@ first `sendMessage` explodes") is forbidden.
 
 ```typescript
 // src/configs/sqs.config.ts
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
-const scheme = z.discriminatedUnion('isEnabled', [
+const configSchema = z.discriminatedUnion('isEnabled', [
   z.object({ isEnabled: z.literal(false) }),
   z.object({
     isEnabled: z.literal(true),
@@ -1154,30 +1159,30 @@ const scheme = z.discriminatedUnion('isEnabled', [
   }),
 ]);
 
-export type SqsConfig = z.infer<typeof scheme>;
+export type SqsConfig = z.infer<typeof configSchema>;
 
 export const sqsConfig = registerAs('sqs', (): SqsConfig => {
   const isEnabled: boolean = process.env.SQS_ENABLED === 'true';
 
-  const config: SqsConfig = isEnabled
-    ? {
-        isEnabled: true,
-        region: process.env.AWS_REGION ?? '',
-        ...(process.env.AWS_ENDPOINT_URL && { endpoint: process.env.AWS_ENDPOINT_URL }),
-      }
-    : { isEnabled: false };
-
-  validateScheme(scheme, config, new Logger('SqsConfig'));
-
-  return config;
+  return validateConfigSchema(
+    configSchema,
+    isEnabled
+      ? {
+          isEnabled: true,
+          region: process.env.AWS_REGION ?? '',
+          ...(process.env.AWS_ENDPOINT_URL && { endpoint: process.env.AWS_ENDPOINT_URL }),
+        }
+      : { isEnabled: false },
+  );
 });
 ```
 
-Config files take Nest's plain `Logger`, not `CustomLoggerService` — they are evaluated
-at module-registration time, before DI exists. This is also the one file kind where an
-exported `type` sits next to its `registerAs` (§2): `SqsConfig` is inferred from the
-schema and inseparable from it. Zod 4 spells URL validation `z.url()`, not
-`z.string().url()`.
+Config factories log nothing. They are evaluated at module-registration time, before DI
+or any logger transport exists, so a bad value throws out of `ConfigModule.forRoot()`
+and Nest prints the boot failure with the Zod issue list attached — one report, not a
+log line plus a throw. This is also the one file kind where an exported `type` sits next
+to its `registerAs` (§2): `SqsConfig` is inferred from the schema and inseparable from
+it. Zod 4 spells URL validation `z.url()`, not `z.string().url()`.
 
 When a provider is disabled, its module binds a `Disabled<X>Provider` implementing
 the same contract — every method throws a coded 500 (`"SQS provider is disabled —
@@ -1190,12 +1195,11 @@ no discriminated union, just a flat schema with defaults:
 
 ```typescript
 // src/configs/app.config.ts
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
-const scheme = z.object({
+const configSchema = z.object({
   port: z.number(),
   env: z.enum(['development', 'test', 'production']),
   apiPrefix: z.string(),
@@ -1203,10 +1207,10 @@ const scheme = z.object({
   corsOrigins: z.array(z.url()),
 });
 
-export type AppConfig = Required<z.infer<typeof scheme>>;
+export type AppConfig = z.infer<typeof configSchema>;
 
 export const appConfig = registerAs('app', (): AppConfig => {
-  const config: AppConfig = {
+  return validateConfigSchema(configSchema, {
     port: Number(process.env.PORT ?? 3000),
     env: (process.env.NODE_ENV ?? 'development') as AppConfig['env'],
     apiPrefix: process.env.API_PREFIX ?? 'api',
@@ -1215,11 +1219,7 @@ export const appConfig = registerAs('app', (): AppConfig => {
       .split(',')
       .map((origin: string): string => origin.trim())
       .filter((origin: string): boolean => origin.length > 0),
-  };
-
-  validateScheme(scheme, config, new Logger('AppConfig'));
-
-  return config;
+  });
 });
 ```
 

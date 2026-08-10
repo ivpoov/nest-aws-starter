@@ -1,22 +1,17 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
-const scheme = z.object({
+const configSchema = z.object({
   url: z.string().min(1),
   isCluster: z.boolean(),
 });
 
-export type RedisConfig = Required<z.infer<typeof scheme>>;
+export type RedisConfig = z.infer<typeof configSchema>;
 
 export const redisConfig = registerAs('redis', (): RedisConfig => {
-  const config: RedisConfig = {
+  return validateConfigSchema(configSchema, {
     url: process.env.REDIS_URL ?? 'redis://localhost:6390',
     isCluster: process.env.REDIS_IS_CLUSTER === 'true',
-  };
-
-  validateScheme(scheme, config, new Logger('RedisConfig'));
-
-  return config;
+  });
 });

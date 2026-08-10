@@ -234,7 +234,7 @@ the profile ships without one, and the container refuses to boot until you
 export one:
 
 ```
-ERROR [ProductionGuardConfig] Refusing to boot with NODE_ENV=production:
+ERROR [ProductionBootGuard] Refusing to boot with NODE_ENV=production:
   - [PRODUCTION_WEAK_JWT_SECRET] AUTH_JWT_SECRET is 0 characters carrying at
     most ~0 bits of entropy, below the 256 bits (32 bytes) required — ...
 ```

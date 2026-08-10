@@ -170,7 +170,7 @@ describe('websocket notification gateway', () => {
     await waitForConnect(socket);
     await waitForRoomMember(ADMIN_ROOM);
 
-    // Filtered for the same reason notification-dispatcher.e2e-spec.ts's
+    // Filtered for the same reason notification-event-subscriber.e2e-spec.ts's
     // admin fan-out test is: this socket is in its own user room too, and
     // registerAdmin()'s second login produces a real NEW_DEVICE_LOGIN
     // notification that can land here first on a slow database.

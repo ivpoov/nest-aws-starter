@@ -70,7 +70,7 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
       where: {
         ...this.buildScopeWhere(filters, filters.audience),
         ...(filters.type && { type: filters.type }),
-        ...(filters.unreadOnly && this.buildUnreadWhere(filters.userId)),
+        ...(filters.unreadOnly && this.unreadFilter(filters.userId)),
         // Strictly older than the previous page's last id — UUIDv7 ids are
         // time-ordered, so `lt` under `id: 'desc'` is "the next page".
         ...(pagination.cursor && { id: { lt: pagination.cursor } }),
@@ -91,7 +91,7 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
     return this.prisma.notification.count({
       where: {
         ...this.buildScopeWhere(filters),
-        ...this.buildUnreadWhere(filters.userId),
+        ...this.unreadFilter(filters.userId),
       },
     });
   }
@@ -196,7 +196,7 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
   // Unread = the reader has no read receipt for the row yet, OR has one
   // whose readAt is still null. Works uniformly for USER rows (always have
   // an eager receipt) and ADMIN rows (may have none at all).
-  private buildUnreadWhere(readerId: string): Prisma.NotificationWhereInput {
+  private unreadFilter(readerId: string): Prisma.NotificationWhereInput {
     return {
       receipts: { none: { userId: readerId, readAt: { not: null } } },
     };

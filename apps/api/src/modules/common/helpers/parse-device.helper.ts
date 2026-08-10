@@ -15,7 +15,7 @@
 // new-device notification, once, the next time they sign in.
 //
 // Shared between SessionService (writes the fingerprint on session creation)
-// and suspicious-activity's new-device check (reads it back for comparison) —
+// and account-security's new-device check (reads it back for comparison) —
 // both sides must format the string identically or every login looks like a
 // new device.
 

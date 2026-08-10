@@ -22,10 +22,10 @@ same markers appear as `{/* <module:oauth-facebook> */}`. Delete the marked line
 and the markers themselves.
 
 - `apps/api/src/app.module.ts`
-  - line 17: `import { FacebookOauthModule } from '@modules/oauth-facebook/facebook-oauth.module.js'; // <module:oauth-facebook>`
+  - line 18: `import { FacebookOauthModule } from '@modules/oauth-facebook/facebook-oauth.module.js'; // <module:oauth-facebook>`
   - line 74: `FacebookOauthModule, // <module:oauth-facebook>`
 - `apps/api/src/configs/index.ts`
-  - line 6: `import { facebookOauthConfig } from '@configs/facebook-oauth.config.js'; // <module:oauth-facebook>`
+  - line 7: `import { facebookOauthConfig } from '@configs/facebook-oauth.config.js'; // <module:oauth-facebook>`
   - line 29: `facebookOauthConfig, // <module:oauth-facebook>`
 
 ### Not yet fence-marked (edit by hand)

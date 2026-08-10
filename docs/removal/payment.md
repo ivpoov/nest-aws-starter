@@ -75,13 +75,13 @@ same markers appear as `{/* <module:payment> */}`. Delete the marked lines/block
 and the markers themselves.
 
 - `apps/api/src/app.module.ts`
-  - line 19: `import { PaymentModule } from '@modules/payment/payment.module.js'; // <module:payment>`
-  - line 23: `import { StripeModule } from '@modules/stripe/stripe.module.js'; // <module:payment>`
+  - line 20: `import { PaymentModule } from '@modules/payment/payment.module.js'; // <module:payment>`
+  - line 24: `import { StripeModule } from '@modules/stripe/stripe.module.js'; // <module:payment>`
   - line 84: `PaymentModule, // <module:payment>`
   - line 85: `StripeModule, // <module:payment>`
 - `apps/api/src/configs/index.ts`
-  - line 10: `import { paymentConfig } from '@configs/payment.config.js'; // <module:payment>`
-  - line 17: `import { stripeConfig } from '@configs/stripe.config.js'; // <module:payment>`
+  - line 11: `import { paymentConfig } from '@configs/payment.config.js'; // <module:payment>`
+  - line 18: `import { stripeConfig } from '@configs/stripe.config.js'; // <module:payment>`
   - line 33: `paymentConfig, // <module:payment>`
   - line 39: `stripeConfig, // <module:payment>`
 - `apps/api/src/modules/common/constants/development-defaults.constants.ts`
@@ -173,24 +173,24 @@ and the markers themselves.
   - lines 29-41 (block)
   - lines 106-148 (block)
 - `packages/shared/src/index.ts`
-  - line 64: `export * from './payments/constants/payment-error-codes.constants.js'; // <module:payment>`
-  - line 65: `export * from './payments/enums/subscription-status.enum.js'; // <module:payment>`
-  - line 66: `export * from './payments/enums/transaction-status.enum.js'; // <module:payment>`
-  - line 67: `export * from './payments/interfaces/admin-plan-list-response.interface.js'; // <module:payment>`
-  - line 68: `export * from './payments/interfaces/admin-plan-response.interface.js'; // <module:payment>`
-  - line 69: `export * from './payments/interfaces/admin-transaction-list-response.interface.js'; // <module:payment>`
-  - line 70: `export * from './payments/interfaces/admin-transaction-response.interface.js'; // <module:payment>`
-  - line 71: `export * from './payments/interfaces/checkout-response.interface.js'; // <module:payment>`
-  - line 72: `export * from './payments/interfaces/create-checkout-request.interface.js'; // <module:payment>`
-  - line 73: `export * from './payments/interfaces/create-plan-request.interface.js'; // <module:payment>`
-  - line 74: `export * from './payments/interfaces/public-plan-response.interface.js'; // <module:payment>`
-  - line 75: `export * from './payments/interfaces/public-plans-response.interface.js'; // <module:payment>`
-  - line 76: `export * from './payments/interfaces/subscription-response.interface.js'; // <module:payment>`
-  - line 77: `export * from './payments/interfaces/transaction-list-response.interface.js'; // <module:payment>`
-  - line 78: `export * from './payments/interfaces/transaction-response.interface.js'; // <module:payment>`
-  - line 79: `export * from './payments/interfaces/update-plan-activation-request.interface.js'; // <module:payment>`
-  - line 80: `export * from './payments/interfaces/update-plan-request.interface.js'; // <module:payment>`
-  - line 81: `export * from './payments/types/payment-error-code.type.js'; // <module:payment>`
+  - line 70: `export * from './payments/constants/payment-error-codes.constants.js'; // <module:payment>`
+  - line 71: `export * from './payments/enums/subscription-status.enum.js'; // <module:payment>`
+  - line 72: `export * from './payments/enums/transaction-status.enum.js'; // <module:payment>`
+  - line 73: `export * from './payments/interfaces/admin-plan-list-response.interface.js'; // <module:payment>`
+  - line 74: `export * from './payments/interfaces/admin-plan-response.interface.js'; // <module:payment>`
+  - line 75: `export * from './payments/interfaces/admin-transaction-list-response.interface.js'; // <module:payment>`
+  - line 76: `export * from './payments/interfaces/admin-transaction-response.interface.js'; // <module:payment>`
+  - line 77: `export * from './payments/interfaces/checkout-response.interface.js'; // <module:payment>`
+  - line 78: `export * from './payments/interfaces/create-checkout-request.interface.js'; // <module:payment>`
+  - line 79: `export * from './payments/interfaces/create-plan-request.interface.js'; // <module:payment>`
+  - line 80: `export * from './payments/interfaces/public-plan-response.interface.js'; // <module:payment>`
+  - line 81: `export * from './payments/interfaces/public-plans-response.interface.js'; // <module:payment>`
+  - line 82: `export * from './payments/interfaces/subscription-response.interface.js'; // <module:payment>`
+  - line 83: `export * from './payments/interfaces/transaction-list-response.interface.js'; // <module:payment>`
+  - line 84: `export * from './payments/interfaces/transaction-response.interface.js'; // <module:payment>`
+  - line 85: `export * from './payments/interfaces/update-plan-activation-request.interface.js'; // <module:payment>`
+  - line 86: `export * from './payments/interfaces/update-plan-request.interface.js'; // <module:payment>`
+  - line 87: `export * from './payments/types/payment-error-code.type.js'; // <module:payment>`
 
 ### Not yet fence-marked (edit by hand)
 
@@ -208,7 +208,7 @@ _None — every cross-module reference for this module is fence-marked._
 The subtracted tree type-checks and passes its tests with these left in place —
 they are cosmetic leftovers, not build breaks:
 
-- `packages/shared/src/notifications/enums/notification-type.enum.ts` — the four payment notification types stay on purpose. apps/api's notification dispatcher keeps its payment builders and @OnDomainEvent handlers — they compile against the core event bus and simply never fire once nothing emits subscription.* — so the wire enum stays total, and apps/web's NOTIFICATION_TYPE_LABELS (a total Record over it) stays valid. The visible leftover is four rows in the preferences grid that can never be triggered; dropping them means dropping the enum members, the label lines, USER_NOTIFICATION_TYPES in apps/api and the dispatcher handlers together
+- `packages/shared/src/notifications/enums/notification-type.enum.ts` — the four payment notification types stay on purpose. apps/api's notification event subscriber keeps its payment builders and @OnDomainEvent handlers — they compile against the core event bus and simply never fire once nothing emits subscription.* — so the wire enum stays total, and apps/web's NOTIFICATION_TYPE_LABELS (a total Record over it) stays valid. The visible leftover is four rows in the preferences grid that can never be triggered; dropping them means dropping the enum members, the label lines, USER_NOTIFICATION_TYPES in apps/api and the event subscriber handlers together
 - `apps/admin/src/components/Statistics/KpiTiles.tsx` — no edit needed — it already renders a placeholder when revenue is null, and the revenue/mrrCents fields stay in the shared statistics contract as `number | null` for exactly this case
 
 ## 3. Drop `.env` variables

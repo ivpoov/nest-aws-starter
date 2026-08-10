@@ -1,7 +1,7 @@
 import { NotificationTypeEnum } from '@nest-aws-starter/shared';
 
-// Every USER-audience type the dispatcher emits (see
-// notification-dispatcher.service.ts's matrix) — the only types a
+// Every USER-audience type the event subscriber emits (see
+// notification-event-subscriber.service.ts's matrix) — the only types a
 // per-user preference can mean anything for. ADMIN-audience types
 // (USER_BLOCKED, SUSPICIOUS_LOGIN, CONTACT_MESSAGE, WEBHOOK_FAILED) have
 // no per-user recipient and are deliberately excluded from the matrix:

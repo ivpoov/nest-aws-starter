@@ -11,7 +11,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { MAIL_TRANSPORT } from '@providers/mail/constants/mail.constants.js';
 import type { MailTransportInterface } from '@providers/mail/interfaces/mail-transport.interface.js';
 
-// The EMAIL channel of the dispatcher's fan-out. Gated on three independent
+// The EMAIL channel of the event subscriber's fan-out. Gated on three independent
 // switches (backend.md §12's "optional providers are enabled, never
 // half-configured", §11a's "preferences gate channels, never persistence",
 // and the per-(user, type) hourly send window) — any one off means no send,

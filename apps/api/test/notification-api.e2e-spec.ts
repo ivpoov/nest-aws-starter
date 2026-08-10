@@ -26,9 +26,9 @@ interface NotificationBodyInterface {
 // History API (Task 4): GET /notifications (own, cursor, merged for admins),
 // GET /notifications/unread-count, PATCH /notifications/:id/read (idempotent),
 // POST /notifications/read-all. Rows are seeded directly via Prisma (matching
-// what the persist-first dispatcher itself writes) so each test controls
-// exactly what exists — the dispatcher's own persistence is already covered
-// by notification-dispatcher.e2e-spec.ts. The one dispatcher-driven flow here
+// what the persist-first event subscriber itself writes) so each test controls
+// exactly what exists — the event subscriber's own persistence is already covered
+// by notification-event-subscriber.e2e-spec.ts. The one subscriber-driven flow here
 // is the WS unread-count push, which only a real dispatch can exercise.
 describe('notification history API (e2e)', () => {
   let app: NestFastifyApplication;
@@ -53,7 +53,7 @@ describe('notification history API (e2e)', () => {
     return { id: authMethod?.userId ?? '', token: response.body.accessToken };
   }
 
-  // Same direct-promote-then-relogin pattern as notification-dispatcher.e2e-spec.ts.
+  // Same direct-promote-then-relogin pattern as notification-event-subscriber.e2e-spec.ts.
   async function registerAdmin(): Promise<{ id: string; token: string }> {
     const user = await registerUser();
 
@@ -622,7 +622,7 @@ describe('notification history API (e2e)', () => {
 
   // Room joins happen asynchronously in handleConnection, after the
   // client's own 'connect' fires — poll real room membership before
-  // emitting into it (same helper as notification-dispatcher.e2e-spec.ts).
+  // emitting into it (same helper as notification-event-subscriber.e2e-spec.ts).
   async function waitForRoomMember(room: string): Promise<void> {
     const deadline: number = Date.now() + 5_000;
 

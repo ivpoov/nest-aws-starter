@@ -1,5 +1,11 @@
 // The single source of truth for every shape that crosses HTTP between apps.
 // Zero runtime dependencies — interfaces, types and string enums only.
+
+export * from './account-security/constants/account-security-error-codes.constants.js';
+export * from './account-security/enums/lockout-scope.enum.js';
+export * from './account-security/interfaces/lockout-list-response.interface.js';
+export * from './account-security/interfaces/lockout-response.interface.js';
+export * from './account-security/types/account-security-error-code.type.js';
 export * from './activities/enums/activity-type.enum.js';
 export * from './activities/interfaces/activity-list-response.interface.js';
 export * from './activities/interfaces/activity-response.interface.js';
@@ -88,11 +94,6 @@ export * from './statistics/interfaces/statistics-revenue-by-plan.interface.js';
 export * from './statistics/interfaces/statistics-series-point.interface.js'; // <module:statistic>
 export * from './statistics/interfaces/statistics-series-response.interface.js'; // <module:statistic>
 export * from './statistics/interfaces/statistics-totals.interface.js'; // <module:statistic>
-export * from './suspicious-activity/constants/suspicious-activity-error-codes.constants.js';
-export * from './suspicious-activity/enums/lockout-scope.enum.js';
-export * from './suspicious-activity/interfaces/lockout-list-response.interface.js';
-export * from './suspicious-activity/interfaces/lockout-response.interface.js';
-export * from './suspicious-activity/types/suspicious-activity-error-code.type.js';
 export * from './users/constants/user-error-codes.constants.js';
 export * from './users/enums/auth-method-type.enum.js';
 export * from './users/enums/user-role.enum.js';

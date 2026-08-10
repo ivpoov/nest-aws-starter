@@ -1,6 +1,7 @@
 import { configs } from '@configs/index.js';
 import { JwtAuthGuard } from '@guards/jwt-auth.guard.js';
 import { ThrottlerBehindProxyGuard } from '@guards/throttler-behind-proxy.guard.js';
+import { AccountSecurityModule } from '@modules/account-security/account-security.module.js';
 import { ActivityModule } from '@modules/activity/activity.module.js';
 import { ApiKeyModule } from '@modules/api-key/api-key.module.js'; // <module:api-key>
 import { AuthModule } from '@modules/auth/auth.module.js';
@@ -21,7 +22,6 @@ import { PrismaModule } from '@modules/prisma/prisma.module.js';
 import { SessionModule } from '@modules/session/session.module.js';
 import { StatisticModule } from '@modules/statistic/statistic.module.js'; // <module:statistic>
 import { StripeModule } from '@modules/stripe/stripe.module.js'; // <module:payment>
-import { SuspiciousActivityModule } from '@modules/suspicious-activity/suspicious-activity.module.js';
 import { TaskSchedulerModule } from '@modules/task-scheduler/task-scheduler.module.js';
 import { TokenModule } from '@modules/token/token.module.js';
 import { UserModule } from '@modules/user/user.module.js';
@@ -77,7 +77,7 @@ import { SqsModule } from '@providers/sqs/sqs.module.js';
     FileModule, // <module:file>
     NotificationModule, // <module:notification>
     ActivityModule,
-    SuspiciousActivityModule,
+    AccountSecurityModule,
     StatisticModule, // <module:statistic>
     ContactUsModule, // <module:contact-us>
     ApiKeyModule, // <module:api-key>

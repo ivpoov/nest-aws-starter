@@ -1,9 +1,8 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
-const scheme = z.discriminatedUnion('isEnabled', [
+const configSchema = z.discriminatedUnion('isEnabled', [
   z.object({ isEnabled: z.literal(false) }),
   z.object({
     isEnabled: z.literal(true),
@@ -13,21 +12,20 @@ const scheme = z.discriminatedUnion('isEnabled', [
   }),
 ]);
 
-export type MailConfig = z.infer<typeof scheme>;
+export type MailConfig = z.infer<typeof configSchema>;
 
 export const mailConfig = registerAs('mail', (): MailConfig => {
   const isEnabled: boolean = process.env.MAIL_ENABLED === 'true';
 
-  const config: MailConfig = isEnabled
-    ? {
-        isEnabled: true,
-        region: process.env.AWS_REGION ?? '',
-        fromAddress: process.env.MAIL_FROM_ADDRESS ?? '',
-        ...(process.env.AWS_ENDPOINT_URL && { endpoint: process.env.AWS_ENDPOINT_URL }),
-      }
-    : { isEnabled: false };
-
-  validateScheme(scheme, config, new Logger('MailConfig'));
-
-  return config;
+  return validateConfigSchema(
+    configSchema,
+    isEnabled
+      ? {
+          isEnabled: true,
+          region: process.env.AWS_REGION ?? '',
+          fromAddress: process.env.MAIL_FROM_ADDRESS ?? '',
+          ...(process.env.AWS_ENDPOINT_URL && { endpoint: process.env.AWS_ENDPOINT_URL }),
+        }
+      : { isEnabled: false },
+  );
 });

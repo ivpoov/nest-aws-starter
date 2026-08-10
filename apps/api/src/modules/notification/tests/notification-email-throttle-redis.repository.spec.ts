@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 // concurrent claims for the same (user, type) must not both be able to
 // observe "no key yet" and both send. Real-Redis concurrency (10 parallel
 // claims -> exactly 1 winner) is proven in
-// test/notification-dispatcher.e2e-spec.ts; this spec pins the command shape
+// test/notification-event-subscriber.e2e-spec.ts; this spec pins the command shape
 // and the key namespace the e2e reads.
 describe('NotificationEmailThrottleRedisRepository', () => {
   function createRepository(setResult: string | null): {
