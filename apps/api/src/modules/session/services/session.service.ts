@@ -120,8 +120,15 @@ export class SessionService {
 
     if (!session || session.userId !== userId) throw new NotFoundError(SESSION_NOT_FOUND);
 
-    await this.sessionRepository.setActiveUntil(sessionId, new Date());
+    // Fail-safe ordering (§7a). The ALLOWLIST is what authorizes: verifyAccessToken
+    // checks Redis membership and never reads activeUntil, so this delete is the
+    // write that actually revokes and the row write below is bookkeeping. Delete
+    // first, and a crash between them leaves the token already dead with the row
+    // still saying active — restrictive, and repaired by the next revoke. The
+    // opposite order left both UIs saying "revoked" while the access token kept
+    // working for its full TTL. Do not reorder these two lines.
     await this.tokenRepository.deleteAllForSession(userId, sessionId);
+    await this.sessionRepository.setActiveUntil(sessionId, new Date());
     this.logger.log(`Session revoked: ${sessionId}`);
   }
 
@@ -139,9 +146,14 @@ export class SessionService {
   }
 
   public async revokeAllForUser(userId: string): Promise<number> {
+    // Fail-safe ordering (§7a), same reasoning as revokeSession: the allowlist
+    // sweep is the write that removes access, so it goes first. The row write
+    // stays second and still supplies the reported count — it counts the rows
+    // that were active when it ran, which is the number the caller reports.
+    await this.tokenRepository.deleteAllForUser(userId);
+
     const count: number = await this.sessionRepository.endAllByUserId(userId, new Date());
 
-    await this.tokenRepository.deleteAllForUser(userId);
     this.logger.log(`All sessions revoked for user ${userId}: ${count}`);
 
     return count;
@@ -219,8 +231,14 @@ export class SessionService {
     if (isAlive) {
       // Stolen-token tripwire: a signed refresh token that matches neither the
       // current nor the grace key while the session lives means reuse.
-      await this.sessionRepository.setActiveUntil(claims.sessionId, new Date());
+      //
+      // Fail-safe ordering (§7a), same reasoning as revokeSession: the allowlist
+      // delete is the write that actually revokes, so it goes first. This is the
+      // path where it matters most — the thief already holds a live access token,
+      // and the old order let a crash here leave that token usable for its whole
+      // TTL while the row and both UIs claimed the session was revoked.
       await this.tokenRepository.deleteAllForSession(claims.userId, claims.sessionId);
+      await this.sessionRepository.setActiveUntil(claims.sessionId, new Date());
       this.logger.warn(
         `AUTH_REFRESH_REUSED: refresh reuse detected for session ${claims.sessionId} — session revoked`,
       );
