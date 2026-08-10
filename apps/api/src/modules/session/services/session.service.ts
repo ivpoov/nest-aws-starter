@@ -1,5 +1,6 @@
 import { type AuthConfig, authConfig } from '@configs/auth.config.js';
 import { parseDevice } from '@helpers/parse-device.helper.js';
+import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
@@ -26,8 +27,10 @@ import type { RotationStateInterface } from '@modules/token/interfaces/rotation-
 import type { TokenPairInterface } from '@modules/token/interfaces/token-pair.interface.js';
 import type { TokenRepositoryInterface } from '@modules/token/interfaces/token-repository.interface.js';
 import { TokenService } from '@modules/token/services/token.service.js';
+import { USER_BLOCKED } from '@modules/user/constants/user-errors.constants.js';
 import type { UserInterface } from '@modules/user/interfaces/user.interface.js';
 import { UserService } from '@modules/user/services/user.service.js';
+import { UserStatusEnum } from '@nest-aws-starter/shared';
 import { Inject, Injectable } from '@nestjs/common';
 
 @Injectable()
@@ -166,11 +169,33 @@ export class SessionService {
     claims: RefreshTokenClaimsInterface,
     replay: RotationGracePairInterface,
   ): Promise<TokenPairInterface> {
+    // The same account gate rotate() applies. Without it the grace entry is a
+    // way for a blocked account to keep collecting fresh access tokens for the
+    // whole window — this path returns before rotate() is ever reached.
+    await this.assertAccountActive(claims.userId);
+
     return {
       accessToken: replay.accessToken,
       refreshToken: replay.refreshToken,
       expiresInSec: this.config.accessTtlSec,
     };
+  }
+
+  // Status, not just role, is re-read from the row on every refresh. The admin
+  // block path revokes the allowlist before flipping the status, so reaching
+  // here with a non-active account means that revoke never ran (partially
+  // applied block, direct database edit, a status added later). Finish the job
+  // through that very same revoke rather than a bespoke one.
+  private async assertAccountActive(userId: string): Promise<UserInterface> {
+    const user: UserInterface = await this.userService.findByIdOrThrow(userId);
+
+    if (user.status !== UserStatusEnum.ACTIVE) {
+      await this.revokeAllForUser(userId);
+
+      throw new ForbiddenError(USER_BLOCKED);
+    }
+
+    return user;
   }
 
   private async handleInvalidRefresh(claims: RefreshTokenClaimsInterface): Promise<never> {
@@ -199,7 +224,7 @@ export class SessionService {
     oldRefreshToken: string,
   ): Promise<TokenPairInterface> {
     const [user, session]: [UserInterface, SessionInterface | null] = await Promise.all([
-      this.userService.findByIdOrThrow(claims.userId),
+      this.assertAccountActive(claims.userId),
       this.sessionRepository.findById(claims.sessionId),
     ]);
 

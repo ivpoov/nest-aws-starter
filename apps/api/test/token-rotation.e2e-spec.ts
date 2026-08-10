@@ -216,6 +216,19 @@ describe('refresh token rotation under concurrency', () => {
     HTTP_RACE_TIMEOUT_MS,
   );
 
+  // The admin block path revokes the allowlist before flipping the status, so
+  // this drives the status flip on its own — the state a partially applied
+  // block, a direct database edit or a future non-active status would leave
+  // behind, and the one in which a blocked session used to renew forever.
+  it('refuses to rotate for an account that is no longer active', async () => {
+    const { email, pair } = await registerUserWithEmail();
+    const owner: UserWithMethodTypesInterface | null = await users.findByAuthEmail(email);
+
+    await users.updateStatus(owner?.id ?? '', UserStatusEnum.BLOCKED, randomUUID());
+
+    await expect(sessions.refresh(pair.refreshToken)).rejects.toSatisfy(isBlocked);
+  });
+
   // Keys written before the `{userId}` hash tag are unreachable by any lookup,
   // but a SCAN on the new pattern alone steps straight past them and leaves
   // them to idle out on their own 30-day TTL. Force-logout has to be total.
@@ -228,5 +241,34 @@ describe('refresh token rotation under concurrency', () => {
     await sessions.revokeAllForUser(owner?.id ?? '');
 
     await expect(redis.get(legacyKey)).resolves.toBeNull();
+  });
+
+  // The grace short-circuit returns before rotate() is ever reached, so the
+  // account gate has to live on that path too — otherwise a blocked user just
+  // presents the grace token and keeps collecting fresh access tokens for the
+  // whole grace window.
+  it('refuses the grace token too once the account is blocked', async () => {
+    const { email, pair } = await registerUserWithEmail();
+    const rotated: TokenPairInterface = await sessions.refresh(pair.refreshToken);
+    const owner: UserWithMethodTypesInterface | null = await users.findByAuthEmail(email);
+
+    // pair.refreshToken is now the grace key, rotated.refreshToken the current.
+    await users.updateStatus(owner?.id ?? '', UserStatusEnum.BLOCKED, randomUUID());
+
+    await expect(sessions.refresh(pair.refreshToken)).rejects.toSatisfy(isBlocked);
+    await expect(sessions.refresh(rotated.refreshToken)).rejects.toThrow(Error);
+  });
+
+  it('kills the blocked account allowlist instead of leaving it renewable', async () => {
+    const { email, pair } = await registerUserWithEmail();
+    const owner: UserWithMethodTypesInterface | null = await users.findByAuthEmail(email);
+
+    await users.updateStatus(owner?.id ?? '', UserStatusEnum.BLOCKED, randomUUID());
+    await expect(sessions.refresh(pair.refreshToken)).rejects.toThrow(ForbiddenError);
+
+    // Second attempt: the allowlist is gone, so it can never come back even if
+    // the account were unblocked again.
+    await users.updateStatus(owner?.id ?? '', UserStatusEnum.ACTIVE, randomUUID());
+    await expect(sessions.refresh(pair.refreshToken)).rejects.toThrow(UnauthorizedError);
   });
 });
