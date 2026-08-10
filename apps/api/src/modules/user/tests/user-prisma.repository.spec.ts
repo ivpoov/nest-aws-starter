@@ -1,6 +1,9 @@
 import { MAX_PAGE_SIZE } from '@constants/pagination.constants.js';
+import { AuthMethodType } from '@generated/prisma/enums.js';
 import type { PrismaService } from '@modules/prisma/services/prisma.service.js';
+import { UnlinkMethodResultEnum } from '@modules/user/enums/unlink-method-result.enum.js';
 import { UserPrismaRepository } from '@modules/user/repositories/user-prisma.repository.js';
+import { AuthMethodTypeEnum } from '@nest-aws-starter/shared';
 import { describe, expect, it, vi } from 'vitest';
 
 function createRepository(): {
@@ -106,5 +109,87 @@ describe('UserPrismaRepository.findManyForAdmin', () => {
       take: 20,
       orderBy: { id: 'desc' },
     });
+  });
+});
+
+interface GuardedDeleteSetupInterface {
+  readonly repository: UserPrismaRepository;
+  readonly authMethod: Record<string, ReturnType<typeof vi.fn>>;
+  readonly queryRawTyped: ReturnType<typeof vi.fn>;
+  readonly calls: string[];
+}
+
+// The transaction client is the same mock, so the order in which the guarded
+// delete touches it is observable.
+function createTransactionalRepository(
+  methods: { type: AuthMethodType }[],
+): GuardedDeleteSetupInterface {
+  const calls: string[] = [];
+  const authMethod: Record<string, ReturnType<typeof vi.fn>> = {
+    findMany: vi.fn().mockImplementation(async (): Promise<{ type: AuthMethodType }[]> => {
+      calls.push('findMany');
+
+      return methods;
+    }),
+    delete: vi.fn().mockImplementation(async (): Promise<null> => {
+      calls.push('delete');
+
+      return null;
+    }),
+  };
+  const queryRawTyped = vi.fn().mockImplementation(async (): Promise<unknown[]> => {
+    calls.push('lock');
+
+    return [];
+  });
+  const tx: Record<string, unknown> = { authMethod, $queryRawTyped: queryRawTyped };
+  const prisma: PrismaService = {
+    $transaction: async (fn: (client: unknown) => Promise<unknown>): Promise<unknown> => fn(tx),
+  } as unknown as PrismaService;
+
+  return { repository: new UserPrismaRepository(prisma), authMethod, queryRawTyped, calls };
+}
+
+describe('UserPrismaRepository.removeMethodUnlessLast', () => {
+  it('takes the user row lock before it counts the methods', async () => {
+    const { repository, calls } = createTransactionalRepository([
+      { type: AuthMethodType.EMAIL },
+      { type: AuthMethodType.GOOGLE },
+    ]);
+
+    await repository.removeMethodUnlessLast('user-1', AuthMethodTypeEnum.GOOGLE);
+
+    // Counting before locking is the race: the count would be stale by the
+    // time the delete runs.
+    expect(calls).toEqual(['lock', 'findMany', 'delete']);
+  });
+
+  it('refuses to delete the only remaining method', async () => {
+    const { repository, authMethod } = createTransactionalRepository([
+      { type: AuthMethodType.EMAIL },
+    ]);
+
+    const result: UnlinkMethodResultEnum = await repository.removeMethodUnlessLast(
+      'user-1',
+      AuthMethodTypeEnum.EMAIL,
+    );
+
+    expect(result).toBe(UnlinkMethodResultEnum.LAST_METHOD);
+    expect(authMethod.delete).not.toHaveBeenCalled();
+  });
+
+  it('reports a type the account does not have as not found', async () => {
+    const { repository, authMethod } = createTransactionalRepository([
+      { type: AuthMethodType.EMAIL },
+      { type: AuthMethodType.GOOGLE },
+    ]);
+
+    const result: UnlinkMethodResultEnum = await repository.removeMethodUnlessLast(
+      'user-1',
+      AuthMethodTypeEnum.DISCORD,
+    );
+
+    expect(result).toBe(UnlinkMethodResultEnum.NOT_FOUND);
+    expect(authMethod.delete).not.toHaveBeenCalled();
   });
 });
