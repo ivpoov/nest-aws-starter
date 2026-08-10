@@ -28,8 +28,8 @@ export class NotificationService {
   ) {}
 
   // The merged feed: own USER-audience rows, plus every ADMIN-audience row
-  // when the caller is an admin (task-4-brief.md's "admin gets merged
-  // USER+ADMIN feed" — one table, resolved by role, not two requests).
+  // when the caller is an admin — one merged USER+ADMIN feed from one table,
+  // resolved by role, not two requests.
   public async findMany(
     user: CurrentUserInterface,
     pagination: CursorPaginationInterface,
@@ -86,7 +86,7 @@ export class NotificationService {
   }
 
   // A USER row belongs to its userId; an ADMIN row is readable only by
-  // ADMIN role — task-4-brief.md's binding ownership rule, enforced here,
+  // ADMIN role — the binding ownership rule, enforced here,
   // not in CASL (which only gates the class-level action).
   private isVisible(notification: NotificationInterface, user: CurrentUserInterface): boolean {
     if (notification.audience === NotificationAudienceEnum.USER) {

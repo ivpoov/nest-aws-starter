@@ -4,7 +4,7 @@ import type { PlanInterface } from '@modules/payment/interfaces/plan.interface.j
 // reads its own key out of plan.providerRefs and has amountCents/currency
 // on hand for providers that build a one-off price instead of using a
 // pre-created one. Success/cancel return URLs are intentionally absent —
-// they are per-provider config (Stripe's own config module, PR 4), not a
+// they are per-provider config (Stripe's own config module), not a
 // per-call concern here.
 export interface CreateCheckoutDataInterface {
   readonly userId: string;

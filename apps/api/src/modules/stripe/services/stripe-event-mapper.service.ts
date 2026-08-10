@@ -6,7 +6,7 @@ import { TransactionStatusEnum } from '@nest-aws-starter/shared';
 import type Stripe from 'stripe';
 
 // Translates a verified Stripe webhook Event into the provider-neutral
-// ProviderEventInterface — the only shape the lifecycle service (PR 7) will
+// ProviderEventInterface — the only shape the lifecycle service will
 // ever see. Not a Nest provider — manually constructed by
 // StripePaymentProvider, same as that class itself. One private method per
 // event type keeps each mapping focused and independently testable against

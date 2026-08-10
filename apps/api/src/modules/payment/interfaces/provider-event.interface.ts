@@ -3,8 +3,8 @@ import type { CheckoutEventDataInterface } from '@modules/payment/interfaces/che
 import type { ProviderTransactionDataInterface } from '@modules/payment/interfaces/provider-transaction-data.interface.js';
 
 // The normalized shape every provider's verifyAndParseWebhook() must produce
-// — the lifecycle service (PR 7) only ever sees this, never a raw Stripe/etc
-// payload. checkoutData/canceledAtPeriodEnd added in PR 4 (Stripe): a
+// — the lifecycle service only ever sees this, never a raw Stripe/etc
+// payload. checkoutData/canceledAtPeriodEnd exist because a
 // CHECKOUT_COMPLETED event needs somewhere to carry the userId/planId/
 // customerRef the lifecycle service will persist, and SUBSCRIPTION_UPDATED
 // needs a minimal cancellation hint — both optional so providers that never

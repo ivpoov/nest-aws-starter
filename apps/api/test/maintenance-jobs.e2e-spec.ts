@@ -323,7 +323,7 @@ describe('maintenance jobs (real postgres/redis/localstack)', () => {
       expect(enqueued).not.toContain(tooRecent.id);
     });
 
-    it('re-enqueues a stale RECEIVED event whose ingest-time enqueue never landed (PR 5 TODO)', async () => {
+    it('re-enqueues a stale RECEIVED event whose ingest-time enqueue never landed', async () => {
       const staleReceived = await seedEvent({
         status: WebhookEventStatusEnum.RECEIVED,
         attempts: 0,

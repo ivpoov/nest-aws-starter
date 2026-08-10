@@ -9,7 +9,7 @@ import type { ScheduledJobInterface } from '@modules/task-scheduler/interfaces/s
 // registration factory, same idiom as SubscriptionExpiryJob. Hourly cron;
 // WebhookRetryService.sweep() owns both halves: FAILED events under the
 // attempts ceiling, and stale RECEIVED rows whose ingest-time enqueue never
-// landed (PR 5 TODO in WebhookIngestService.enqueue).
+// landed (the gap documented in WebhookIngestService.enqueue).
 export class WebhookRetryJob implements ScheduledJobInterface {
   public readonly name: string = 'webhook-retry';
   public readonly cronExpression: string = WEBHOOK_RETRY_CRON_EXPRESSION;

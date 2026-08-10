@@ -62,7 +62,7 @@ const webhookRetryJobRegistrationProvider: Provider = {
   },
 };
 
-// Global so provider modules (Stripe in PR 4, others later) can inject
+// Global so provider modules (Stripe, others later) can inject
 // PaymentProviderRegistryService with a single import line in AppModule —
 // mirrors OauthModule.
 @Global()

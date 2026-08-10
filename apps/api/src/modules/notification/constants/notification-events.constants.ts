@@ -3,7 +3,7 @@
 // to; an unauthorized/revoked socket is just disconnected, nothing is
 // emitted to it — see NotificationGateway.rejectHandshake).
 //
-// Reserved here, in the module that owns the transport, so PR 3's
+// Reserved here, in the module that owns the transport, so the
 // event subscriber sends `NOTIFICATION_EVENT` (payload =
 // `NotificationResponseInterface`) and `UNREAD_COUNT_EVENT` (payload =
 // `number`) without redefining the names itself.

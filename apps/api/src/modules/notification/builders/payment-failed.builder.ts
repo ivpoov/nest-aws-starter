@@ -1,7 +1,8 @@
 import type { NotificationContentInterface } from '@modules/notification/interfaces/notification-content.interface.js';
 import type { SubscriptionPastDuePayloadInterface } from '@modules/notification/interfaces/subscription-past-due-payload.interface.js';
 
-// subscription.past-due -> PAYMENT_FAILED (see the matrix in task-3-brief.md).
+// subscription.past-due -> PAYMENT_FAILED (see the matrix in
+// NotificationEventSubscriberService).
 export function buildPaymentFailedContent(
   payload: SubscriptionPastDuePayloadInterface,
 ): NotificationContentInterface {

@@ -4,7 +4,7 @@ import type { CreateSubscriptionResultInterface } from '@modules/payment/interfa
 import type { SubscriptionInterface } from '@modules/payment/interfaces/subscription.interface.js';
 import type { SubscriptionStatusEnum } from '@nest-aws-starter/shared';
 
-// PR 7 adds the write side — SubscriptionLifecycleService is the ONLY
+// On the write side, SubscriptionLifecycleService is the ONLY
 // caller of updateStatus/setCanceledAt/updatePeriodEnd; every other module
 // reaches subscriptions through BillingService/SubscriptionService instead.
 export interface SubscriptionRepositoryInterface {

@@ -22,7 +22,7 @@ export class WebhookEventDispatcherService {
 
   public async dispatch(event: WebhookEventInterface): Promise<void> {
     // The row's payload IS the normalized ProviderEventInterface persisted
-    // by WebhookIngestService (PR 5) — Date-typed fields survive the JSON
+    // by WebhookIngestService — Date-typed fields survive the JSON
     // round-trip as ISO strings, so every date read below goes through
     // `new Date(...)`, which safely accepts either shape.
     const payload = event.payload as unknown as ProviderEventInterface;

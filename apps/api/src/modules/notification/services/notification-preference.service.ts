@@ -45,8 +45,8 @@ export class NotificationPreferenceService {
   }
 
   // The full grid: IN_APP always enabled and non-editable, EMAIL resolved
-  // from the stored override or the default (task-5-brief.md: "returns the
-  // full matrix... merging stored rows over defaults").
+  // from the stored override or the default — the full matrix, merging
+  // stored rows over defaults.
   public async getMatrix(userId: string): Promise<NotificationPreferenceMatrixItemInterface[]> {
     const emailPreferences: EmailPreferenceMap = await this.loadEmailPreferences(userId);
 

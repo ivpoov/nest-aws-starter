@@ -11,8 +11,7 @@ import type { Server, ServerOptions } from 'socket.io';
 
 // Wires Socket.IO to Redis pub/sub so `server.to(room).emit(...)` fans out
 // across every API instance, not just the one that happens to hold the
-// recipient's live connection — required for multi-instance deployments
-// (Task 2 brief: "Socket.IO on the API (Redis adapter for multi-instance)").
+// recipient's live connection — required for multi-instance deployments.
 // Two duplicated ioredis connections are required by the adapter (one
 // publishes, one subscribes) — reusing REDIS_CLIENT itself for both roles
 // isn't possible because a client in subscriber mode can't issue other

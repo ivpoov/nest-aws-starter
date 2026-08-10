@@ -20,12 +20,12 @@ import {
 import { Inject, Injectable } from '@nestjs/common';
 
 // The event subscriber's fan-out orchestrator, extracted out of
-// NotificationEventSubscriberService (PR 5 code review) so a future channel
-// (e.g. PUSH) has one obvious place to add a step, rather than entangling
-// further with the event -> type mapping. Mechanical extraction: the three
-// channel steps and their independent containment are unchanged from PR 3/4/5
-// — only the constructor arguments moved (notificationRepository, gateway,
-// emailService instead of being reached through the event subscriber).
+// NotificationEventSubscriberService so a future channel (e.g. PUSH) has one
+// obvious place to add a step, rather than entangling further with the
+// event -> type mapping. The extraction was mechanical: the three channel
+// steps and their independent containment are unchanged — only the
+// constructor arguments moved (notificationRepository, gateway, emailService
+// instead of being reached through the event subscriber).
 @Injectable()
 export class NotificationFanOutService {
   private readonly logger = new CustomLoggerService(NotificationFanOutService.name);
@@ -91,8 +91,8 @@ export class NotificationFanOutService {
     }
   }
 
-  // USER-audience only: PR 3 deferred this push because it needs the
-  // read-side query PR 4 built (NotificationRepositoryInterface.countUnread).
+  // USER-audience only: this push needs the read-side query
+  // (NotificationRepositoryInterface.countUnread).
   // Scoped to the recipient's own USER-audience unread count, even if they
   // happen to hold the ADMIN role — a merged count would need a User lookup
   // this hot path doesn't otherwise need; GET /notifications/unread-count

@@ -1,6 +1,6 @@
 // Backs the Prisma Notification.type VarChar(60) column — the DB stores the
 // string value, this enum is the source of truth at the wire level. Members
-// cover the PR 3 dispatcher's initial event-to-notification matrix; new
+// cover the dispatcher's initial event-to-notification matrix; new
 // notification types extend this enum, they never invent an untyped string.
 export enum NotificationTypeEnum {
   NEW_DEVICE_LOGIN = 'NEW_DEVICE_LOGIN',

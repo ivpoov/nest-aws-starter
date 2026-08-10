@@ -19,7 +19,7 @@ export const NOTIFICATION_ACCESS_DENIED: ErrorArgsInterface = {
   details: 'This notification is not visible to you',
 };
 
-// IN_APP is always on (task-5-brief.md's binding rule) — a write that
+// IN_APP is always on (binding rule) — a write that
 // targets it is a coded rejection, never a silent ignore.
 export const NOTIFICATION_PREFERENCE_CHANNEL_IMMUTABLE: ErrorArgsInterface = {
   code: 'NOTIFICATION_PREFERENCE_CHANNEL_IMMUTABLE',
