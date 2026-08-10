@@ -225,6 +225,7 @@ covered in [`docs/guides/container.md`](docs/guides/container.md).
 apps/api/            # NestJS API — controller → service → repository, 25 modules
 apps/web/            # user app — Vite + React + Tailwind + Zustand
 apps/admin/          # admin panel — same stack, role-gated
+apps/docs/           # Astro + Starlight site that publishes docs/ — no prose of its own
 packages/shared/     # wire contracts shared by the API and both frontends
 infra/terraform/     # the AWS footprint, in two cost profiles
 lambdas/example/     # echo Lambda demonstrating the invoker pattern
@@ -347,6 +348,11 @@ gh workflow run deploy.yml -f sha=<earlier-commit-sha>
 | [`docs/removal/`](docs/removal/) | Generated per-module removal recipes, proven by CI. |
 | [`docs/benchmarks.md`](docs/benchmarks.md) | What was measured, on what, and why you should not quote it as capacity. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) | How work flows through branches and PRs · how to report a vulnerability. |
+| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | The standard everyone taking part is held to, and where to report a breach. |
+
+Every page above is also published as a site, built from these same files by
+[`apps/docs/`](apps/docs/) — see [The documentation site](CONTRIBUTING.md#the-documentation-site)
+if you want to build it locally.
 
 The `note` module is the living reference implementation of the backend
 conventions — read it alongside [`docs/conventions/backend.md`](docs/conventions/backend.md),

@@ -28,6 +28,8 @@ below is repeated there. Anything about running the project locally
 - Read the convention file for the workspace you are about to change (listed
   above). They are the law of this repository, and reviewers apply them
   literally.
+- Taking part here — issues, pull requests, discussions — means agreeing to the
+  [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## Branch model
 
@@ -190,6 +192,42 @@ on any diff, so forgetting this fails your PR rather than the next nightly run.
 See [`docs/removal/README.md`](./docs/removal/README.md) for what the recipes
 prove and what they only document.
 
+### The documentation site
+
+[`apps/docs/`](./apps/docs/) is an Astro + [Starlight](https://starlight.astro.build)
+workspace that publishes this repository's prose to
+<https://ivpoov.github.io/nest-aws-starter/>. It has **no content of its own**:
+it renders `docs/**`, `README.md`, `CONTRIBUTING.md` and `SECURITY.md` from
+where they already live, rewriting the relative file links that GitHub needs
+into the URLs the site needs. Edit the Markdown in place — never a copy under
+`apps/docs/`.
+
+```bash
+pnpm --dir apps/docs run dev          # local preview on http://localhost:4321
+pnpm --dir apps/docs run docs:build   # what CI runs
+```
+
+**Prerequisite: a Chrome or Chromium binary on your `PATH`.** The `mermaid`
+code blocks in [`docs/architecture.md`](./docs/architecture.md) are rendered to
+SVG *at build time* by `rehype-mermaid`, which drives a real browser through
+Playwright — Mermaid has to measure text to lay a diagram out. The build is
+configured with `launchOptions: { channel: 'chrome' }`, so it uses the Chrome
+already installed on the machine rather than downloading Playwright's own copy.
+GitHub's `ubuntu-latest` runners ship one, which is why
+[`docs.yml`](./.github/workflows/docs.yml) asserts it with
+`google-chrome --version` instead of installing browsers.
+
+Without Chrome the build fails at the first diagram. Either install it, or run
+`pnpm --dir apps/docs exec playwright install chromium` and drop the `channel`
+option locally.
+
+`docs:build` is deliberately **not** part of `pnpm run build` — the turbo task is
+named `docs:build`, not `build`, so launching a browser is not on the critical
+path of every API change. It is gated separately, on any pull request that
+touches `docs/**` or `apps/docs/**`. The build also **fails on a broken internal
+link**: `starlight-links-validator` proves every rewritten link still resolves,
+which is what stops a renamed doc from silently orphaning a reference.
+
 ## What CI gates
 
 Everything in [`.github/workflows/`](./.github/workflows). Three of them have
@@ -230,7 +268,7 @@ case where running the full script locally still matters.
 
 **[`docs.yml`](./.github/workflows/docs.yml)** — builds the documentation site
 when a pull request touches `docs/**` or `apps/docs/**`, and publishes it to
-GitHub Pages from `main`.
+GitHub Pages from `main`. See [The documentation site](#the-documentation-site).
 
 ## Definition of done
 
