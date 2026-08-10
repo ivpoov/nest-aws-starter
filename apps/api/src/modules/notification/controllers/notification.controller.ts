@@ -26,7 +26,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { StatusCodes } from 'http-status-codes';
 
-// Same endpoints serve both roles (task-4-brief.md): audience is resolved
+// Same endpoints serve both roles: audience is resolved
 // from the caller's role inside NotificationService, not by a separate
 // admin controller — an admin's GET /notifications returns their own
 // USER-audience rows merged with every ADMIN-audience row.

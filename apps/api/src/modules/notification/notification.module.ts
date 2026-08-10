@@ -19,19 +19,18 @@ import { Module } from '@nestjs/common';
 
 // TokenService is injected directly — TokenModule is @Global(), so no
 // import is needed here (same as JwtAuthGuard). NotificationEventSubscriberService
-// is the module's only @OnDomainEvent subscriber (PR 3) — it depends on
+// is the module's only @OnDomainEvent subscriber — it depends on
 // NotificationGateway directly (same module, no need for a contract) and on
-// the repository via its injection token. NotificationController (PR 4)
+// the repository via its injection token. NotificationController
 // serves both roles from one set of endpoints, resolved by
 // NotificationService against the caller's id/role. NotificationGateway
 // stays exported for the fan-out service and any future consumer that needs
 // `server`. UserModule is imported for NotificationEmailService's recipient
 // lookup — `user` is a core module (docs/removal/README.md), so this is a
 // core dependency, not a feature-to-feature import. CacheModule/MailModule
-// are @Global(), so CacheFactoryService/MAIL_TRANSPORT need no import here
-// (PR 5). NotificationFanOutService is the event subscriber's fan-out orchestrator
-// (IN_APP/unread-count/EMAIL), extracted out of the event subscriber itself in
-// PR 5 code review.
+// are @Global(), so CacheFactoryService/MAIL_TRANSPORT need no import here.
+// NotificationFanOutService is the event subscriber's fan-out orchestrator
+// (IN_APP/unread-count/EMAIL), extracted out of the event subscriber itself.
 @Module({
   imports: [CaslModule.forFeature({ permissions: notificationPermissions }), UserModule],
   controllers: [NotificationController, NotificationPreferenceController],

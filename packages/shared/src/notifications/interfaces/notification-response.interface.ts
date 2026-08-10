@@ -1,7 +1,7 @@
 import type { NotificationAudienceEnum } from '../enums/notification-audience.enum.js';
 import type { NotificationTypeEnum } from '../enums/notification-type.enum.js';
 
-// Wire shape for both the WS `notification` event payload and the PR 4
+// Wire shape for both the WS `notification` event payload and the
 // history API response — denormalized (title/body/meta), no join back to
 // whichever feature table triggered it (subtraction-safe). `readAt` is the
 // caller's own read receipt for this row (always null on the WS push — a

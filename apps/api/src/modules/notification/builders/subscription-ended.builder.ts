@@ -3,7 +3,7 @@ import type { SubscriptionEndedReasonType } from '@modules/notification/types/su
 
 // Backs both subscription.canceled and subscription.expired — same
 // NotificationTypeEnum.SUBSCRIPTION_ENDED member (see the matrix in
-// task-3-brief.md).
+// NotificationEventSubscriberService).
 export function buildSubscriptionEndedContent(
   subscriptionId: string,
   reason: SubscriptionEndedReasonType,

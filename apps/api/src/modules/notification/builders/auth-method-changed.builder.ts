@@ -4,7 +4,7 @@ import type { AuthMethodTypeEnum } from '@nest-aws-starter/shared';
 
 // Backs both auth.method-linked and auth.method-unlinked — same
 // NotificationTypeEnum.AUTH_METHOD_CHANGED member, distinguished only by
-// which event fired (see the matrix in task-3-brief.md).
+// which event fired (see the matrix in NotificationEventSubscriberService).
 export function buildAuthMethodChangedContent(
   methodType: AuthMethodTypeEnum,
   action: AuthMethodChangeActionType,
