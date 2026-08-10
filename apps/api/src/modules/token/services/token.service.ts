@@ -62,9 +62,13 @@ export class TokenService {
     const payload: JWTPayload = await this.verify(token);
     const userId: string = payload.sub ?? '';
     const sessionId: string = String(payload.sessionId ?? '');
-    const stored: string | null = await this.tokenRepository.getAccessToken(userId, sessionId);
+    const isAllowlisted: boolean = await this.tokenRepository.matchesAccessToken(
+      userId,
+      sessionId,
+      token,
+    );
 
-    if (stored !== token) throw new UnauthorizedError(AUTH_TOKEN_INVALID);
+    if (!isAllowlisted) throw new UnauthorizedError(AUTH_TOKEN_INVALID);
 
     const actAsBy: string | undefined =
       typeof payload.actAsBy === 'string' ? payload.actAsBy : undefined;

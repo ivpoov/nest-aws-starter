@@ -48,10 +48,10 @@ and the markers themselves.
   - line 42: `let s3: S3ProviderInterface; // <module:file>`
   - line 48: `await ensureBucket(); // <module:file>`
   - line 51: `s3 = app.get<S3ProviderInterface>(S3_PROVIDER); // <module:file>`
-  - lines 144-247 (block)
+  - lines 129-232 (block)
 - `apps/api/prisma/schema.prisma`
   - line 42: `files                   File[] // <module:file>`
-  - lines 192-226 (block)
+  - lines 208-242 (block)
 - `apps/web/src/pages/NotesPage.tsx`
   - line 2: `FileIntentEnum, // <module:file>`
   - line 8: `import { AttachmentsCard } from '../components/Attachments/AttachmentsCard'; // <module:file>`

@@ -115,10 +115,22 @@ export class StatisticService {
     return [this.sumRevenueCents(revenueByDay), mrrCents, revenueByPlan];
   }
 
+  // Summed as bigint, then clamped once — not reduced with `+`. Each bucket
+  // arrives already clamped to Number.MAX_SAFE_INTEGER by the repository, so
+  // thirty of them can exceed it between them, and a plain JS sum past 2^53
+  // stops landing on the integer it should: the total would be neither exact
+  // nor bounded, which is the one thing a money figure may not be. bigint
+  // makes the addition exact and the clamp explicit.
   private sumRevenueCents(points: StatisticsDayPointInterface[]): number {
-    return points.reduce((total: number, point: StatisticsDayPointInterface): number => {
-      return total + point.count;
-    }, 0);
+    const ceiling: bigint = BigInt(Number.MAX_SAFE_INTEGER);
+    let total: bigint = 0n;
+
+    for (const point of points) total += BigInt(point.count);
+
+    if (total > ceiling) return Number.MAX_SAFE_INTEGER;
+    if (total < -ceiling) return -Number.MAX_SAFE_INTEGER;
+
+    return Number(total);
   }
   // </module:payment>
 

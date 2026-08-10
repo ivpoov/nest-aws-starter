@@ -49,6 +49,13 @@ model User {
 
   @@index([role, status])
   @@index([createdAt])
+  // Trigram index for the admin search's `ILIKE '%term%'`. A btree cannot
+  // serve a leading wildcard at all, so the search used to seq-scan every
+  // user row on every keystroke. Writes to this table are rare (registration,
+  // the occasional profile edit), which is what makes a GIN index the right
+  // place to spend write throughput. Patterns shorter than three characters
+  // yield no trigrams and still fall back to a scan — see AdminUsersQueryDto.
+  @@index([displayName(ops: raw("gin_trgm_ops"))], type: Gin, map: "users_displayName_trgm_idx")
   @@map("users")
 }
 
@@ -69,12 +76,16 @@ model AuthMethod {
   @@unique([type, email]) // conflict rule backbone (EMAIL row per address)
   @@index([email])
   @@index([userId])
+  // Same reasoning as users.displayName: the admin search matches emails by
+  // substring, which the btree on `email` above cannot serve.
+  @@index([email(ops: raw("gin_trgm_ops"))], type: Gin, map: "auth_methods_email_trgm_idx")
   @@map("auth_methods")
 }
 
 // Metadata only — powers the sessions pages. No token material lives in
-// Postgres, ever: all tokens are TTL'd Redis allowlist keys (see token module);
-// a session is alive iff its Redis refresh key exists.
+// Postgres, ever: the allowlist is a set of TTL'd Redis keys holding SHA-256
+// digests of the tokens, never the tokens (see token module); a session is
+// alive iff its Redis refresh key exists.
 model Session {
   id              String   @id @default(uuid(7))
   userId          String
@@ -161,6 +172,11 @@ model Activity {
   @@index([userId, id])
   @@index([type, id])
   @@index([type, createdAt])
+  // Backs the admin list's date-range filter on its own. Without it a
+  // dateFrom/dateTo query with no type or user walks the primary key
+  // backwards across the whole table to fill one page, and this is the
+  // fastest-growing table in the app.
+  @@index([createdAt, id])
   @@map("activities")
 }
 
@@ -289,6 +305,17 @@ model Plan {
   @@map("plans")
 }
 
+// Financial records outlive the account they belong to. The same retention
+// reasoning the Activity audit trail already documents applies here with more
+// force: a subscription and its charges are what a chargeback, a tax audit or
+// a revenue reconciliation is argued from, and `onDelete: Cascade` quietly
+// destroyed all of it the first time anyone deleted a user row. The relations
+// below are Restrict instead, so Postgres refuses the delete rather than
+// silently erasing the money trail. There is deliberately no user-erasure
+// endpoint in this starter (users are BLOCKED, never deleted); whoever adds
+// one must decide explicitly what happens here — the intended shape is to
+// anonymize the payment rows (drop the FK, keep amounts, dates and provider
+// refs) and only then delete the user, never to cascade.
 model Subscription {
   id                  String               @id @default(uuid(7))
   userId              String
@@ -301,13 +328,16 @@ model Subscription {
   canceledAt          DateTime?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
-  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
   plan                Plan                 @relation(fields: [planId], references: [id])
   transactions        PaymentTransaction[]
 
   @@unique([provider, providerRef])
   @@index([userId, status])
   @@index([status, currentPeriodEndsAt]) // expiry sweep
+  // Foreign key with no index of its own: every plan delete had to seq-scan
+  // subscriptions to prove no row referenced it, holding a lock while it did.
+  @@index([planId])
   @@map("subscriptions")
 }
 
@@ -321,12 +351,21 @@ model PaymentTransaction {
   provider       String            @db.VarChar(30)
   providerRef    String            @db.VarChar(255) // payment_intent / charge id
   createdAt      DateTime          @default(now())
-  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Restrict, for the retention reasons documented on Subscription above.
+  user           User              @relation(fields: [userId], references: [id], onDelete: Restrict)
   subscription   Subscription?     @relation(fields: [subscriptionId], references: [id])
 
   @@unique([provider, providerRef])
   @@index([userId, id])
   @@index([status, createdAt]) // revenue TypedSQL
+  // Same keyset shape the admin list actually pages by: filter on status,
+  // order by id desc. [status, createdAt] serves the revenue queries but
+  // cannot supply that ordering, so the list read every matching row and
+  // sorted them to return twenty.
+  @@index([status, id])
+  // Foreign key with no index of its own: deleting a subscription nulls this
+  // column on its transactions, which meant a seq scan per delete.
+  @@index([subscriptionId])
   @@map("payment_transactions")
 }
 

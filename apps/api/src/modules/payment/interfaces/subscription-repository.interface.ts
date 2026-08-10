@@ -35,5 +35,5 @@ export interface SubscriptionRepositoryInterface {
   // status IN (ACTIVE, PAST_DUE) AND currentPeriodEndsAt < cutoff — the
   // expiry job's sweep query; cutoff already has the grace period baked in
   // by the caller.
-  findOverdue(cutoff: Date): Promise<SubscriptionInterface[]>;
+  findOverdue(cutoff: Date, limit: number): Promise<SubscriptionInterface[]>;
 }
