@@ -101,6 +101,17 @@ the sense of [ADR 1](./0001-contracts-over-implementations.md).
   and, in cluster mode, runs it per master node and deletes keys one at a time (multi-key
   `DEL` is `CROSSSLOT`). It is fine at this cardinality and would not be at a much larger one.
 
+  **That per-master walk is a property of this repository, not of the codebase.** It was
+  taken as read that every key walk had it, and it was not true: the lockout listing in
+  `account-security` walked keys with a bare `SCAN` on the shared client until v1.0, which
+  on a cluster reads one arbitrary master and returns a partial or empty admin list — no
+  error, no log line. The rule that generalizes it now lives in
+  [`docs/conventions/backend.md` §10c](../conventions/backend.md), because "the token
+  repository does it correctly" is not a convention. Nothing about cluster mode was
+  exercised before then: CI never set `REDIS_IS_CLUSTER=true` and the `cluster` compose
+  profile had never been started, so both the walk and the `CROSSSLOT` release it masked
+  survived to a tagged release.
+
 **Upgrade step — already spent, delete on sight**
 
 The release that introduced digests shipped a compatibility shim,
