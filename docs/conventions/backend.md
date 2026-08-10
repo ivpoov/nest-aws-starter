@@ -51,8 +51,10 @@ Controller  →  Service  →  RepositoryInterface  ←implements←  PrismaRepo
   event) — never the repository.
 - The generated Prisma client (`@generated/prisma/client.js`, `.../models.js`,
   `.../enums.js`, `.../sql.js`) may be imported only inside `*-prisma.repository.ts`
-  files, their unit specs, and Prisma infrastructure (`PrismaService`). Anywhere else
-  it is a review rejection — no lint rule encodes this one.
+  files, their unit specs, and the `prisma` module itself — the persistence adapter,
+  which today is `PrismaService`, `PrismaUnitOfWorkService` and
+  `prisma-transaction-registry.helper.ts` (§7a). Anywhere else it is a review rejection
+  — no lint rule encodes this one.
 - Repository methods accept scalars/domain inputs and return domain interfaces —
   never ORM models, never ORM generics, never query fragments.
 - Repositories expose named, intention-revealing methods (`findActiveByUserId`), not
@@ -587,7 +589,11 @@ A transaction is **not** required, and should not be added, when:
 
 ### How a repository accepts a transaction
 
-Every write method takes an **optional, opaque** `tx` as its last parameter:
+A write method that needs to participate in a unit of work takes an **optional, opaque** `tx` as
+its last parameter. This is adopted per method, not repo-wide: today 6 of ~38 write methods carry
+one, because only those six have a caller that composes. Adding it is a non-breaking change — the
+parameter is optional and last, so every existing call site keeps autocommitting — so add it when
+a composing caller appears, not pre-emptively.
 
 ```typescript
 // interfaces/subscription-repository.interface.ts
@@ -602,10 +608,19 @@ setCanceledAt(
 
 `TransactionContextInterface` lives in `common` and declares exactly one readable
 field, `id`, for logs. It names no database, no driver and no Prisma type — so adding
-it to a contract does not weaken §1. The persistence adapter attaches the live client
-under a `unique symbol` the interface does not declare, which is why a service holding
-one **cannot** reach the client: the property does not exist in the type it holds, and
-the symbol is not importable without reaching into the Prisma zone.
+it to a contract does not weaken §1.
+
+The handle is a **frozen `{ id }` and nothing else**: the live client is held in a
+`WeakMap` keyed on the context's identity, private to
+`prisma-transaction-registry.helper.ts`. Nothing hangs off the object, so no reflection
+route reaches the client — not `Object.getOwnPropertySymbols`, not `Reflect.ownKeys` —
+and, the case that would actually bite, `{...tx}` or `Object.assign` into a log line, an
+event payload or a DTO **copies no client**. A copy is a different identity, so it is not
+in the map and `resolvePrismaClient` rejects it rather than silently autocommitting. A
+property on the context — even under a `unique symbol` — would fail every one of those:
+symbols are enumerable by reflection and are copied by spread. The specs in
+`prisma-unit-of-work.service.spec.ts` assert each route explicitly, so the claim in this
+paragraph is executable rather than aspirational.
 
 The implementation resolves it in one line and uses the result for every statement:
 
@@ -667,10 +682,13 @@ this.eventBus.emit(SUBSCRIPTION_CANCELED_EVENT, { userId, subscriptionId: id });
 ```
 
 `UNIT_OF_WORK` and `UnitOfWorkInterface` live in `common`; `PrismaUnitOfWorkService`
-implements them in the (global) `prisma` module. A service's type universe therefore
-still contains zero Prisma: deleting Prisma from the repo would not touch a single
-service file, and a `NoteMongooseRepository` family would ship its own unit-of-work
-implementation bound to the same token.
+implements them in the (global) `prisma` module. A *feature* service's type universe
+therefore still contains zero Prisma: swapping the store rewrites the `prisma` module —
+`PrismaService`, `PrismaUnitOfWorkService`, the registry helper and the
+`*-prisma.repository.ts` files, which are the persistence adapter and are *supposed* to
+name Prisma — plus one binding per token, and touches no feature service. A
+`NoteMongooseRepository` family ships its own unit-of-work implementation bound to the
+same token.
 
 Binding rules for the body of `run`:
 
@@ -683,7 +701,10 @@ Binding rules for the body of `run`:
 - **Never nest `run`.** A nested call would open a second, independent transaction on
   another connection that cannot see the first one's uncommitted rows, and can
   deadlock against it. A method that may run inside someone else's unit takes `tx?`
-  and passes it as `run`'s second argument, which joins instead of nesting.
+  and passes it as `run`'s second argument, which joins instead of nesting. No path
+  needs this yet — every current unit is opened and closed inside one service method —
+  so `run`'s `parent` exists as the sanctioned answer to the nesting hazard, covered by
+  spec, and is deliberately kept rather than left for the first composer to reinvent.
 - **Let it throw.** Do not catch inside the callback to "clean up": the throw *is* the
   rollback. Catch outside `run` if the caller needs to react.
 
@@ -1437,7 +1458,7 @@ No module merges untested; tests land in the same commit series.
 | Loose `*.controller.ts`/`*.service.ts` at module root | Dedicated folder per artifact kind, even for a single file (`controllers/`, `services/`, `repositories/`, `constants/`) |
 | Service depending on a concrete repository class | Contract interface via injection token |
 | Module exporting a repository | Export the service; others ask the service |
-| `@generated/prisma/*` outside `*-prisma.repository.ts` | New named contract method |
+| `@generated/prisma/*` outside `*-prisma.repository.ts` or the `prisma` module | New named contract method |
 | Repository returning an ORM model or response DTO | `toDomain()` → domain interface |
 | Business logic in a controller (pre-checks, casts) | Service method (`deleteById` owns the 404) |
 | `type` for an object shape | `interface` in `interfaces/` |

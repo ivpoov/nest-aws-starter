@@ -28,6 +28,11 @@ export class UserAdminService {
     // the status write below fails after a successful revoke, the user is
     // left logged out but still ACTIVE — the safe direction, since it never
     // leaves a BLOCKED user with live sessions.
+    //
+    // Session rows are Postgres, so the revoke's row write and the status write
+    // could be one unit of work (§7a) once SessionService accepts a `tx`; the
+    // token allowlist the revoke also clears is Redis and never can be. Until
+    // then the ordering is the whole guarantee.
     if (status === UserStatusEnum.BLOCKED) {
       this.userService.assertNotSelfBlock(id, adminId);
       await this.sessionService.revokeAllForUser(id);
