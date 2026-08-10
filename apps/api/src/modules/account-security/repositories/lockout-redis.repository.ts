@@ -28,10 +28,15 @@ export class LockoutRedisRepository implements LockoutRepositoryInterface {
   //
   // As two separate commands, a failure between them left the counter with NO
   // TTL, and the old `count === 1` guard meant no later increment ever re-armed
-  // it: the key became immortal and parked that email/IP one attempt below the
-  // lockout threshold forever. `EXPIRE ... NX` (Redis >= 7) arms the window only
-  // when the key has none, so a replay never pushes a live window out — the same
-  // reason `lock()` below uses SET NX.
+  // it. The counter then climbed forever, so once it passed the threshold EVERY
+  // subsequent failed login re-locked the moment the previous lock's TTL
+  // lapsed: a permanent self-inflicted lockout of that email or IP, escapable
+  // only by a successful login (which the lock prevents) or an admin `release`.
+  //
+  // `EXPIRE ... NX` (Redis >= 7) arms the window only when the key has none, so
+  // a replay never pushes a live window out — the same reason `lock()` below
+  // uses SET NX. Legacy immortal keys self-heal: their next increment finds no
+  // TTL and arms one.
   public async incrementFailedAttempts(scope: LockoutScopeEnum, value: string): Promise<number> {
     const key: string = this.counterKey(scope, value);
     const results: [Error | null, unknown][] | null = await this.redis

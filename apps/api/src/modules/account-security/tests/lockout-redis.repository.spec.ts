@@ -60,8 +60,9 @@ function createMultiRepository(execResult: [Error | null, unknown][] | null): {
 describe('LockoutRedisRepository.incrementFailedAttempts', () => {
   // The counter and its TTL must be queued as ONE unit. As two round trips a
   // failure in between left a counter with no expiry, and the old
-  // `count === 1` guard meant nothing ever re-armed it — an immortal key
-  // parked that identity one attempt below the lockout threshold forever.
+  // `count === 1` guard meant nothing ever re-armed it — the count then climbed
+  // forever, re-locking that email or IP on every failed login once past the
+  // threshold: a permanent self-inflicted lockout.
   it('queues the increment and the expiry in a single MULTI', async () => {
     const { repository, multi } = createMultiRepository([
       [null, 3],
