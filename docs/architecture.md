@@ -40,9 +40,11 @@ in three flavours:
   service.
 - **Core modules** — user, token, session, auth, oauth, activity, account-security, casl,
   health, event, task-scheduler. Removing any of these is not a supported operation.
-- **Optional modules** — note, file, contact-us, api-key, statistic, notification, payment,
-  the three OAuth providers, Stripe, CloudFront. Each is fenced with `// <module:x>` markers
-  and has a generated removal recipe. See
+- **Optional modules** — the eleven ids in [`docs/removal/`](./removal/): note, file,
+  contact-us, api-key, statistic, notification, payment, the three OAuth providers, and
+  cloudfront. Each is fenced with `// <module:x>` markers and has a generated removal recipe.
+  `modules/stripe` is not among them: it is the payment module's provider and comes out
+  *with* `payment`, which is why there is no `stripe` recipe. See
   [ADR 8](./decisions/0008-modular-by-subtraction.md).
 
 ### Module dependency graph

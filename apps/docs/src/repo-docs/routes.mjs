@@ -32,6 +32,7 @@ export const SITE = {
 const ROOT_PAGES = [
   ['README.md', 'index'],
   ['CONTRIBUTING.md', 'contributing'],
+  ['CODE_OF_CONDUCT.md', 'code-of-conduct'],
   ['SECURITY.md', 'security'],
 ];
 

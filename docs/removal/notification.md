@@ -141,11 +141,9 @@ and the markers themselves.
 ### Not yet fence-marked (edit by hand)
 
 These references are **not** fenced, so `scripts/subtraction-test.mjs` neither strips
-them nor proves they were handled. Any `packages/shared/src/*` folder marked "delete by
-hand" in section 1 belongs here too: the script leaves it in place because
-`packages/shared/src/index.ts` re-exports it through unfenced `export *` lines, so
-deleting the folder on its own would break `build shared`. Delete the folder and those
-export lines together. Work through the list by hand:
+them nor proves they were handled. Every one of them is a hole in the proof: the
+subtracted tree was type-checked and unit-tested *without* these edits applied, so it is
+on you to make them and to re-run the suites afterwards. Work through the list by hand:
 
 - `apps/api/test/vitest.e2e.config.ts` — the WEBSOCKET_* env pins
 - `turbo.json` — the WEBSOCKET_* entries in the test:e2e env allowlist

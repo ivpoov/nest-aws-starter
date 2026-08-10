@@ -128,6 +128,7 @@ export function repoDocsLoader() {
         path.join(REPO_ROOT, 'docs'),
         path.join(REPO_ROOT, 'README.md'),
         path.join(REPO_ROOT, 'CONTRIBUTING.md'),
+        path.join(REPO_ROOT, 'CODE_OF_CONDUCT.md'),
         path.join(REPO_ROOT, 'SECURITY.md'),
       ]);
       for (const event of ['add', 'change', 'unlink']) {

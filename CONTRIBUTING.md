@@ -28,6 +28,8 @@ below is repeated there. Anything about running the project locally
 - Read the convention file for the workspace you are about to change (listed
   above). They are the law of this repository, and reviewers apply them
   literally.
+- Taking part here — issues, pull requests, discussions — means agreeing to the
+  [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## Branch model
 
@@ -109,8 +111,11 @@ are review-enforced, and two of them are about you rather than the code:
 - **Tests ship with the code**, in the same PR — not a follow-up. Every module
   ships unit *and* e2e tests.
 - **Docs ship with the behaviour.** If you changed an env var, an endpoint or a
-  fence marker, the README, `docs/conventions/` or the regenerated
-  `docs/removal/` recipes change in the same PR.
+  *fence marker* — the `// <module:x>` comment that marks a line or block as
+  belonging to an optional module, so removing the module can delete it
+  mechanically ([the subtraction test](#the-subtraction-test) below) — the
+  README, `docs/conventions/` or the regenerated `docs/removal/` recipes change
+  in the same PR.
 
 Title the PR the same way you title a commit — `feat(api): per-type
 notification preferences with email channel` is a real one.
@@ -182,35 +187,99 @@ node scripts/subtraction-test.mjs --emit-docs       # regenerate docs/removal/*.
 ```
 
 **If you add, remove or move a cross-module reference, re-run `--emit-docs` and
-commit the result.** CI regenerates the recipes and fails on any diff. See
-[`docs/removal/README.md`](./docs/removal/README.md) for what the recipes prove
-and what they only document.
+commit the result.** CI regenerates the recipes on every pull request and fails
+on any diff, so forgetting this fails your PR rather than the next nightly run.
+See [`docs/removal/README.md`](./docs/removal/README.md) for what the recipes
+prove and what they only document.
+
+### The documentation site
+
+[`apps/docs/`](./apps/docs/) is an Astro + [Starlight](https://starlight.astro.build)
+workspace that publishes this repository's prose to
+<https://ivpoov.github.io/nest-aws-starter/>. It has **no content of its own**:
+it renders `docs/**`, `README.md`, `CONTRIBUTING.md` and `SECURITY.md` from
+where they already live, rewriting the relative file links that GitHub needs
+into the URLs the site needs. Edit the Markdown in place — never a copy under
+`apps/docs/`.
+
+```bash
+pnpm --dir apps/docs run dev          # local preview on http://localhost:4321
+pnpm --dir apps/docs run docs:build   # what CI runs
+```
+
+**Prerequisite: a Chrome or Chromium binary on your `PATH`.** The `mermaid`
+code blocks in [`docs/architecture.md`](./docs/architecture.md) are rendered to
+SVG *at build time* by `rehype-mermaid`, which drives a real browser through
+Playwright — Mermaid has to measure text to lay a diagram out. The build is
+configured with `launchOptions: { channel: 'chrome' }`, so it uses the Chrome
+already installed on the machine rather than downloading Playwright's own copy.
+GitHub's `ubuntu-latest` runners ship one, which is why
+[`docs.yml`](./.github/workflows/docs.yml) asserts it with
+`google-chrome --version` instead of installing browsers.
+
+Without Chrome the build fails at the first diagram. Either install it, or run
+`pnpm --dir apps/docs exec playwright install chromium` and drop the `channel`
+option locally.
+
+`docs:build` is deliberately **not** part of `pnpm run build` — the turbo task is
+named `docs:build`, not `build`, so launching a browser is not on the critical
+path of every API change. It is gated separately, on any pull request that
+touches `docs/**` or `apps/docs/**`. The build also **fails on a broken internal
+link**: `starlight-links-validator` proves every rewritten link still resolves,
+which is what stops a renamed doc from silently orphaning a reference.
 
 ## What CI gates
 
-Two workflows, both in [`.github/workflows/`](./.github/workflows).
+Everything lives in [`.github/workflows/`](./.github/workflows). Seven of those
+workflows can run on a pull request; the rest (`deploy`, `release`,
+`release-check`, `promote`) are release and deployment machinery that never
+does.
+
+Two run on **every** pull request — [`ci.yml`](./.github/workflows/ci.yml) and
+[`security.yml`](./.github/workflows/security.yml) — plus the fast half of
+[`subtraction.yml`](./.github/workflows/subtraction.yml). Four more are
+path-filtered and stay quiet unless you touched what they cover:
+[`codeql.yml`](./.github/workflows/codeql.yml) on any JS/TS file,
+[`docs.yml`](./.github/workflows/docs.yml) on `docs/**` or `apps/docs/**`,
+[`infra.yml`](./.github/workflows/infra.yml) on `infra/**`, and
+[`image.yml`](./.github/workflows/image.yml) on anything that can change the API
+container. The three worth knowing in detail:
 
 **[`ci.yml`](./.github/workflows/ci.yml)** — every pull request, plus pushes to
-`main`. Three jobs run in parallel:
+`main`. Four jobs run in parallel:
 
 - **lint** — `pnpm install --frozen-lockfile`, then `pnpm exec biome ci .`.
 - **test** — brings up the compose stack with `--wait`, migrates, then runs
   `pnpm run build`, `pnpm run test`, the e2e type-check
   (`tsc --noEmit -p tsconfig.e2e.json`) and `pnpm run test:e2e` against real
   Postgres, Redis, LocalStack and MinIO.
-- **audit** — `pnpm audit --prod --audit-level high`. A new high-severity
-  advisory in a production dependency fails the build, so patching or overriding
-  it is part of the PR.
+- **bootstrap** — runs `scripts/bootstrap.mjs --dry-run` on the checkout and
+  asserts it wrote nothing. The README's headline command is the first thing a
+  newcomer runs, so it is worth a job of its own.
+- **audit** — `pnpm audit --prod --audit-level high`, then
+  `pnpm run license-check`. A new high-severity advisory in a production
+  dependency, or a dependency that relicensed under you, fails the build — so
+  patching, overriding or replacing it is part of the PR.
 
 In-progress runs are cancelled when you push again to the same ref.
 
-**[`subtraction.yml`](./.github/workflows/subtraction.yml)** — nightly at 03:00
-UTC, on pushes to `staging` and `main`, and on manual dispatch. It is too slow
-for every PR. It runs `scripts/subtraction-test.mjs` across every module, then
-re-emits the removal docs and fails if `docs/removal` drifted from the code.
+**[`subtraction.yml`](./.github/workflows/subtraction.yml)** — split in two,
+because its halves cost very different things:
 
-Because this one does *not* run on your PR, a fence-marker change is the case
-where running it locally actually matters.
+- **docs-drift** runs on **every pull request**. It re-emits the removal recipes
+  and fails if `docs/removal` drifted from the fence markers. No install, no
+  database, no worktrees — seconds.
+- **subtraction** runs nightly at 03:00 UTC, on pushes to `staging` and `main`,
+  and on manual dispatch. It runs `scripts/subtraction-test.mjs` across every
+  module, each in its own worktree, and is far too slow for a pull request.
+
+So a forgotten `--emit-docs` fails your PR, but an unfenced cross-reference that
+breaks an actual removal will not surface until the nightly run — which is the
+case where running the full script locally still matters.
+
+**[`docs.yml`](./.github/workflows/docs.yml)** — builds the documentation site
+when a pull request touches `docs/**` or `apps/docs/**`, and publishes it to
+GitHub Pages from `main`. See [The documentation site](#the-documentation-site).
 
 ## Definition of done
 
