@@ -50,7 +50,7 @@ than describing one lucky route.
 | CPU | AMD Ryzen AI 9 HX PRO 370 w/ Radeon 890M — 12 cores / 24 threads |
 | CPU state during the runs | `amd-pstate-epp` driver, `powersave` governor, ACPI platform profile `low-power`, cores pegged at ~2.02 GHz |
 | RAM | 58.5 GiB |
-| Disk | NVMe (SK hynix HFS002TEJ9X162N) |
+| Disk | NVMe SSD |
 | OS | Fedora Linux 44, kernel 7.1.5-201.fc44.x86_64 |
 | Node | v24.18.1 |
 | autocannon | 8.0.0 |

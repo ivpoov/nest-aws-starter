@@ -38,11 +38,13 @@ in three flavours:
   facade, S3, SQS, SNS, mail, Lambda, HTTP client, CloudFront. Most are `@Global()`, and most
   have a disabled fallback implementation so the app boots without the corresponding AWS
   service.
-- **Core modules** — user, token, session, auth, oauth, activity, suspicious-activity, casl,
+- **Core modules** — user, token, session, auth, oauth, activity, account-security, casl,
   health, event, task-scheduler. Removing any of these is not a supported operation.
-- **Optional modules** — note, file, contact-us, api-key, statistic, notification, payment,
-  the three OAuth providers, Stripe, CloudFront. Each is fenced with `// <module:x>` markers
-  and has a generated removal recipe. See
+- **Optional modules** — the eleven ids in [`docs/removal/`](./removal/): note, file,
+  contact-us, api-key, statistic, notification, payment, the three OAuth providers, and
+  cloudfront. Each is fenced with `// <module:x>` markers and has a generated removal recipe.
+  `modules/stripe` is not among them: it is the payment module's provider and comes out
+  *with* `payment`, which is why there is no `stripe` recipe. See
   [ADR 8](./decisions/0008-modular-by-subtraction.md).
 
 ### Module dependency graph
@@ -70,7 +72,7 @@ flowchart TD
     Auth["AuthModule"]
     Oauth["OauthModule"]
     Activity["ActivityModule"]
-    Suspicious["SuspiciousActivityModule"]
+    AccountSecurity["AccountSecurityModule"]
     Health["HealthModule"]
   end
 
@@ -96,14 +98,14 @@ flowchart TD
   Session -.->|forwardRef| User
   Auth --> User
   Auth --> Session
-  Auth --> Suspicious
+  Auth --> AccountSecurity
   Oauth --> User
   Oauth --> Session
   Activity --> Casl
   Activity --> User
-  Suspicious --> Casl
-  Suspicious --> Session
-  Suspicious --> User
+  AccountSecurity --> Casl
+  AccountSecurity --> Session
+  AccountSecurity --> User
   Note --> Casl
   Contact --> Casl
   ApiKey --> Casl
@@ -344,14 +346,14 @@ name string each constant resolves to is in
 | `ADMIN_LOGIN_AS_EVENT` | user | activity |
 | `API_KEY_CREATED_EVENT` | api-key | activity |
 | `API_KEY_REVOKED_EVENT` | api-key | activity |
-| `AUTH_LOGIN_EVENT` | auth | activity, suspicious-activity |
-| `AUTH_LOGIN_FAILED_EVENT` | auth | activity, suspicious-activity |
+| `AUTH_LOGIN_EVENT` | auth | activity, account-security |
+| `AUTH_LOGIN_FAILED_EVENT` | auth | activity, account-security |
 | `AUTH_LOGOUT_EVENT` | auth | activity |
 | `AUTH_METHOD_LINKED_EVENT` | auth, oauth | activity, notification |
 | `AUTH_METHOD_UNLINKED_EVENT` | auth | activity, notification |
-| `AUTH_NEW_DEVICE_EVENT` | auth | activity, notification, suspicious-activity |
+| `AUTH_NEW_DEVICE_EVENT` | auth | activity, notification, account-security |
 | `AUTH_PASSWORD_CHANGED_EVENT` | auth | activity, notification |
-| `AUTH_SUSPICIOUS_LOGIN_EVENT` | suspicious-activity | activity, notification |
+| `AUTH_SUSPICIOUS_LOGIN_EVENT` | account-security | activity, notification |
 | `CONTACT_RECEIVED_EVENT` | contact-us | activity, notification |
 | `FILE_UPLOADED_EVENT` | file | activity |
 | `NOTE_CREATED_EVENT` | note | _none_ |
@@ -371,7 +373,7 @@ Reading the table:
 - **`activity` subscribes to almost everything.** That is the design: feature services never
   call `ActivityService`, they emit, and `ActivityListener` is the single place an event
   becomes an audit row.
-- **`notification` is the other broad subscriber.** `NotificationDispatcherService` persists a
+- **`notification` is the other broad subscriber.** `NotificationEventSubscriberService` persists a
   notification first, then fans out over WebSocket and (per user preference) email.
 - **`NOTE_CREATED_EVENT` has no subscribers.** It is not dead code by accident — the `note`
   module is the reference implementation, and it demonstrates the emit side of the pattern

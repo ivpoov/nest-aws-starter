@@ -1,9 +1,8 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
-const scheme = z.discriminatedUnion('isEnabled', [
+const configSchema = z.discriminatedUnion('isEnabled', [
   z.object({ isEnabled: z.literal(false) }),
   z.object({
     isEnabled: z.literal(true),
@@ -24,7 +23,7 @@ const scheme = z.discriminatedUnion('isEnabled', [
   }),
 ]);
 
-export type S3Config = z.infer<typeof scheme>;
+export type S3Config = z.infer<typeof configSchema>;
 
 export const s3Config = registerAs('s3', (): S3Config => {
   const isEnabled: boolean = process.env.S3_ENABLED === 'true';
@@ -33,22 +32,21 @@ export const s3Config = registerAs('s3', (): S3Config => {
     process.env.S3_ACCESS_KEY || process.env.S3_SECRET_KEY,
   );
 
-  const config: S3Config = isEnabled
-    ? {
-        isEnabled: true,
-        region: process.env.AWS_REGION ?? '',
-        bucketName: process.env.S3_BUCKET_NAME ?? '',
-        ...(hasStaticCredentials && {
-          credentials: {
-            accessKeyId: process.env.S3_ACCESS_KEY ?? '',
-            secretAccessKey: process.env.S3_SECRET_KEY ?? '',
-          },
-        }),
-        ...(process.env.S3_ENDPOINT && { endpoint: process.env.S3_ENDPOINT }),
-      }
-    : { isEnabled: false };
-
-  validateScheme(scheme, config, new Logger('S3Config'));
-
-  return config;
+  return validateConfigSchema(
+    configSchema,
+    isEnabled
+      ? {
+          isEnabled: true,
+          region: process.env.AWS_REGION ?? '',
+          bucketName: process.env.S3_BUCKET_NAME ?? '',
+          ...(hasStaticCredentials && {
+            credentials: {
+              accessKeyId: process.env.S3_ACCESS_KEY ?? '',
+              secretAccessKey: process.env.S3_SECRET_KEY ?? '',
+            },
+          }),
+          ...(process.env.S3_ENDPOINT && { endpoint: process.env.S3_ENDPOINT }),
+        }
+      : { isEnabled: false },
+  );
 });

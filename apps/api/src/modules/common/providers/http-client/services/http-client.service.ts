@@ -42,7 +42,9 @@ export class HttpClientService {
     const response: Response = await fetch(url, {
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
     }).catch((caught: unknown): never => {
-      this.logger.warn(`GET ${url} download failed: ${String(caught)}`);
+      this.logger.warn(
+        `GET ${this.redactUrl(url)} download failed: ${this.redactMessage(String(caught))}`,
+      );
 
       throw new InternalError(HTTP_REQUEST_FAILED);
     });
@@ -79,7 +81,7 @@ export class HttpClientService {
       });
 
       this.logger.log(
-        `${options.method} ${options.url} ${response.status} ${Date.now() - startedAt}ms`,
+        `${options.method} ${this.redactUrl(options.url)} ${response.status} ${Date.now() - startedAt}ms`,
       );
 
       if (!response.ok) {
@@ -89,7 +91,7 @@ export class HttpClientService {
       return { ok: true, data: await this.parseBody<T>(response) };
     } catch (caught) {
       this.logger.warn(
-        `${options.method} ${options.url} failed after ${Date.now() - startedAt}ms: ${String(caught)}`,
+        `${options.method} ${this.redactUrl(options.url)} failed after ${Date.now() - startedAt}ms: ${this.redactMessage(String(caught))}`,
       );
 
       return { ok: false, status: null, retryable: true };
@@ -100,6 +102,35 @@ export class HttpClientService {
     const raw: string = await response.text();
 
     return raw === '' ? (undefined as T) : (JSON.parse(raw) as T);
+  }
+
+  // Origin and path only — the query string never reaches a log line. Callers
+  // put client secrets, access tokens and one-time codes in search params
+  // (several OAuth providers document exactly that), and this service is the
+  // single choke point every outbound request passes through, so redacting
+  // here protects every present and future caller rather than one of them.
+  // Conventions: "never log secrets, tokens, passwords, or raw bodies of auth
+  // endpoints" (docs/conventions/backend.md).
+  private redactUrl(rawUrl: string): string {
+    if (!URL.canParse(rawUrl)) return '[unparseable-url]';
+
+    const parsed: URL = new URL(rawUrl);
+
+    return `${parsed.origin}${parsed.pathname}`;
+  }
+
+  // The caught error is appended to the same line the URL was redacted on, and
+  // fetch quotes the offending URL back verbatim — `Request cannot be
+  // constructed from a URL that includes credentials: https://user:pw@host/p?
+  // client_secret=…`, `Failed to parse URL from host/p?client_secret=…`. So
+  // the message is sanitised as well, or the suffix simply undoes the prefix.
+  //
+  // Deliberately blunt: any `user:pass@` before a host is dropped, and any run
+  // of non-space characters after a `?` is treated as a query string and
+  // dropped with it. A false positive costs a few characters of an error
+  // message; a false negative costs a credential.
+  private redactMessage(text: string): string {
+    return text.replace(/(:\/\/)[^/\s@]*@/g, '$1[redacted]@').replace(/\?\S+/g, '?[redacted]');
   }
 
   private pause(ms: number): Promise<void> {

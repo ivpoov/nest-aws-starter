@@ -1,9 +1,8 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
-const scheme = z.discriminatedUnion('isEnabled', [
+const configSchema = z.discriminatedUnion('isEnabled', [
   z.object({ isEnabled: z.literal(false) }),
   z.object({
     isEnabled: z.literal(true),
@@ -13,21 +12,20 @@ const scheme = z.discriminatedUnion('isEnabled', [
   }),
 ]);
 
-export type GoogleOauthConfig = z.infer<typeof scheme>;
+export type GoogleOauthConfig = z.infer<typeof configSchema>;
 
 export const googleOauthConfig = registerAs('googleOauth', (): GoogleOauthConfig => {
   const isEnabled: boolean = process.env.GOOGLE_OAUTH_ENABLED === 'true';
 
-  const config: GoogleOauthConfig = isEnabled
-    ? {
-        isEnabled: true,
-        clientId: process.env.GOOGLE_OAUTH_CLIENT_ID ?? '',
-        clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '',
-        redirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI ?? '',
-      }
-    : { isEnabled: false };
-
-  validateScheme(scheme, config, new Logger('GoogleOauthConfig'));
-
-  return config;
+  return validateConfigSchema(
+    configSchema,
+    isEnabled
+      ? {
+          isEnabled: true,
+          clientId: process.env.GOOGLE_OAUTH_CLIENT_ID ?? '',
+          clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '',
+          redirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI ?? '',
+        }
+      : { isEnabled: false },
+  );
 });

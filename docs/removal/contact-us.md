@@ -36,15 +36,15 @@ same markers appear as `{/* <module:contact-us> */}`. Delete the marked lines/bl
 and the markers themselves.
 
 - `apps/api/src/app.module.ts`
-  - line 9: `import { ContactUsModule } from '@modules/contact-us/contact-us.module.js'; // <module:contact-us>`
+  - line 10: `import { ContactUsModule } from '@modules/contact-us/contact-us.module.js'; // <module:contact-us>`
   - line 82: `ContactUsModule, // <module:contact-us>`
 - `apps/api/prisma/schema.prisma`
-  - lines 167-190 (block)
+  - lines 183-206 (block)
 - `apps/api/prisma/seed.ts`
-  - lines 316-378 (block)
-  - lines 685-702 (block)
-  - lines 821-834 (block)
-  - lines 890-892 (block)
+  - lines 360-422 (block)
+  - lines 729-746 (block)
+  - lines 865-878 (block)
+  - lines 934-936 (block)
 - `apps/web/src/App.tsx`
   - line 10: `import { ContactPage } from './pages/ContactPage'; // <module:contact-us>`
   - lines 33-35 (block)
@@ -69,20 +69,18 @@ and the markers themselves.
   - lines 17-19 (block)
   - lines 37-41 (block)
 - `packages/shared/src/index.ts`
-  - line 33: `export * from './contact/enums/contact-message-status.enum.js'; // <module:contact-us>`
-  - line 34: `export * from './contact/interfaces/contact-message-list-response.interface.js'; // <module:contact-us>`
-  - line 35: `export * from './contact/interfaces/contact-message-response.interface.js'; // <module:contact-us>`
-  - line 36: `export * from './contact/interfaces/create-contact-request.interface.js'; // <module:contact-us>`
-  - line 37: `export * from './contact/interfaces/update-contact-message-status-request.interface.js'; // <module:contact-us>`
+  - line 39: `export * from './contact/enums/contact-message-status.enum.js'; // <module:contact-us>`
+  - line 40: `export * from './contact/interfaces/contact-message-list-response.interface.js'; // <module:contact-us>`
+  - line 41: `export * from './contact/interfaces/contact-message-response.interface.js'; // <module:contact-us>`
+  - line 42: `export * from './contact/interfaces/create-contact-request.interface.js'; // <module:contact-us>`
+  - line 43: `export * from './contact/interfaces/update-contact-message-status-request.interface.js'; // <module:contact-us>`
 
 ### Not yet fence-marked (edit by hand)
 
 These references are **not** fenced, so `scripts/subtraction-test.mjs` neither strips
-them nor proves they were handled. Any `packages/shared/src/*` folder marked "delete by
-hand" in section 1 belongs here too: the script leaves it in place because
-`packages/shared/src/index.ts` re-exports it through unfenced `export *` lines, so
-deleting the folder on its own would break `build shared`. Delete the folder and those
-export lines together. Work through the list by hand:
+them nor proves they were handled. Every one of them is a hole in the proof: the
+subtracted tree was type-checked and unit-tested *without* these edits applied, so it is
+on you to make them and to re-run the suites afterwards. Work through the list by hand:
 
 _None — every cross-module reference for this module is fence-marked._
 
@@ -91,7 +89,7 @@ _None — every cross-module reference for this module is fence-marked._
 The subtracted tree type-checks and passes its tests with these left in place —
 they are cosmetic leftovers, not build breaks:
 
-- `packages/shared/src/notifications/enums/notification-type.enum.ts` — the CONTACT_MESSAGE member stays on purpose, for the same reason as payment's types: apps/api's notification dispatcher keeps its contact-message builder and handler, which compile against the core event bus and simply never fire once nothing emits contact.message.created. Keeping the member keeps apps/web's NOTIFICATION_TYPE_LABELS (a total Record over the enum) valid. Dropping it means dropping the member, the label line, USER_NOTIFICATION_TYPES and the dispatcher handler together
+- `packages/shared/src/notifications/enums/notification-type.enum.ts` — the CONTACT_MESSAGE member stays on purpose, for the same reason as payment's types: apps/api's notification event subscriber keeps its contact-message builder and handler, which compile against the core event bus and simply never fire once nothing emits contact.message.created. Keeping the member keeps apps/web's NOTIFICATION_TYPE_LABELS (a total Record over the enum) valid. Dropping it means dropping the member, the label line, USER_NOTIFICATION_TYPES and the event subscriber handler together
 
 ## 3. Drop `.env` variables
 

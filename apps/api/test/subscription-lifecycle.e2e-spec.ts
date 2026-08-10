@@ -1,8 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { SUBSCRIPTION_LIFECYCLE } from '@modules/payment/constants/payment.constants.js';
+import type { TransactionContextInterface } from '@interfaces/transaction-context.interface.js';
+import {
+  SUBSCRIPTION_LIFECYCLE,
+  SUBSCRIPTION_REPOSITORY,
+} from '@modules/payment/constants/payment.constants.js';
 import type { PaymentProviderInterface } from '@modules/payment/interfaces/payment-provider.interface.js';
 import type { ProviderEventInterface } from '@modules/payment/interfaces/provider-event.interface.js';
+import type { SubscriptionInterface } from '@modules/payment/interfaces/subscription.interface.js';
 import type { SubscriptionLifecycleInterface } from '@modules/payment/interfaces/subscription-lifecycle.interface.js';
+import type { SubscriptionRepositoryInterface } from '@modules/payment/interfaces/subscription-repository.interface.js';
 import { SubscriptionExpiryJob } from '@modules/payment/jobs/subscription-expiry.job.js';
 import { PaymentProviderRegistryService } from '@modules/payment/services/payment-provider-registry.service.js';
 import { PaymentWebhookConsumerService } from '@modules/payment/services/payment-webhook-consumer.service.js';
@@ -14,7 +20,7 @@ import { SQS_PROVIDER } from '@providers/sqs/constants/sqs.constants.js';
 import type { SqsMessageInterface } from '@providers/sqs/interfaces/sqs-message.interface.js';
 import type { SqsProviderInterface } from '@providers/sqs/interfaces/sqs-provider.interface.js';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createTestApp } from './app.factory.js';
 import { waitForActivity } from './helpers/wait-for-activity.helper.js';
 
@@ -259,6 +265,69 @@ describe('subscription lifecycle (deep e2e, fixture webhooks through the real pi
     );
 
     expect(activity).toBeTruthy();
+  });
+
+  // The atomicity proof for the cancel path (conventions §7a). A happy-path
+  // assertion proves nothing about transactions, so this induces a real failure
+  // BETWEEN the two writes — after the second one has actually hit Postgres —
+  // and asserts the committed row shows neither of them.
+  //
+  // Before the unit of work existed, a crash here left the row CANCELED with
+  // canceledAt = null permanently: `cancel` short-circuits on `isTerminal`, so
+  // every redelivery returned at the guard and no retry could ever repair it.
+  it('cancel is atomic: an induced failure mid-operation leaves no partial state, and the row stays repairable', async () => {
+    const atomicRef: string = `sub_e2e_atomic_${randomUUID()}`;
+    const row = await prisma.subscription.create({
+      data: {
+        userId,
+        planId,
+        status: 'ACTIVE',
+        provider: 'STRIPE',
+        providerRef: atomicRef,
+        providerCustomerRef: 'cus_e2e_atomic',
+        currentPeriodEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+    const repository: SubscriptionRepositoryInterface =
+      app.get<SubscriptionRepositoryInterface>(SUBSCRIPTION_REPOSITORY);
+    const realSetCanceledAt = repository.setCanceledAt.bind(repository);
+    const spy = vi
+      .spyOn(repository, 'setCanceledAt')
+      .mockImplementation(
+        async (
+          id: string,
+          canceledAt: Date,
+          tx?: TransactionContextInterface,
+        ): Promise<SubscriptionInterface> => {
+          // Let the second write really happen on the transaction's connection,
+          // THEN die. Both statements are now pending in the same unit, so only
+          // a genuine ROLLBACK can satisfy the assertions below.
+          await realSetCanceledAt(id, canceledAt, tx);
+
+          throw new Error('induced failure mid-transaction');
+        },
+      );
+
+    await expect(lifecycle.cancel('STRIPE', atomicRef, true)).rejects.toThrow(
+      'induced failure mid-transaction',
+    );
+
+    // Read on the autocommit connection: this is what actually committed.
+    const afterFailure = await prisma.subscription.findUniqueOrThrow({ where: { id: row.id } });
+
+    expect(afterFailure.status).toBe('ACTIVE');
+    expect(afterFailure.canceledAt).toBeNull();
+
+    spy.mockRestore();
+
+    // Still ACTIVE means still non-terminal, so the next delivery repairs it —
+    // the property the old two-statement version destroyed.
+    await lifecycle.cancel('STRIPE', atomicRef, true);
+
+    const repaired = await prisma.subscription.findUniqueOrThrow({ where: { id: row.id } });
+
+    expect(repaired.status).toBe('CANCELED');
+    expect(repaired.canceledAt).not.toBeNull();
   });
 
   it('expiry job: expires an overdue subscription but respects the 3-day grace window', async () => {

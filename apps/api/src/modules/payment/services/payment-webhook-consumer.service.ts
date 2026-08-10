@@ -1,4 +1,7 @@
 import { type PaymentConfig, paymentConfig } from '@configs/payment.config.js';
+import { UNIT_OF_WORK } from '@constants/unit-of-work.constants.js';
+import type { TransactionContextInterface } from '@interfaces/transaction-context.interface.js';
+import type { UnitOfWorkInterface } from '@interfaces/unit-of-work.interface.js';
 import { WEBHOOK_FAILED_EVENT } from '@modules/event/constants/event-names.constants.js';
 import { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
@@ -46,6 +49,8 @@ export class PaymentWebhookConsumerService
     private readonly webhookEventRepository: WebhookEventRepositoryInterface,
     @Inject(SQS_PROVIDER)
     private readonly sqsProvider: SqsProviderInterface,
+    @Inject(UNIT_OF_WORK)
+    private readonly unitOfWork: UnitOfWorkInterface,
     private readonly redisLock: RedisLockService,
     private readonly dispatcher: WebhookEventDispatcherService,
     private readonly eventBus: EventBusService,
@@ -246,12 +251,30 @@ export class PaymentWebhookConsumerService
     }
   }
 
+  // The attempt count and the status it decides are one unit of work (§7a):
+  // incrementing to the ceiling without also writing FAILED strands the row in
+  // a non-terminal state that WebhookRetryService.retryFailed — which only
+  // selects FAILED rows — can never see again.
   private async recordDispatchFailure(
     event: WebhookEventInterface,
     caught: unknown,
   ): Promise<boolean> {
     const message: string = this.extractErrorMessage(caught);
-    const attempts: number = await this.webhookEventRepository.recordFailure(event.id, message);
+    const attempts: number = await this.unitOfWork.run(
+      async (tx: TransactionContextInterface): Promise<number> => {
+        const recorded: number = await this.webhookEventRepository.recordFailure(
+          event.id,
+          message,
+          tx,
+        );
+
+        if (recorded >= MAX_WEBHOOK_ATTEMPTS) {
+          await this.webhookEventRepository.markFailed(event.id, tx);
+        }
+
+        return recorded;
+      },
+    );
 
     this.logError(
       `Webhook event dispatch failed (attempt ${attempts}/${MAX_WEBHOOK_ATTEMPTS}): ${event.id}`,
@@ -260,7 +283,6 @@ export class PaymentWebhookConsumerService
 
     if (attempts < MAX_WEBHOOK_ATTEMPTS) return false;
 
-    await this.webhookEventRepository.markFailed(event.id);
     this.logger.error(`Webhook event exhausted retries, marked FAILED: ${event.id}`);
     this.emitWebhookFailedOnTransition(event, attempts, message);
 

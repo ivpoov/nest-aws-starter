@@ -36,6 +36,7 @@ export function buildSidebar() {
       items: [
         ...pick('index', 'Overview'),
         ...pick('contributing', 'Contributing'),
+        ...pick('code-of-conduct', 'Code of conduct'),
         ...pick('security', 'Security policy'),
       ],
     },

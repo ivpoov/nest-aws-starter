@@ -19,10 +19,10 @@ import request from 'supertest';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestApp } from './app.factory.js';
 
-// GET/PUT /notifications/preferences (Task 5) plus the dispatcher's EMAIL
+// GET/PUT /notifications/preferences (Task 5) plus the event subscriber's EMAIL
 // channel: "preferences gate channels, never persistence" is exercised via
 // a real domain event through the real EventBus, same as
-// notification-dispatcher.e2e-spec.ts — the EMAIL send itself is asserted
+// notification-event-subscriber.e2e-spec.ts — the EMAIL send itself is asserted
 // by spying on the real MAIL_TRANSPORT (mail.e2e-spec.ts already proves the
 // SES transport itself works against LocalStack).
 describe('notification preferences (e2e)', () => {
@@ -86,7 +86,7 @@ describe('notification preferences (e2e)', () => {
     return new Promise((resolve) => socket.once(event, (payload: T) => resolve(payload)));
   }
 
-  // Same poll as notification-dispatcher.e2e-spec.ts — room joins happen
+  // Same poll as notification-event-subscriber.e2e-spec.ts — room joins happen
   // asynchronously in handleConnection, after the client's own 'connect'.
   async function waitForRoomMember(room: string): Promise<void> {
     const deadline: number = Date.now() + 5_000;

@@ -7,6 +7,7 @@ import { MethodLinkingService } from '@modules/auth/services/method-linking.serv
 import { ConflictError } from '@modules/common/errors/conflict.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import type { EventBusService } from '@modules/event/services/event-bus.service.js';
+import { UnlinkMethodResultEnum } from '@modules/user/enums/unlink-method-result.enum.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
 import type { UserService } from '@modules/user/services/user.service.js';
 import { AuthMethodTypeEnum } from '@nest-aws-starter/shared';
@@ -34,7 +35,7 @@ interface SetupInterface {
     findEmailMethod: ReturnType<typeof vi.fn>;
     findByAuthEmail: ReturnType<typeof vi.fn>;
     addEmailMethod: ReturnType<typeof vi.fn>;
-    removeMethod: ReturnType<typeof vi.fn>;
+    removeMethodUnlessLast: ReturnType<typeof vi.fn>;
   };
   readonly emailFlow: { requestEmailVerification: ReturnType<typeof vi.fn> };
   readonly emit: ReturnType<typeof vi.fn>;
@@ -46,7 +47,7 @@ function setup(methods: AuthMethodInterface[]): SetupInterface {
     findEmailMethod: vi.fn().mockResolvedValue(null),
     findByAuthEmail: vi.fn().mockResolvedValue(null),
     addEmailMethod: vi.fn().mockResolvedValue(undefined),
-    removeMethod: vi.fn().mockResolvedValue(true),
+    removeMethodUnlessLast: vi.fn().mockResolvedValue(UnlinkMethodResultEnum.REMOVED),
   };
   const emailFlow = { requestEmailVerification: vi.fn().mockResolvedValue(undefined) };
   const emit = vi.fn();
@@ -147,7 +148,7 @@ describe('MethodLinkingService addEmailMethod', () => {
 });
 
 describe('MethodLinkingService unlinkMethod', () => {
-  it('removes a linked method when another remains', async () => {
+  it('removes a linked method when the guarded delete reports success', async () => {
     const { service, users, emit } = setup([
       method({}),
       method({ id: 'm-2', type: AuthMethodTypeEnum.GOOGLE, providerAccountId: 'acc' }),
@@ -155,7 +156,7 @@ describe('MethodLinkingService unlinkMethod', () => {
 
     await service.unlinkMethod('u-1', AuthMethodTypeEnum.GOOGLE);
 
-    expect(users.removeMethod).toHaveBeenCalledWith('u-1', AuthMethodTypeEnum.GOOGLE);
+    expect(users.removeMethodUnlessLast).toHaveBeenCalledWith('u-1', AuthMethodTypeEnum.GOOGLE);
     expect(emit).toHaveBeenCalledWith('auth.method-unlinked', {
       userId: 'u-1',
       type: AuthMethodTypeEnum.GOOGLE,
@@ -163,7 +164,9 @@ describe('MethodLinkingService unlinkMethod', () => {
   });
 
   it('rejects unlinking a method that is not linked', async () => {
-    const { service } = setup([method({})]);
+    const { service, users, emit } = setup([method({})]);
+
+    users.removeMethodUnlessLast.mockResolvedValue(UnlinkMethodResultEnum.NOT_FOUND);
 
     const caught = await service
       .unlinkMethod('u-1', AuthMethodTypeEnum.GOOGLE)
@@ -172,10 +175,13 @@ describe('MethodLinkingService unlinkMethod', () => {
 
     expect(caught).toBeInstanceOf(NotFoundError);
     expect(caught?.args.code).toBe(AUTH_METHOD_NOT_FOUND.code);
+    expect(emit).not.toHaveBeenCalled();
   });
 
   it('guards the last remaining method', async () => {
-    const { service, users } = setup([method({})]);
+    const { service, users, emit } = setup([method({})]);
+
+    users.removeMethodUnlessLast.mockResolvedValue(UnlinkMethodResultEnum.LAST_METHOD);
 
     const caught = await service
       .unlinkMethod('u-1', AuthMethodTypeEnum.EMAIL)
@@ -184,6 +190,21 @@ describe('MethodLinkingService unlinkMethod', () => {
 
     expect(caught).toBeInstanceOf(ConflictError);
     expect(caught?.args.code).toBe(AUTH_LAST_METHOD.code);
-    expect(users.removeMethod).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  // Regression guard for the unlink race: the service must not decide "is this
+  // the last method?" from a read of its own. Any such read is by definition
+  // stale by the time the delete runs, which is how two concurrent unlinks
+  // used to strip an account of every way in.
+  it('never pre-reads the method list to decide the last-method question', async () => {
+    const { service, users } = setup([
+      method({}),
+      method({ id: 'm-2', type: AuthMethodTypeEnum.GOOGLE, providerAccountId: 'acc' }),
+    ]);
+
+    await service.unlinkMethod('u-1', AuthMethodTypeEnum.GOOGLE);
+
+    expect(users.findMethodsByUserId).not.toHaveBeenCalled();
   });
 });

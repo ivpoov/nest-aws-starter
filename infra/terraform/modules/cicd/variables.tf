@@ -42,13 +42,175 @@ variable "github_repository" {
   }
 }
 
+variable "github_deploy_environment" {
+  description = <<-EOT
+    The GitHub Actions *environment* the deploy job runs in. This is the other
+    half of the trust policy's `sub` condition, matched with StringEquals.
+
+    It must equal the `environment:` value in .github/workflows/deploy.yml
+    exactly. GitHub replaces the ref form of the `sub` claim with
+    `repo:<owner>/<name>:environment:<name>` for any job that declares an
+    environment, so a mismatch here is not a soft failure — STS refuses the
+    first call of every deployment.
+
+    Terraform cannot create a GitHub environment, and this module does not
+    pretend to. Creating it and attaching a deployment branch rule is a manual
+    step; `terraform output github_actions_setup` prints the exact commands.
+  EOT
+  type        = string
+  default     = "production"
+
+  validation {
+    condition     = length(trimspace(var.github_deploy_environment)) > 0 && var.github_deploy_environment == trimspace(var.github_deploy_environment)
+    error_message = "github_deploy_environment must be a non-empty name with no leading or trailing whitespace — GitHub trims environment names, and a trimmed name would no longer match this condition."
+  }
+
+  validation {
+    # `:` is the separator the sub claim itself is built from, so an
+    # environment name containing one could be made to look like a different
+    # claim shape. `*` and `?` are IAM's StringLike wildcards: inert under
+    # StringEquals, but a future edit to StringLike must not inherit a value
+    # written assuming exact matching.
+    condition     = !can(regex("[*?:]", var.github_deploy_environment))
+    error_message = "github_deploy_environment must not contain \"*\", \"?\" or \":\" — those are IAM's wildcard characters and the sub claim's own separator."
+  }
+}
+
+# ---------------------------------------------------------------------------
+# WHICH SPELLING of the subject GitHub mints for you
+#
+# GitHub has two default subject formats. The historical one names the
+# repository; the immutable one interpolates numeric ids that are never
+# reissued, and applies to repositories created after 2026-07-15 or renamed or
+# transferred after that date. Terraform cannot tell which applies to you, so
+# these three variables make it expressible instead of assumed. Guessing wrong
+# is AccessDenied — closed, not open. README.md has the `gh api` call that
+# reads the answer.
+# ---------------------------------------------------------------------------
+
+variable "github_subject_format" {
+  description = <<-EOT
+    Which default subject format GitHub mints for this repository.
+
+      mutable    repo:<owner>/<name>:environment:<env>
+                 Repositories created on or before 2026-07-15 and not renamed
+                 or transferred since.
+      immutable  repo:<owner>@<owner-id>/<name>@<repo-id>:environment:<env>
+                 Repositories created after that date, and any repository
+                 renamed or transferred after it. Requires
+                 github_repository_ids.
+      both       Trusts both strings. Still StringEquals — two literal values,
+                 an OR of exact matches, no wildcard — but it is a wider policy
+                 and it re-admits the name-squatting case the immutable format
+                 exists to close. Use it only to get unstuck, and narrow it once
+                 a run has told you which form you are actually issued.
+
+    `mutable` is the default because it is the form every pre-existing
+    repository uses and the one the customization endpoint reports for
+    repositories that have not migrated. It is a default, not a determination:
+    verify it before you rely on it.
+  EOT
+  type        = string
+  default     = "mutable"
+
+  validation {
+    condition     = contains(["mutable", "immutable", "both"], var.github_subject_format)
+    error_message = "github_subject_format must be one of: mutable, immutable, both."
+  }
+
+  validation {
+    condition     = var.github_subject_format == "mutable" || var.github_repository_ids != null
+    error_message = "github_subject_format is \"immutable\" or \"both\", which needs github_repository_ids — read them with: gh api repos/<owner>/<name> --jq '{owner: .owner.id, repository: .id}'."
+  }
+}
+
+variable "github_repository_ids" {
+  description = <<-EOT
+    The numeric owner and repository ids that the immutable subject format
+    interpolates. Null unless github_subject_format needs them.
+
+      gh api repos/<owner>/<name> --jq '{owner: .owner.id, repository: .id}'
+
+    These are ids, not names: they survive a rename or a transfer, which is the
+    entire reason the immutable format exists. Typed as numbers, so unlike the
+    string inputs they cannot carry an IAM wildcard at all.
+  EOT
+  type = object({
+    owner      = number
+    repository = number
+  })
+  default = null
+
+  validation {
+    condition = (
+      var.github_repository_ids == null
+      || (var.github_repository_ids.owner > 0 && var.github_repository_ids.repository > 0)
+    )
+    error_message = "github_repository_ids.owner and .repository must both be positive — a zero or negative id is not a GitHub id."
+  }
+
+  validation {
+    condition = (
+      var.github_repository_ids == null
+      || (
+        floor(var.github_repository_ids.owner) == var.github_repository_ids.owner
+        && floor(var.github_repository_ids.repository) == var.github_repository_ids.repository
+      )
+    )
+    error_message = "github_repository_ids must be whole numbers — a fractional value would render into the subject with a decimal point and match nothing."
+  }
+}
+
+variable "github_deploy_subject_override" {
+  description = <<-EOT
+    The complete `sub` claim to trust, replacing everything this module would
+    compute. Null by default, and the escape hatch of last resort.
+
+    Set it when neither default format describes your repository — most often
+    because the subject-claim template has been customised
+    (`PUT /repos/{owner}/{repo}/actions/oidc/customization/sub`), which changes
+    the shape entirely. Paste the string a run was actually issued; deploy.yml
+    prints it when the assume-role step fails.
+
+    It is still matched with StringEquals and is still validated against
+    wildcards, and it must contain `:environment:` — this role is only ever
+    presented an environment-scoped subject, so a `:pull_request` or
+    `:ref:refs/heads/...` value here would be a mistake that widens the policy
+    to something the workflow does not even produce.
+  EOT
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.github_deploy_subject_override == null || !can(regex("[*?[:space:]]", var.github_deploy_subject_override))
+    error_message = "github_deploy_subject_override must not contain a wildcard or whitespace. \"*\" and \"?\" are IAM's StringLike wildcards, and a stray space would silently never match."
+  }
+
+  validation {
+    condition = (
+      var.github_deploy_subject_override == null
+      || (
+        startswith(var.github_deploy_subject_override, "repo:")
+        && strcontains(var.github_deploy_subject_override, ":environment:")
+      )
+    )
+    error_message = "github_deploy_subject_override must start with \"repo:\" and contain \":environment:\" — the deploy job declares an environment, so that is the only subject it can ever present."
+  }
+}
+
 variable "github_deploy_ref" {
   description = <<-EOT
-    The single git ref deployments may run from, in full `refs/...` form.
+    The single branch deployments may run from, in full `refs/...` form.
+
+    This is NOT part of the trust policy — it cannot be, because a job that
+    declares an environment is issued an environment subject with no ref in it
+    at all. It is the branch you must set as the environment's *deployment
+    branch rule*, which GitHub enforces before it mints the token, and it is
+    what `terraform output github_actions_setup` prints the command for.
 
     The default is the default branch, which is the only ref that has passed
-    review. Widening this to `refs/heads/*` or to a `pull_request` subject means
-    any contributor who can open a pull request can run this role's permissions.
+    review. Leaving the environment's branch rule unset means any branch a
+    dispatch can be started from reaches the role.
   EOT
   type        = string
   default     = "refs/heads/main"
@@ -60,7 +222,7 @@ variable "github_deploy_ref" {
 
   validation {
     condition     = !can(regex("[*?]", var.github_deploy_ref))
-    error_message = "github_deploy_ref must not contain a wildcard — the trust policy matches it exactly, and a wildcard here would admit every branch and every fork's pull-request ref."
+    error_message = "github_deploy_ref must not contain a wildcard — it names the one branch the environment's deployment branch rule admits, and a wildcard there would admit every branch."
   }
 }
 

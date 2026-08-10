@@ -1,9 +1,8 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
-const scheme = z.discriminatedUnion('isEnabled', [
+const configSchema = z.discriminatedUnion('isEnabled', [
   z.object({ isEnabled: z.literal(false) }),
   z.object({
     isEnabled: z.literal(true),
@@ -12,20 +11,19 @@ const scheme = z.discriminatedUnion('isEnabled', [
   }),
 ]);
 
-export type SqsConfig = z.infer<typeof scheme>;
+export type SqsConfig = z.infer<typeof configSchema>;
 
 export const sqsConfig = registerAs('sqs', (): SqsConfig => {
   const isEnabled: boolean = process.env.SQS_ENABLED === 'true';
 
-  const config: SqsConfig = isEnabled
-    ? {
-        isEnabled: true,
-        region: process.env.AWS_REGION ?? '',
-        ...(process.env.AWS_ENDPOINT_URL && { endpoint: process.env.AWS_ENDPOINT_URL }),
-      }
-    : { isEnabled: false };
-
-  validateScheme(scheme, config, new Logger('SqsConfig'));
-
-  return config;
+  return validateConfigSchema(
+    configSchema,
+    isEnabled
+      ? {
+          isEnabled: true,
+          region: process.env.AWS_REGION ?? '',
+          ...(process.env.AWS_ENDPOINT_URL && { endpoint: process.env.AWS_ENDPOINT_URL }),
+        }
+      : { isEnabled: false },
+  );
 });

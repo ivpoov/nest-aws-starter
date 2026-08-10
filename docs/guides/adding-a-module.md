@@ -32,9 +32,20 @@ deliberately not patchable.
 Before you start:
 
 ```bash
-docker compose up -d --wait     # Postgres, Redis, LocalStack, MinIO
+docker compose up -d --wait          # Postgres, Redis, LocalStack, MinIO
 pnpm install
+pnpm --dir apps/api run db:migrate    # apply the existing migrations
+pnpm --dir apps/api run db:generate   # write apps/api/src/generated/prisma
 ```
+
+Those last two are not optional and there is no `postinstall` that runs them for
+you. The Prisma client is **generated** into `apps/api/src/generated/prisma` and
+is git-ignored, so on a fresh clone that folder does not exist: every
+`@generated/prisma/...` import — and therefore most of `apps/api` — is red in
+your editor until `db:generate` has run once. `db:generate` reads the live
+database (`prisma generate --sql` type-checks the TypedSQL queries against it),
+which is why `db:migrate` comes first. §3 adds this module's own migration with
+`prisma migrate dev`, which regenerates the client for you from then on.
 
 ## 0. Think in contracts before you think in tables
 
@@ -141,7 +152,9 @@ export interface BookmarkListResponseInterface {
 
 Finally, the barrel. `packages/shared/src/index.ts` is the only entry point, its
 lines are alphabetised, and every export belonging to an **optional** module
-carries a `// <module:x>` fence marker (section 14 explains what those do). Add
+carries a **fence marker** — a `// <module:x>` comment meaning *delete this line
+when module `x` is removed*, which is what makes removal mechanical rather than a
+search. Section 15 covers them properly, including the block form. Add
 these six lines between the `auth/…` block and the `common/…` block:
 
 ```typescript
@@ -266,8 +279,8 @@ pnpm --dir apps/api exec prisma migrate deploy
 
 `migrate deploy` only applies pending migrations and never resets anything, so
 the scratch database ends up structurally identical to your dev one. Now
-`migrate dev --name add_bookmark` has nothing shared to damage, and the whole
-test suite in section 12 runs against the scratch database too. When you are
+`migrate dev --name add_bookmark` has nothing shared to damage, and the e2e suite
+in section 14 runs against the scratch database too. When you are
 done, point `DATABASE_URL` back and `DROP DATABASE starter_scratch;`.
 
 If you would rather work directly against your dev database, know how to reverse

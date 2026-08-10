@@ -34,7 +34,7 @@ and a browser app.**
 
 | Does not belong | Where it lives instead |
 |---|---|
-| Domain models (Prisma-shaped, `Date`-carrying, with fields the wire never sees) | Module-private `apps/api/src/modules/<m>/interfaces/` ([`backend.md` §5](./backend.md)) |
+| Domain models (Prisma-shaped, `Date`-carrying, with fields the wire never sees) | Module-private `apps/api/src/modules/<m>/interfaces/` ([`backend.md` §4](./backend.md)) |
 | Repository contracts, service contracts, injection tokens | The owning API module |
 | Enums that never cross HTTP — `OneTimeTokenKindEnum`, `WebhookEventStatusEnum`, `NormalizedEventTypeEnum`, `FileSweepOutcomeEnum`, `ErrorCategoryEnum` | `apps/api/src/modules/<m>/enums/` |
 | UI-only state shapes — `AuthStoreInterface`, `TransactionFiltersInterface`, every `Use…ResultInterface` | The app's own `src/interfaces/` ([`frontend.md` §1](./frontend.md)) |

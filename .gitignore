@@ -7,7 +7,10 @@ coverage/
 .turbo/
 *.log
 .DS_Store
-.claude/settings.local.json
+# Local agent/editor state. The whole directory, not just settings.local.json:
+# anything dropped in here is machine-local by default and must not be committed
+# by accident.
+.claude/
 .superpowers/
 
 # Terraform

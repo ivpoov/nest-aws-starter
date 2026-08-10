@@ -24,7 +24,7 @@ takes the demo module out on the way. What is left is yours.
 Email/password with verification and reset · OAuth login **and** account linking
 for Google, Facebook and Discord · refresh-token sessions you can list and
 revoke · long-lived API keys · CASL permissions · login lockout, new-device
-alerts and a suspicious-activity trail. Tokens live in Redis, never in Postgres
+alerts and a suspicious-login trail. Tokens live in Redis, never in Postgres
 ([ADR 0003](docs/decisions/0003-tokens-in-redis-never-postgres.md)); nothing in
 the tree sets a cookie ([ADR 0004](docs/decisions/0004-bearer-tokens-no-cookies.md)).
 
@@ -61,11 +61,19 @@ through GitHub OIDC — no AWS keys in the repository — with a migration gate 
 refuses to swap the task definition if migrations fail. Rollback is one command.
 
 ### Modular by subtraction
-The parts you don't want come out cleanly. Optional modules leave `// <module:x>`
-fence markers at their cross-module references, and `scripts/subtraction-test.mjs`
-both generates the 11 removal recipes in [`docs/removal/`](docs/removal/) and
-proves them by deleting each module in a throwaway worktree and rebuilding what
-is left. CI runs it nightly, so a recipe cannot drift from the code.
+The parts you don't want come out cleanly. Wherever an optional module is
+referenced from code that stays, the reference carries a **fence marker** — a
+`// <module:x>` comment that means *delete this line*, or a
+`// <module:x>` … `// </module:x>` pair that means *delete this block*. That
+makes every cross-reference machine-findable, so removal is a script rather than
+a search. `scripts/subtraction-test.mjs` reads those markers to generate the 11
+removal recipes in [`docs/removal/`](docs/removal/), and proves them by deleting
+each module in a throwaway worktree and rebuilding what is left
+([ADR 0008](docs/decisions/0008-modular-by-subtraction.md)).
+
+CI runs the drift check — regenerate the recipes, fail on any diff — on **every
+pull request**, so a recipe cannot fall out of step with the markers. The full
+removal proof is far slower and runs nightly and on pushes to release branches.
 
 ---
 
@@ -217,6 +225,7 @@ covered in [`docs/guides/container.md`](docs/guides/container.md).
 apps/api/            # NestJS API — controller → service → repository, 25 modules
 apps/web/            # user app — Vite + React + Tailwind + Zustand
 apps/admin/          # admin panel — same stack, role-gated
+apps/docs/           # Astro + Starlight site that publishes docs/ — no prose of its own
 packages/shared/     # wire contracts shared by the API and both frontends
 infra/terraform/     # the AWS footprint, in two cost profiles
 lambdas/example/     # echo Lambda demonstrating the invoker pattern
@@ -263,7 +272,7 @@ handle in `.github/CODEOWNERS`.
 
 `--drop-demo` does not reimplement deletion: it calls straight into
 `scripts/subtraction-test.mjs`, removing the `note` module's paths and its
-`// <module:note>` fences with the same code CI proves nightly. It then
+`// <module:note>` fences with the same code the nightly proof runs. It then
 regenerates `docs/removal/` and deletes itself, because a rename script has one
 job and you have now done it.
 
@@ -339,6 +348,11 @@ gh workflow run deploy.yml -f sha=<earlier-commit-sha>
 | [`docs/removal/`](docs/removal/) | Generated per-module removal recipes, proven by CI. |
 | [`docs/benchmarks.md`](docs/benchmarks.md) | What was measured, on what, and why you should not quote it as capacity. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) | How work flows through branches and PRs · how to report a vulnerability. |
+| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | The standard everyone taking part is held to, and where to report a breach. |
+
+Every page above is also published as a site, built from these same files by
+[`apps/docs/`](apps/docs/) — see [The documentation site](CONTRIBUTING.md#the-documentation-site)
+if you want to build it locally.
 
 The `note` module is the living reference implementation of the backend
 conventions — read it alongside [`docs/conventions/backend.md`](docs/conventions/backend.md),

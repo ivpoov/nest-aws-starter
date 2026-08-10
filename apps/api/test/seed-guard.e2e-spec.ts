@@ -19,24 +19,98 @@ const API_ROOT: string = path.resolve(path.dirname(fileURLToPath(import.meta.url
 // the whole run (CI sets it directly instead — see turbo.json's test:e2e env
 // allowlist), which is the same variable `prisma.config.ts` hands the script
 // when a human runs `prisma db seed`.
-function runSeed(nodeEnv: string): SpawnSyncReturns<string> {
+// An `undefined` override deletes the variable rather than passing it as the
+// string "undefined" — which is the whole point of the unset-NODE_ENV case:
+// `prisma db seed` sets no NODE_ENV at all.
+function runSeed(overrides: Record<string, string | undefined>): SpawnSyncReturns<string> {
+  const env: Record<string, string | undefined> = { ...process.env, ...overrides };
+
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined) delete env[key];
+  }
+
   return spawnSync('pnpm', ['exec', 'tsx', 'prisma/seed.ts'], {
     cwd: API_ROOT,
     encoding: 'utf8',
-    env: { ...process.env, NODE_ENV: nodeEnv },
+    env,
   });
 }
 
 describe('demo seed production guard (e2e)', () => {
   it('refuses to run with NODE_ENV=production', () => {
-    const result: SpawnSyncReturns<string> = runSeed('production');
+    const result: SpawnSyncReturns<string> = runSeed({ NODE_ENV: 'production' });
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('Refusing to seed: NODE_ENV=production');
   });
 
+  // The documented command is `prisma db seed`, and neither it nor
+  // prisma.config.ts sets NODE_ENV. An allowlist guard that only rejected
+  // "production" therefore waved through the single most likely way to hit a
+  // real database: an operator with production credentials exported running
+  // the command the README prints. Unset must refuse.
+  it('refuses to run with NODE_ENV unset', () => {
+    const result: SpawnSyncReturns<string> = runSeed({ NODE_ENV: undefined });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Refusing to seed: NODE_ENV=(unset)');
+  });
+
+  it('refuses to run with an unrecognised NODE_ENV', () => {
+    const result: SpawnSyncReturns<string> = runSeed({ NODE_ENV: 'staging' });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Refusing to seed: NODE_ENV=staging');
+  });
+
+  // NODE_ENV is a label an operator sets; DATABASE_URL is where the writes
+  // actually land. A development label pointed at an RDS endpoint is exactly
+  // the accident the label alone cannot catch, so the host is checked too.
+  it('refuses to run against a non-local database host', () => {
+    const result: SpawnSyncReturns<string> = runSeed({
+      NODE_ENV: 'development',
+      DATABASE_URL: 'postgresql://postgres:postgres@db.production.example.com:5432/starter',
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Refusing to seed: DATABASE_URL host');
+    expect(result.stderr).toContain('db.production.example.com');
+  });
+
+  // "postgres" and "db" are the ordinary service names for a *production*
+  // Postgres in Docker Compose and for a Kubernetes Service. A hostname is not
+  // proof of locality, so only addresses that cannot leave the machine are
+  // allowed — a resolvable name never qualifies.
+  it.each([
+    'postgres',
+    'db',
+    'postgres.default.svc.cluster.local',
+  ])('refuses a resolvable service-name host (%s)', (host: string) => {
+    const result: SpawnSyncReturns<string> = runSeed({
+      NODE_ENV: 'development',
+      DATABASE_URL: `postgresql://postgres:postgres@${host}:5432/starter`,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Refusing to seed: DATABASE_URL host');
+    expect(result.stderr).toContain(host);
+  });
+
+  // `postgresql:` is a non-special URL scheme, so WHATWG parsing leaves the
+  // host's case alone. Without normalising, a capitalised host fails closed
+  // with a refusal the developer cannot make sense of.
+  it('accepts a loopback host whatever its case', () => {
+    const result: SpawnSyncReturns<string> = runSeed({
+      NODE_ENV: 'development',
+      DATABASE_URL: 'postgresql://postgres:postgres@LOCALHOST:5433/starter?connection_limit=10',
+    });
+
+    expect(result.stderr).not.toContain('Refusing to seed');
+    expect(result.status).toBe(0);
+  });
+
   it('prints no credentials and writes nothing when it refuses', () => {
-    const result: SpawnSyncReturns<string> = runSeed('production');
+    const result: SpawnSyncReturns<string> = runSeed({ NODE_ENV: 'production' });
     const output: string = `${result.stdout}${result.stderr}`;
 
     expect(output).not.toContain('admin@example.com');
@@ -45,8 +119,8 @@ describe('demo seed production guard (e2e)', () => {
   });
 
   it('seeds demo accounts outside production, idempotently', () => {
-    const first: SpawnSyncReturns<string> = runSeed('development');
-    const second: SpawnSyncReturns<string> = runSeed('development');
+    const first: SpawnSyncReturns<string> = runSeed({ NODE_ENV: 'development' });
+    const second: SpawnSyncReturns<string> = runSeed({ NODE_ENV: 'development' });
 
     expect(first.status).toBe(0);
     expect(second.status).toBe(0);

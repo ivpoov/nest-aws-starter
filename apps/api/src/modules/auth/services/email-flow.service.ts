@@ -104,9 +104,26 @@ export class EmailFlowService {
 
     if (!method) throw new UnauthorizedError(AUTH_ONE_TIME_TOKEN_INVALID);
 
-    await this.userService.updatePasswordHash(method.id, await hash(password, ARGON2_OPTIONS));
-    // A reset means the password may have been compromised — everything dies.
+    // Fail-safe ordering (§7a). Revoke FIRST: a crash after the revoke leaves
+    // the account logged out with the OLD password still valid, and the user
+    // simply asks for another reset. The old order left the NEW password live
+    // with every pre-reset session — including the attacker's — still
+    // authenticated, which is the exact property a reset exists to guarantee.
+    //
+    // Only PART of this is irreducibly cross-store. Session rows are Postgres
+    // (SessionPrismaRepository), so `revokeAllForUser`'s row write and the
+    // password write below could be one unit; the token allowlist it also
+    // clears is Redis, and that half never can be. Making the Postgres halves
+    // atomic needs SessionService and SESSION_REPOSITORY to accept a `tx` —
+    // tracked as follow-up work, not done here. Until then the ordering is the
+    // whole guarantee, so do not reorder these two lines.
+    //
+    // The argon2 hash is computed before the revoke so the window between the
+    // two writes stays as short as possible.
+    const passwordHash: string = await hash(password, ARGON2_OPTIONS);
+
     await this.sessionService.revokeAllForUser(userId);
+    await this.userService.updatePasswordHash(method.id, passwordHash);
     this.logger.log(`Password reset completed for user ${userId}`);
     this.eventBus.emit(AUTH_PASSWORD_CHANGED_EVENT, { userId, sessionId: null });
   }
@@ -124,9 +141,15 @@ export class EmailFlowService {
       throw new UnauthorizedError(AUTH_INVALID_CREDENTIALS);
     }
 
-    await this.userService.updatePasswordHash(method.id, await hash(password, ARGON2_OPTIONS));
-    // The actor proved possession of the current password — their session stays.
+    // Same fail-safe ordering as resetPassword, and the same partly-cross-store
+    // caveat documented there. Revoke first, so a crash between the two leaves
+    // other devices logged out under the unchanged password rather than logged
+    // in under the new one. The actor proved possession of the current
+    // password, so their own session stays.
+    const passwordHash: string = await hash(password, ARGON2_OPTIONS);
+
     await this.sessionService.revokeOtherSessions(userId, sessionId);
+    await this.userService.updatePasswordHash(method.id, passwordHash);
     this.logger.log(`Password changed for user ${userId}`);
     this.eventBus.emit(AUTH_PASSWORD_CHANGED_EVENT, { userId, sessionId });
   }

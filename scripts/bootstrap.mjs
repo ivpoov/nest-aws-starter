@@ -44,7 +44,7 @@
 // single owner/repo value.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deleteModulePaths, MODULES, scanFences, stripFencesInFile } from './subtraction-test.mjs';
@@ -287,7 +287,16 @@ function rewriteTrackedFiles(replacements, dryRun) {
   for (const relPath of trackedFiles()) {
     const absPath = path.join(REPO_ROOT, relPath);
 
-    if (!existsSync(absPath)) continue;
+    // lstat, not existsSync: git tracks symlinks too (apps/docs/public/assets
+    // points at docs/assets), existsSync follows the link to the directory it
+    // targets, and readFileSync then dies with EISDIR — which killed the whole
+    // run, --dry-run included, before a single byte was written. A symlink has
+    // no content of its own to rewrite; whatever it points at is either tracked
+    // and rewritten on its own turn, or outside the repository and none of our
+    // business.
+    const stats = lstatSync(absPath, { throwIfNoEntry: false });
+
+    if (!stats?.isFile()) continue;
 
     const original = readFileSync(absPath, 'utf8');
 

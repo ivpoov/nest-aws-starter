@@ -5,6 +5,10 @@ import type { CreateSessionDataInterface } from '@modules/session/interfaces/cre
 import type { SessionInterface } from '@modules/session/interfaces/session.interface.js';
 import type { SessionRepositoryInterface } from '@modules/session/interfaces/session-repository.interface.js';
 import { SessionService } from '@modules/session/services/session.service.js';
+import type { RotateTokensDataInterface } from '@modules/token/interfaces/rotate-tokens-data.interface.js';
+import type { RotationGracePairInterface } from '@modules/token/interfaces/rotation-grace-pair.interface.js';
+import type { RotationStateInterface } from '@modules/token/interfaces/rotation-state.interface.js';
+import type { TokenPairInterface } from '@modules/token/interfaces/token-pair.interface.js';
 import type { TokenRepositoryInterface } from '@modules/token/interfaces/token-repository.interface.js';
 import { TokenService } from '@modules/token/services/token.service.js';
 import type { UserInterface } from '@modules/user/interfaces/user.interface.js';
@@ -37,6 +41,9 @@ class FakeTokenRepository implements TokenRepositoryInterface {
   // TTL semantics, so this is how tests assert "the Redis key would have
   // expired at the right time" without a real Redis clock.
   public readonly ttlSecByKey: Map<string, number> = new Map();
+  // The pair a grace key can replay, kept beside it exactly as the Redis
+  // implementation keeps both halves in one value.
+  public readonly replays: Map<string, RotationGracePairInterface> = new Map();
 
   public async setAccessToken(
     userId: string,
@@ -58,31 +65,52 @@ class FakeTokenRepository implements TokenRepositoryInterface {
     this.ttlSecByKey.set(`${userId}:${sessionId}:refresh`, ttlSec);
   }
 
-  public async setPreviousRefreshToken(
+  public async matchesAccessToken(
     userId: string,
     sessionId: string,
     token: string,
-    ttlSec: number,
-  ): Promise<void> {
-    this.keys.set(`${userId}:${sessionId}:prev`, token);
-    this.ttlSecByKey.set(`${userId}:${sessionId}:prev`, ttlSec);
+  ): Promise<boolean> {
+    return this.keys.get(`${userId}:${sessionId}:access`) === token;
   }
 
-  public async getAccessToken(userId: string, sessionId: string): Promise<string | null> {
-    return this.keys.get(`${userId}:${sessionId}:access`) ?? null;
+  public async readRotationState(
+    userId: string,
+    sessionId: string,
+    token: string,
+  ): Promise<RotationStateInterface> {
+    const graceKey: string = `${userId}:${sessionId}:prev`;
+
+    return {
+      isCurrent: this.keys.get(`${userId}:${sessionId}:refresh`) === token,
+      replay: this.keys.get(graceKey) === token ? (this.replays.get(graceKey) ?? null) : null,
+    };
   }
 
-  public async getRefreshToken(userId: string, sessionId: string): Promise<string | null> {
-    return this.keys.get(`${userId}:${sessionId}:refresh`) ?? null;
-  }
+  // Mirrors the Lua script's all-or-nothing semantics: compare first, then
+  // write the grace entry and both keys, or write nothing at all.
+  public async rotateTokens(data: RotateTokensDataInterface): Promise<boolean> {
+    const refreshKey: string = `${data.userId}:${data.sessionId}:refresh`;
 
-  public async getPreviousRefreshToken(userId: string, sessionId: string): Promise<string | null> {
-    return this.keys.get(`${userId}:${sessionId}:prev`) ?? null;
+    if (this.keys.get(refreshKey) !== data.expectedRefreshToken) return false;
+
+    const graceKey: string = `${data.userId}:${data.sessionId}:prev`;
+
+    this.keys.set(graceKey, data.expectedRefreshToken);
+    this.replays.set(graceKey, {
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+    });
+    this.ttlSecByKey.set(graceKey, data.graceTtlSec);
+    await this.setRefreshToken(data.userId, data.sessionId, data.refreshToken, data.refreshTtlSec);
+    await this.setAccessToken(data.userId, data.sessionId, data.accessToken, data.accessTtlSec);
+
+    return true;
   }
 
   public async deleteAllForSession(userId: string, sessionId: string): Promise<void> {
     for (const suffix of ['access', 'refresh', 'prev']) {
       this.keys.delete(`${userId}:${sessionId}:${suffix}`);
+      this.replays.delete(`${userId}:${sessionId}:${suffix}`);
     }
   }
 
@@ -284,6 +312,101 @@ describe('SessionService management', () => {
   });
 });
 
+// Fail-safe cross-store ordering (conventions §7a). verifyAccessToken authorizes
+// on allowlist membership ALONE — it never reads activeUntil — so the Redis
+// delete is the write that actually revokes and the row write is bookkeeping.
+// A happy-path assertion passes under either order, so each test here induces a
+// real failure BETWEEN the two writes and asserts the surviving state is
+// restrictive (token dead, row stale) rather than permissive (row revoked, token
+// still usable for its full TTL). Restore the original order and every one of
+// them goes red on the verifyAccessToken assertion.
+describe('SessionService revocation ordering under an induced mid-operation failure', () => {
+  function expectDeadToken(pair: TokenPairInterface, tokens: FakeTokenRepository): Promise<void> {
+    const tokenService: TokenService = new TokenService(config, tokens);
+
+    return expect(tokenService.verifyAccessToken(pair.accessToken)).rejects.toSatisfy(
+      (caught: unknown): boolean =>
+        caught instanceof UnauthorizedError && caught.args.code === 'AUTH_TOKEN_INVALID',
+    ) as Promise<void>;
+  }
+
+  it('revokeSession: the token is dead even though the row write never landed', async () => {
+    const { service, tokens, sessions } = createService();
+    const pair: TokenPairInterface = await service.createSession(user, context);
+    const before: SessionInterface | null = await sessions.findById('session-1');
+    // The process dies between the two cross-store writes: the row write is
+    // never applied at all, which is the state a crash actually leaves.
+    const spy = vi
+      .spyOn(sessions, 'setActiveUntil')
+      .mockRejectedValue(new Error('induced failure mid-revocation'));
+
+    await expect(service.revokeSession(user.id, 'session-1')).rejects.toThrow(
+      'induced failure mid-revocation',
+    );
+
+    // Restrictive half: access is already gone.
+    await expectDeadToken(pair, tokens);
+    // Stale half: the row still says active. Annoying to look at, never unsafe.
+    expect((await sessions.findById('session-1'))?.activeUntil.getTime()).toBe(
+      before?.activeUntil.getTime(),
+    );
+
+    spy.mockRestore();
+
+    // Self-correcting: the next revoke finishes the bookkeeping.
+    await service.revokeSession(user.id, 'session-1');
+
+    expect((await sessions.findById('session-1'))?.activeUntil.getTime()).toBeLessThanOrEqual(
+      Date.now(),
+    );
+  });
+
+  it('revokeAllForUser: every allowlist key is gone before the row write can fail', async () => {
+    const { service, tokens, sessions } = createService();
+    const first: TokenPairInterface = await service.createSession(user, context);
+    const second: TokenPairInterface = await service.createSession(user, context);
+    const spy = vi
+      .spyOn(sessions, 'endAllByUserId')
+      .mockRejectedValue(new Error('induced failure mid-revocation'));
+
+    await expect(service.revokeAllForUser(user.id)).rejects.toThrow(
+      'induced failure mid-revocation',
+    );
+
+    await expectDeadToken(first, tokens);
+    await expectDeadToken(second, tokens);
+    expect([...tokens.keys.keys()].filter((key) => key.startsWith(`${user.id}:`))).toHaveLength(0);
+
+    spy.mockRestore();
+
+    // The count still comes from the row write, which now runs second: it
+    // reports the rows that were active when it ran, unchanged by the reorder.
+    expect(await service.revokeAllForUser(user.id)).toBe(2);
+  });
+
+  it('refresh-reuse tripwire: the thief loses the access token even if the row write fails', async () => {
+    const { service, tokens, sessions } = createService();
+    const first: TokenPairInterface = await service.createSession(user, context);
+    const live: TokenPairInterface = await service.refresh(first.refreshToken);
+
+    tokens.keys.delete(`${user.id}:session-1:prev`); // grace TTL elapsed
+
+    const spy = vi
+      .spyOn(sessions, 'setActiveUntil')
+      .mockRejectedValue(new Error('induced failure mid-revocation'));
+
+    await expect(service.refresh(first.refreshToken)).rejects.toThrow(
+      'induced failure mid-revocation',
+    );
+
+    // The path where this matters most: the thief already holds a live access
+    // token, so the allowlist delete must survive a failed row write.
+    await expectDeadToken(live, tokens);
+
+    spy.mockRestore();
+  });
+});
+
 describe('SessionService impersonation', () => {
   const adminId = '01890a5d-ac96-774b-bcce-b302099a9999';
 
@@ -415,18 +538,40 @@ describe('SessionService impersonation', () => {
 
   // Release-review fix (case c, regression guard): normal sessions keep the
   // sliding window exactly as before — every refresh re-grants the full TTL.
+  //
+  // The clock is pinned and stepped by hand rather than left to run. Both
+  // bounds are `Date.now() + refreshTtlSec * 1000` evaluated at their own
+  // moment, so a create and a refresh that land in the same millisecond —
+  // which is most of them, and reliably so under the parallel module runs of
+  // scripts/subtraction-test.mjs — produce equal bounds and fail a
+  // `toBeGreaterThan` on nothing but timing. Controlling the clock is also
+  // strictly the better test: the window must move by exactly the elapsed
+  // time, which "greater than" never checked.
   it('still extends activeUntil on every refresh for a normal (non-impersonated) session', async () => {
-    const { service, sessions } = createService();
-    const first = await service.createSession(user, context);
-    const originalActiveUntil: number =
-      (await sessions.findById('session-1'))?.activeUntil.getTime() ?? 0;
+    const createdAt: Date = new Date('2026-08-09T12:00:00.000Z');
+    const elapsedMs: number = 1_000;
 
-    await service.refresh(first.refreshToken);
+    vi.useFakeTimers();
+    vi.setSystemTime(createdAt);
 
-    const rotatedActiveUntil: number =
-      (await sessions.findById('session-1'))?.activeUntil.getTime() ?? 0;
+    try {
+      const { service, sessions } = createService();
+      const first = await service.createSession(user, context);
+      const originalActiveUntil: number =
+        (await sessions.findById('session-1'))?.activeUntil.getTime() ?? 0;
 
-    expect(rotatedActiveUntil).toBeGreaterThan(originalActiveUntil);
+      vi.setSystemTime(new Date(createdAt.getTime() + elapsedMs));
+
+      await service.refresh(first.refreshToken);
+
+      const rotatedActiveUntil: number =
+        (await sessions.findById('session-1'))?.activeUntil.getTime() ?? 0;
+
+      expect(originalActiveUntil).toBe(createdAt.getTime() + config.refreshTtlSec * 1_000);
+      expect(rotatedActiveUntil).toBe(originalActiveUntil + elapsedMs);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // The Critical fix under test: rotate()'s happy path must gate on

@@ -2,10 +2,18 @@
 
 AWS-native NestJS + React full-stack starter. pnpm-workspaces monorepo + Turborepo.
 
+## Workspaces
+`apps/api` (NestJS) · `apps/web` + `apps/admin` (Vite/React) · `apps/docs`
+(Astro + Starlight — publishes `docs/**` and the root Markdown, owns no prose of
+its own) · `packages/shared` (wire contracts) · `infra/terraform` ·
+`lambdas/example`.
+
 ## Commands
 - `pnpm run build | lint | test | test:e2e` — via turbo, from root
 - `docker compose up -d` — Postgres, Redis, LocalStack, MinIO
 - `pnpm run db:generate | db:migrate` — inside apps/api
+- `pnpm run docs:build` — the docs site; needs Chrome on PATH (Mermaid renders
+  at build time via Playwright). Not part of `pnpm run build`.
 
 ## Binding rules
 - Read `docs/conventions/backend.md` BEFORE writing any backend code.

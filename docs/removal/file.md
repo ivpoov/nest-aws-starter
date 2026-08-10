@@ -37,7 +37,7 @@ same markers appear as `{/* <module:file> */}`. Delete the marked lines/blocks
 and the markers themselves.
 
 - `apps/api/src/app.module.ts`
-  - line 11: `import { FileModule } from '@modules/file/file.module.js'; // <module:file>`
+  - line 12: `import { FileModule } from '@modules/file/file.module.js'; // <module:file>`
   - line 77: `FileModule, // <module:file>`
 - `apps/api/test/maintenance-jobs.e2e-spec.ts`
   - line 7: `import { FileIntentEnum, FileStatusEnum } from '@nest-aws-starter/shared'; // <module:file>`
@@ -48,10 +48,10 @@ and the markers themselves.
   - line 42: `let s3: S3ProviderInterface; // <module:file>`
   - line 48: `await ensureBucket(); // <module:file>`
   - line 51: `s3 = app.get<S3ProviderInterface>(S3_PROVIDER); // <module:file>`
-  - lines 144-247 (block)
+  - lines 129-232 (block)
 - `apps/api/prisma/schema.prisma`
   - line 42: `files                   File[] // <module:file>`
-  - lines 192-226 (block)
+  - lines 208-242 (block)
 - `apps/web/src/pages/NotesPage.tsx`
   - line 2: `FileIntentEnum, // <module:file>`
   - line 8: `import { AttachmentsCard } from '../components/Attachments/AttachmentsCard'; // <module:file>`
@@ -60,22 +60,20 @@ and the markers themselves.
   - line 21: `const fileUpload: UseFileUploadResultInterface = useFileUpload(FileIntentEnum.ATTACHMENT); // <module:file>`
   - lines 72-80 (block)
 - `packages/shared/src/index.ts`
-  - line 38: `export * from './files/constants/file-error-codes.constants.js'; // <module:file>`
-  - line 40: `export * from './files/enums/file-status.enum.js'; // <module:file>`
-  - line 41: `export * from './files/interfaces/download-url-response.interface.js'; // <module:file>`
-  - line 42: `export * from './files/interfaces/file-response.interface.js'; // <module:file>`
-  - line 43: `export * from './files/interfaces/request-upload-request.interface.js'; // <module:file>`
-  - line 44: `export * from './files/interfaces/request-upload-response.interface.js'; // <module:file>`
-  - line 45: `export * from './files/types/file-error-code.type.js'; // <module:file>`
+  - line 44: `export * from './files/constants/file-error-codes.constants.js'; // <module:file>`
+  - line 46: `export * from './files/enums/file-status.enum.js'; // <module:file>`
+  - line 47: `export * from './files/interfaces/download-url-response.interface.js'; // <module:file>`
+  - line 48: `export * from './files/interfaces/file-response.interface.js'; // <module:file>`
+  - line 49: `export * from './files/interfaces/request-upload-request.interface.js'; // <module:file>`
+  - line 50: `export * from './files/interfaces/request-upload-response.interface.js'; // <module:file>`
+  - line 51: `export * from './files/types/file-error-code.type.js'; // <module:file>`
 
 ### Not yet fence-marked (edit by hand)
 
 These references are **not** fenced, so `scripts/subtraction-test.mjs` neither strips
-them nor proves they were handled. Any `packages/shared/src/*` folder marked "delete by
-hand" in section 1 belongs here too: the script leaves it in place because
-`packages/shared/src/index.ts` re-exports it through unfenced `export *` lines, so
-deleting the folder on its own would break `build shared`. Delete the folder and those
-export lines together. Work through the list by hand:
+them nor proves they were handled. Every one of them is a hole in the proof: the
+subtracted tree was type-checked and unit-tested *without* these edits applied, so it is
+on you to make them and to re-run the suites afterwards. Work through the list by hand:
 
 _None — every cross-module reference for this module is fence-marked._
 

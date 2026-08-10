@@ -1,20 +1,15 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
-const scheme = z.object({
+const configSchema = z.object({
   url: z.string().min(1),
 });
 
-export type DatabaseConfig = Required<z.infer<typeof scheme>>;
+export type DatabaseConfig = z.infer<typeof configSchema>;
 
 export const databaseConfig = registerAs('database', (): DatabaseConfig => {
-  const config: DatabaseConfig = {
+  return validateConfigSchema(configSchema, {
     url: process.env.DATABASE_URL ?? '',
-  };
-
-  validateScheme(scheme, config, new Logger('DatabaseConfig'));
-
-  return config;
+  });
 });

@@ -1,3 +1,4 @@
+import type { TransactionContextInterface } from '@interfaces/transaction-context.interface.js';
 import type { ProviderEventInterface } from '@modules/payment/interfaces/provider-event.interface.js';
 import type { UpsertWebhookEventResultInterface } from '@modules/payment/interfaces/upsert-webhook-event-result.interface.js';
 import type { WebhookEventInterface } from '@modules/payment/interfaces/webhook-event.interface.js';
@@ -15,12 +16,15 @@ export interface WebhookEventRepositoryInterface {
   findById(id: string): Promise<WebhookEventInterface | null>;
   markProcessed(id: string): Promise<void>;
   markSkipped(id: string): Promise<void>;
-  markFailed(id: string): Promise<void>;
+  // markFailed/recordFailure take the optional unit-of-work handle (§7a): the
+  // consumer writes them as one unit, so a row can never end up at the attempt
+  // ceiling without the FAILED status that makes the retry sweep see it.
+  markFailed(id: string, tx?: TransactionContextInterface): Promise<void>;
   // Pure counter update (attempts++, lastError) — returns the attempts count
   // after the increment. Deciding whether that count crosses the FAILED
   // threshold is a business rule and stays in the consumer service, not
   // here (conventions §1: repositories hold no business logic).
-  recordFailure(id: string, error: string): Promise<number>;
+  recordFailure(id: string, error: string, tx?: TransactionContextInterface): Promise<number>;
   // Retry-sweep candidates (WebhookRetryJob): FAILED rows older than cutoff
   // whose attempts haven't hit the retry ceiling yet, oldest first, capped
   // at limit.

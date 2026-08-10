@@ -1,3 +1,4 @@
+import { API_KEY_SECURITY_SCHEME } from '@constants/swagger.constants.js';
 import { ApiDefaultResponse } from '@decorators/api-default-response.decorator.js';
 import { Serialize } from '@decorators/serialize.decorator.js';
 import { API_KEY_THROTTLER_NAME } from '@modules/api-key/constants/api-key.constants.js';
@@ -8,7 +9,7 @@ import { ApiKeyThrottlerGuard } from '@modules/api-key/guards/api-key-throttler.
 import type { ApiKeyPrincipalInterface } from '@modules/api-key/interfaces/api-key-principal.interface.js';
 import type { ApiDemoWhoamiResponseInterface } from '@nest-aws-starter/shared';
 import { Controller, Get, UseGuards } from '@nestjs/common';
-import { ApiHeader, ApiTags } from '@nestjs/swagger';
+import { ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { StatusCodes } from 'http-status-codes';
 
@@ -17,8 +18,14 @@ import { StatusCodes } from 'http-status-codes';
 // @RequireApiKey() (Public() + ApiKeyGuard) plus the per-key rate budget
 // (ApiKeyThrottlerGuard). Copy this shape for real service-to-service
 // endpoints.
+// @ApiSecurity, not @ApiHeader: the key is a credential, so it belongs in the
+// document's `security` list against the scheme setup-swagger.helper.ts
+// registers — which is what makes Swagger UI's Authorize dialog offer a box for
+// it and what a client generator reads. Documenting it as a plain required
+// header described the same wire format while telling every tool downstream
+// that this endpoint needs no authentication.
 @ApiTags('API keys')
-@ApiHeader({ name: 'X-Api-Key', description: 'API key issued by an admin', required: true })
+@ApiSecurity(API_KEY_SECURITY_SCHEME)
 @Controller('api-demo')
 export class ApiDemoController {
   // Guard order is load-bearing, not stylistic: @RequireApiKey() is written

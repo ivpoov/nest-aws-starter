@@ -250,4 +250,44 @@ describe('transactions', () => {
       expect(secondPage.body.items[0].id).toBe(middle.id);
     });
   });
+
+  // Both payment foreign keys used to be ON DELETE CASCADE, so removing one
+  // user row took that user's entire financial history with it — the exact
+  // retention rule the Activity audit trail already documents, never applied
+  // to the money. Postgres refuses the delete now.
+  describe('payment retention', () => {
+    it('refuses to delete a user whose payment records still exist', async () => {
+      const owner = await registerUser('Transactions Retention E2E');
+      const plan = await prisma.plan.create({
+        data: {
+          name: `Retention E2E Plan ${randomUUID()}`,
+          amountCents: 2_500,
+          currency: 'USD',
+          intervalDays: 30,
+        },
+      });
+      const subscription = await prisma.subscription.create({
+        data: {
+          userId: owner.id,
+          planId: plan.id,
+          status: 'ACTIVE',
+          provider: 'FAKE',
+          providerRef: `sub_${randomUUID()}`,
+          currentPeriodEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+      });
+      const transaction = await seedTransaction({ userId: owner.id });
+
+      await expect(prisma.user.delete({ where: { id: owner.id } })).rejects.toThrow();
+
+      // The audit trail is still there — this is the assertion the cascade
+      // used to fail: the rows were gone, not merely detached.
+      expect(
+        await prisma.subscription.findUnique({ where: { id: subscription.id } }),
+      ).not.toBeNull();
+      expect(
+        await prisma.paymentTransaction.findUnique({ where: { id: transaction.id } }),
+      ).not.toBeNull();
+    });
+  });
 });

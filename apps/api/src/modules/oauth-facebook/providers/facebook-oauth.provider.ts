@@ -28,28 +28,34 @@ export class FacebookOauthProvider implements OauthProviderInterface {
     return url.toString();
   }
 
+  // Facebook documents both of these calls with the credentials in the query
+  // string, and both are accepted the way Google and Discord do it instead: a
+  // URL is logged, cached by proxies and kept in browser and server history,
+  // so the app secret goes in the POST form body and the user's access token
+  // in an Authorization header. Only `fields` — which is not a secret —
+  // remains a search param.
   public async exchangeCode(code: string): Promise<OauthProfileInterface> {
-    const tokenUrl: URL = new URL(`${GRAPH_BASE}/oauth/access_token`);
-
-    tokenUrl.searchParams.set('client_id', this.config.clientId);
-    tokenUrl.searchParams.set('client_secret', this.config.clientSecret);
-    tokenUrl.searchParams.set('redirect_uri', this.config.redirectUri);
-    tokenUrl.searchParams.set('code', code);
-
     const token: FacebookTokenResponseInterface =
       await this.httpClient.request<FacebookTokenResponseInterface>({
-        method: 'GET',
-        url: tokenUrl.toString(),
+        method: 'POST',
+        url: `${GRAPH_BASE}/oauth/access_token`,
+        // OAuth token endpoints require form encoding (RFC 6749 §4.1.3)
+        form: {
+          client_id: this.config.clientId,
+          client_secret: this.config.clientSecret,
+          redirect_uri: this.config.redirectUri,
+          code,
+        },
       });
     const profileUrl: URL = new URL(`${GRAPH_BASE}/me`);
 
     profileUrl.searchParams.set('fields', 'id,name,email,picture.type(large)');
-    profileUrl.searchParams.set('access_token', token.access_token);
 
     const profile: FacebookProfileResponseInterface =
       await this.httpClient.request<FacebookProfileResponseInterface>({
         method: 'GET',
         url: profileUrl.toString(),
+        headers: { authorization: `Bearer ${token.access_token}` },
       });
 
     return {

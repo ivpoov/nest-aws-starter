@@ -1,7 +1,9 @@
 import { Prisma } from '@generated/prisma/client.js';
 import type { CursorPaginationInterface } from '@interfaces/cursor-pagination.interface.js';
+import type { TransactionContextInterface } from '@interfaces/transaction-context.interface.js';
 import type { TransactionFiltersInterface } from '@modules/payment/interfaces/transaction-filters.interface.js';
 import { PaymentTransactionPrismaRepository } from '@modules/payment/repositories/payment-transaction-prisma.repository.js';
+import { openPrismaTransactionContext } from '@modules/prisma/helpers/prisma-transaction-registry.helper.js';
 import type { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import { TransactionStatusEnum } from '@nest-aws-starter/shared';
 import { describe, expect, it, vi } from 'vitest';
@@ -33,7 +35,7 @@ function createRepository(overrides: Record<string, ReturnType<typeof vi.fn>> = 
   paymentTransaction: Record<string, ReturnType<typeof vi.fn>>;
 } {
   const paymentTransaction = {
-    create: vi.fn().mockResolvedValue(row),
+    createMany: vi.fn().mockResolvedValue({ count: 1 }),
     findUniqueOrThrow: vi.fn().mockResolvedValue(row),
     findMany: vi.fn().mockResolvedValue([row]),
     ...overrides,
@@ -45,23 +47,25 @@ function createRepository(overrides: Record<string, ReturnType<typeof vi.fn>> = 
 }
 
 describe('PaymentTransactionPrismaRepository.createIdempotent', () => {
-  it('creates a new row and reports isNew=true', async () => {
+  it('inserts with skipDuplicates, reads the row back, and reports isNew=true', async () => {
     const { repository, paymentTransaction } = createRepository();
 
     const result = await repository.createIdempotent(data);
 
-    expect(paymentTransaction.create).toHaveBeenCalledWith({ data });
+    expect(paymentTransaction.createMany).toHaveBeenCalledWith({ data, skipDuplicates: true });
+    expect(paymentTransaction.findUniqueOrThrow).toHaveBeenCalledWith({
+      where: { provider_providerRef: { provider: 'STRIPE', providerRef: 'in_1' } },
+    });
     expect(result.isNew).toBe(true);
     expect(result.transaction.id).toBe('txn-1');
   });
 
-  it('falls back to the existing row on a duplicate (P2002) and reports isNew=false', async () => {
-    const duplicate = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
-      code: 'P2002',
-      clientVersion: '7.8.0',
-    });
+  // The replay path is a zero-row insert, NOT a raised P2002: inside a unit of
+  // work a raised unique violation would abort the whole transaction and take
+  // the caller's other writes with it.
+  it('reports isNew=false and returns the stored row when the insert is skipped as a duplicate', async () => {
     const { repository, paymentTransaction } = createRepository({
-      create: vi.fn().mockRejectedValue(duplicate),
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
     });
 
     const result = await repository.createIdempotent(data);
@@ -70,6 +74,7 @@ describe('PaymentTransactionPrismaRepository.createIdempotent', () => {
       where: { provider_providerRef: { provider: 'STRIPE', providerRef: 'in_1' } },
     });
     expect(result.isNew).toBe(false);
+    expect(result.transaction.id).toBe('txn-1');
   });
 
   it('rethrows any other Prisma error unchanged', async () => {
@@ -77,9 +82,30 @@ describe('PaymentTransactionPrismaRepository.createIdempotent', () => {
       code: 'P2003',
       clientVersion: '7.8.0',
     });
-    const { repository } = createRepository({ create: vi.fn().mockRejectedValue(other) });
+    const { repository } = createRepository({ createMany: vi.fn().mockRejectedValue(other) });
 
     await expect(repository.createIdempotent(data)).rejects.toBe(other);
+  });
+
+  // The whole point of the optional handle: when one is passed, every statement
+  // must run on the caller's transaction client, never on the autocommit one.
+  it('routes both statements through the transaction client when a context is given', async () => {
+    const { repository, paymentTransaction } = createRepository();
+    const transactionalPaymentTransaction = {
+      createMany: vi.fn().mockResolvedValue({ count: 1 }),
+      findUniqueOrThrow: vi.fn().mockResolvedValue(row),
+    };
+    const context: TransactionContextInterface = openPrismaTransactionContext({
+      paymentTransaction: transactionalPaymentTransaction,
+    } as unknown as Prisma.TransactionClient);
+
+    const result = await repository.createIdempotent(data, context);
+
+    expect(transactionalPaymentTransaction.createMany).toHaveBeenCalledTimes(1);
+    expect(transactionalPaymentTransaction.findUniqueOrThrow).toHaveBeenCalledTimes(1);
+    expect(paymentTransaction.createMany).not.toHaveBeenCalled();
+    expect(paymentTransaction.findUniqueOrThrow).not.toHaveBeenCalled();
+    expect(result.isNew).toBe(true);
   });
 });
 

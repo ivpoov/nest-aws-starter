@@ -25,7 +25,7 @@ and the markers themselves.
   - line 33: `import { CloudFrontModule } from '@providers/cloudfront/cloudfront.module.js'; // <module:cloudfront>`
   - line 61: `CloudFrontModule, // <module:cloudfront>`
 - `apps/api/src/configs/index.ts`
-  - line 3: `import { cloudfrontConfig } from '@configs/cloudfront.config.js'; // <module:cloudfront>`
+  - line 4: `import { cloudfrontConfig } from '@configs/cloudfront.config.js'; // <module:cloudfront>`
   - line 26: `cloudfrontConfig, // <module:cloudfront>`
 - `apps/api/src/modules/file/services/file.service.ts`
   - line 2: `import { type CloudFrontConfig, cloudfrontConfig } from '@configs/cloudfront.config.js'; // <module:cloudfront>`
@@ -48,11 +48,9 @@ and the markers themselves.
 ### Not yet fence-marked (edit by hand)
 
 These references are **not** fenced, so `scripts/subtraction-test.mjs` neither strips
-them nor proves they were handled. Any `packages/shared/src/*` folder marked "delete by
-hand" in section 1 belongs here too: the script leaves it in place because
-`packages/shared/src/index.ts` re-exports it through unfenced `export *` lines, so
-deleting the folder on its own would break `build shared`. Delete the folder and those
-export lines together. Work through the list by hand:
+them nor proves they were handled. Every one of them is a hole in the proof: the
+subtracted tree was type-checked and unit-tested *without* these edits applied, so it is
+on you to make them and to re-run the suites afterwards. Work through the list by hand:
 
 _None — every cross-module reference for this module is fence-marked._
 
