@@ -6,8 +6,8 @@ import { CACHE_INVALIDATION_CHANNEL } from '@providers/cache/constants/cache.con
 import type { CacheInvalidationMessageInterface } from '@providers/cache/interfaces/cache-invalidation-message.interface.js';
 import type { MemoryCacheStore } from '@providers/cache/services/memory-cache-store.service.js';
 import { REDIS_CLIENT } from '@providers/redis/constants/redis.constants.js';
+import { createRedisClient } from '@providers/redis/helpers/create-redis-client.helper.js';
 import type { RedisClientType } from '@providers/redis/types/redis-client.type.js';
-import { Cluster, Redis } from 'ioredis';
 
 @Injectable()
 export class CacheInvalidationService implements OnModuleInit, OnModuleDestroy {
@@ -23,9 +23,7 @@ export class CacheInvalidationService implements OnModuleInit, OnModuleDestroy {
 
   public async onModuleInit(): Promise<void> {
     // Subscribing puts a connection into subscriber mode, so the shared client cannot be used.
-    this.subscriber = this.config.isCluster
-      ? new Cluster([this.config.url], { lazyConnect: true })
-      : new Redis(this.config.url, { lazyConnect: true });
+    this.subscriber = createRedisClient(this.config);
 
     this.subscriber.on('message', (_channel: string, message: string): void => {
       void this.handleMessage(message);
