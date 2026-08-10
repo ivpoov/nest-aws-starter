@@ -5,6 +5,7 @@ import type { CreateSessionDataInterface } from '@modules/session/interfaces/cre
 import type { SessionInterface } from '@modules/session/interfaces/session.interface.js';
 import type { SessionRepositoryInterface } from '@modules/session/interfaces/session-repository.interface.js';
 import { SessionService } from '@modules/session/services/session.service.js';
+import type { RotationGracePairInterface } from '@modules/token/interfaces/rotation-grace-pair.interface.js';
 import type { TokenRepositoryInterface } from '@modules/token/interfaces/token-repository.interface.js';
 import { TokenService } from '@modules/token/services/token.service.js';
 import type { UserInterface } from '@modules/user/interfaces/user.interface.js';
@@ -37,6 +38,9 @@ class FakeTokenRepository implements TokenRepositoryInterface {
   // TTL semantics, so this is how tests assert "the Redis key would have
   // expired at the right time" without a real Redis clock.
   public readonly ttlSecByKey: Map<string, number> = new Map();
+  // The pair a grace key can replay, kept beside it exactly as the Redis
+  // implementation keeps both halves in one value.
+  public readonly replays: Map<string, RotationGracePairInterface> = new Map();
 
   public async setAccessToken(
     userId: string,
@@ -58,31 +62,50 @@ class FakeTokenRepository implements TokenRepositoryInterface {
     this.ttlSecByKey.set(`${userId}:${sessionId}:refresh`, ttlSec);
   }
 
-  public async setPreviousRefreshToken(
+  public async setRotationGrace(
     userId: string,
     sessionId: string,
-    token: string,
+    replacedToken: string,
+    issued: RotationGracePairInterface,
     ttlSec: number,
   ): Promise<void> {
-    this.keys.set(`${userId}:${sessionId}:prev`, token);
+    this.keys.set(`${userId}:${sessionId}:prev`, replacedToken);
+    this.replays.set(`${userId}:${sessionId}:prev`, issued);
     this.ttlSecByKey.set(`${userId}:${sessionId}:prev`, ttlSec);
   }
 
-  public async getAccessToken(userId: string, sessionId: string): Promise<string | null> {
-    return this.keys.get(`${userId}:${sessionId}:access`) ?? null;
+  public async matchesAccessToken(
+    userId: string,
+    sessionId: string,
+    token: string,
+  ): Promise<boolean> {
+    return this.keys.get(`${userId}:${sessionId}:access`) === token;
   }
 
-  public async getRefreshToken(userId: string, sessionId: string): Promise<string | null> {
-    return this.keys.get(`${userId}:${sessionId}:refresh`) ?? null;
+  public async matchesRefreshToken(
+    userId: string,
+    sessionId: string,
+    token: string,
+  ): Promise<boolean> {
+    return this.keys.get(`${userId}:${sessionId}:refresh`) === token;
   }
 
-  public async getPreviousRefreshToken(userId: string, sessionId: string): Promise<string | null> {
-    return this.keys.get(`${userId}:${sessionId}:prev`) ?? null;
+  public async findRotationGraceReplay(
+    userId: string,
+    sessionId: string,
+    token: string,
+  ): Promise<RotationGracePairInterface | null> {
+    const key: string = `${userId}:${sessionId}:prev`;
+
+    if (this.keys.get(key) !== token) return null;
+
+    return this.replays.get(key) ?? null;
   }
 
   public async deleteAllForSession(userId: string, sessionId: string): Promise<void> {
     for (const suffix of ['access', 'refresh', 'prev']) {
       this.keys.delete(`${userId}:${sessionId}:${suffix}`);
+      this.replays.delete(`${userId}:${sessionId}:${suffix}`);
     }
   }
 

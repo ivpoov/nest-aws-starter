@@ -47,4 +47,18 @@ describe('RevenueByPlanBreakdown', () => {
     expect(screen.getByText('$30.00')).toBeInTheDocument();
     expect(screen.getByText('$10.00')).toBeInTheDocument();
   });
+
+  it('labels the null-plan row as unattributed instead of dropping it', () => {
+    const items: StatisticsRevenueByPlanInterface[] = [
+      ...ITEMS,
+      { planId: null, planName: null, amountCents: 2_590 },
+    ];
+
+    render(
+      <RevenueByPlanBreakdown items={items} isLoading={false} error={null} onRetry={vi.fn()} />,
+    );
+
+    expect(screen.getByRole('rowheader', { name: 'Unattributed' })).toBeInTheDocument();
+    expect(screen.getByText('$25.90')).toBeInTheDocument();
+  });
 });

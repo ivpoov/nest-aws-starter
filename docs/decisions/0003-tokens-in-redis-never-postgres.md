@@ -18,11 +18,11 @@ alternative store was not a new dependency.
 Every short-lived credential is a Redis key with a native TTL. Nothing token-shaped is
 written to PostgreSQL.
 
-| Credential | Key | Store |
-|---|---|---|
-| Access token | `users:{userId}:sessions:{sessionId}:access` | Redis |
-| Refresh token | `users:{userId}:sessions:{sessionId}:refresh` | Redis |
-| Previous refresh token (rotation grace) | `users:{userId}:sessions:{sessionId}:refresh:prev` | Redis |
+| Credential | Key | Store | Value |
+|---|---|---|---|
+| Access token | `users:{userId}:sessions:{sessionId}:access` | Redis | SHA-256 digest |
+| Refresh token | `users:{userId}:sessions:{sessionId}:refresh` | Redis | SHA-256 digest |
+| Rotation grace (replaced token + its replacement) | `users:{userId}:sessions:{sessionId}:refresh:prev` | Redis | digest + pair |
 | Email verification / password reset | `users:{userId}:{kind}` | Redis |
 | OAuth `state` | `oauth:state:{state}` | Redis |
 | OAuth one-time exchange code | `oauth:exchange:{code}` | Redis |
@@ -32,6 +32,16 @@ Redis is not a cache in front of the truth — it **is** the truth. The comment 
 `apps/api/src/modules/token/repositories/token-redis.repository.ts` states the invariant:
 "a token exists iff its key exists; revocation is key deletion and applies to access tokens
 instantly." A JWT with a valid signature is rejected if its allowlist key is gone.
+
+The session allowlist stores a **SHA-256 digest of the token, never the token**. "Nothing
+token-shaped in Postgres" was only half a promise while the refresh token itself sat in
+Redis for its full 26-day TTL — a Redis dump, replica or RDB snapshot in a backup bucket was
+a pile of directly replayable credentials. A digest answers "is this the token I issued?"
+exactly as well, and there is nothing to brute force in a 256-bit random JWT, so the digest
+is unsalted and compared in constant time. The one exception is the rotation grace key,
+which must hand the pair that won a refresh race back to the request that lost it; it is
+scoped to one session and expires with the grace window (`AUTH_REFRESH_GRACE_SEC`, 30s by
+default).
 
 One-time tokens are consumed with `GETDEL` (`OneTimeTokenRedisRepository`,
 `OauthStoreRedisRepository`), so consumption is atomic and a token cannot be replayed.
@@ -70,6 +80,19 @@ the sense of [ADR 1](./0001-contracts-over-implementations.md).
 - **Prefix scans are O(keys).** `deleteAllForUser` uses `SCAN … MATCH users:{id}:sessions:*`
   and, in cluster mode, runs it per master node and deletes keys one at a time (multi-key
   `DEL` is `CROSSSLOT`). It is fine at this cardinality and would not be at a much larger one.
+
+**Upgrade step, to be done once and then deleted**
+
+The release that introduced digests also shipped a compatibility shim —
+`TokenRedisRepository.matchesPreDigestKey` — which accepts an allowlist key still holding a
+verbatim token, rewrites it as a digest with `SET … KEEPTTL`, and lets that request through.
+Without it, deploying the change would have signed every logged-in user out at once.
+
+**Delete `matchesPreDigestKey` and its callers once one `AUTH_REFRESH_TTL_SEC` window (26
+days by default) has passed since that deploy.** No pre-digest key can survive longer than
+its own TTL, so after that window the shim is unreachable code on the auth hot path. Nothing
+breaks if it is left in place; it is simply dead weight that invites the question "when is a
+non-digest accepted?" every time someone reads the file.
 
 **Where it is bent — and why the bend is intentional**
 

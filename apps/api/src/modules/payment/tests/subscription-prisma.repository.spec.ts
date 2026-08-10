@@ -190,11 +190,14 @@ describe('SubscriptionPrismaRepository — other reads/writes', () => {
     });
   });
 
-  it('findOverdue queries ACTIVE/PAST_DUE rows past the cutoff', async () => {
+  // The sweep is bounded and ordered: unbounded, a backlog would have loaded
+  // every overdue row into memory at once, and without the ordering a capped
+  // run could keep re-reading the same arbitrary slice and starve the oldest.
+  it('findOverdue queries ACTIVE/PAST_DUE rows past the cutoff, capped and oldest first', async () => {
     const { repository, subscription } = createRepository();
     const cutoff = new Date('2026-08-01T00:00:00Z');
 
-    const result = await repository.findOverdue(cutoff);
+    const result = await repository.findOverdue(cutoff, 200);
 
     expect(subscription.findMany).toHaveBeenCalledWith({
       where: {
@@ -202,6 +205,8 @@ describe('SubscriptionPrismaRepository — other reads/writes', () => {
         currentPeriodEndsAt: { lt: cutoff },
       },
       include: { plan: true },
+      orderBy: { currentPeriodEndsAt: 'asc' },
+      take: 200,
     });
     expect(result).toHaveLength(1);
   });

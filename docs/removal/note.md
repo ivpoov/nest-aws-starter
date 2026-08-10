@@ -35,7 +35,7 @@ and the markers themselves.
   - line 1: `export const NOTE_CREATED_EVENT = 'note.created'; // <module:note>`
 - `apps/api/prisma/schema.prisma`
   - line 41: `notes                   Note[] // <module:note>`
-  - lines 99-121 (block)
+  - lines 110-132 (block)
 - `apps/web/src/App.tsx`
   - line 14: `import { NotesPage } from './pages/NotesPage'; // <module:note>`
   - lines 46-48 (block)

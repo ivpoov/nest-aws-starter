@@ -1,4 +1,5 @@
 import { EventBusService } from '@modules/event/services/event-bus.service.js';
+import { EXPIRY_SWEEP_BATCH_LIMIT } from '@modules/payment/constants/subscription-lifecycle.constants.js';
 import type { ActivateFromCheckoutDataInterface } from '@modules/payment/interfaces/activate-from-checkout-data.interface.js';
 import type { PaymentTransactionRepositoryInterface } from '@modules/payment/interfaces/payment-transaction-repository.interface.js';
 import type { PlanInterface } from '@modules/payment/interfaces/plan.interface.js';
@@ -390,6 +391,17 @@ describe('SubscriptionLifecycleService', () => {
       const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
 
       expect(before - cutoff.getTime()).toBeGreaterThanOrEqual(threeDaysMs - 1000);
+    });
+
+    it('caps the rows a single run pulls in', async () => {
+      vi.mocked(subscriptionRepository.findOverdue).mockResolvedValue([]);
+
+      await service.expireOverdue();
+
+      expect(subscriptionRepository.findOverdue).toHaveBeenCalledWith(
+        expect.any(Date),
+        EXPIRY_SWEEP_BATCH_LIMIT,
+      );
     });
   });
 });

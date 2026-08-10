@@ -18,6 +18,13 @@ import { EmptyState } from '../ui/EmptyState';
 import { ErrorMessage } from '../ui/ErrorMessage';
 import { Loader } from '../ui/Loader';
 
+// recharts reads its category axis straight off the row, so the null-plan
+// row needs its display label resolved before the data reaches the chart.
+interface ChartBarInterface {
+  readonly label: string;
+  readonly amountCents: number;
+}
+
 interface RevenueByPlanBreakdownPropsInterface {
   readonly items: StatisticsRevenueByPlanInterface[];
   readonly isLoading: boolean;
@@ -31,6 +38,19 @@ function formatCents(amountCents: number): string {
 
 function formatLabel(label: string | number | boolean | null | undefined): string {
   return typeof label === 'number' ? formatCents(label) : String(label ?? '');
+}
+
+// The API returns one row with a null plan: revenue from transactions that
+// carry no subscription. Dropping it would put a breakdown on screen that
+// does not add up to the total revenue tile beside it.
+const UNATTRIBUTED_LABEL = 'Unattributed';
+
+function planLabel(item: StatisticsRevenueByPlanInterface): string {
+  return item.planName ?? UNATTRIBUTED_LABEL;
+}
+
+function planKey(item: StatisticsRevenueByPlanInterface): string {
+  return item.planId ?? UNATTRIBUTED_LABEL;
 }
 
 // Same accessible-table companion pattern as AuthMethodBreakdown — recharts'
@@ -48,8 +68,8 @@ function renderAccessibleTable(items: StatisticsRevenueByPlanInterface[]): React
       </thead>
       <tbody>
         {items.map((item) => (
-          <tr key={item.planId}>
-            <th scope="row">{item.planName}</th>
+          <tr key={planKey(item)}>
+            <th scope="row">{planLabel(item)}</th>
             <td>{formatCents(item.amountCents)}</td>
           </tr>
         ))}
@@ -62,11 +82,18 @@ function renderChart(
   items: StatisticsRevenueByPlanInterface[],
   colors: ChartColorsInterface,
 ): ReactElement {
+  const bars: ChartBarInterface[] = items.map(
+    (item: StatisticsRevenueByPlanInterface): ChartBarInterface => ({
+      label: planLabel(item),
+      amountCents: item.amountCents,
+    }),
+  );
+
   return (
     <>
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart layout="vertical" data={items}>
+          <BarChart layout="vertical" data={bars}>
             <CartesianGrid horizontal={false} stroke={colors.edge} />
             <XAxis
               type="number"
@@ -76,7 +103,7 @@ function renderChart(
             />
             <YAxis
               type="category"
-              dataKey="planName"
+              dataKey="label"
               stroke={colors.muted}
               tick={{ fontSize: 12 }}
               width={80}

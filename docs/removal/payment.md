@@ -95,23 +95,25 @@ and the markers themselves.
   - line 7: `revenueByPlan, // <module:payment>`
   - lines 12-14 (block)
   - lines 18-20 (block)
-  - lines 77-110 (block)
+  - lines 77-135 (block)
 - `apps/api/src/modules/statistic/services/statistic.service.ts`
   - lines 13-15 (block)
   - lines 44-46 (block)
   - lines 84-88 (block)
-  - lines 105-123 (block)
-  - lines 150-154 (block)
+  - lines 105-135 (block)
+  - lines 162-166 (block)
 - `apps/api/src/modules/statistic/tests/statistic-typed-sql.repository.spec.ts`
   - lines 4-6 (block)
-  - lines 79-124 (block)
+  - lines 79-166 (block)
 - `apps/api/src/modules/statistic/tests/statistic.service.spec.ts`
   - line 44: `findRevenueByDay: vi.fn().mockResolvedValue(revenuePoints), // <module:payment>`
   - line 45: `findMrrCents: vi.fn().mockResolvedValue(4_900), // <module:payment>`
   - line 46: `findRevenueByPlan: vi.fn().mockResolvedValue(revenueByPlanRows), // <module:payment>`
-  - lines 80-100 (block)
-  - lines 155-172 (block)
-  - line 188: `expect(repository.findRevenueByDay).not.toHaveBeenCalled(); // <module:payment>`
+  - lines 80-140 (block)
+  - lines 195-212 (block)
+  - line 228: `expect(repository.findRevenueByDay).not.toHaveBeenCalled(); // <module:payment>`
+- `apps/api/test/database-indexes.e2e-spec.ts`
+  - lines 29-45 (block)
 - `apps/api/test/maintenance-jobs.e2e-spec.ts`
   - line 2: `import { NormalizedEventTypeEnum } from '@modules/payment/enums/normalized-event-type.enum.js'; // <module:payment>`
   - line 3: `import { WebhookEventStatusEnum } from '@modules/payment/enums/webhook-event-status.enum.js'; // <module:payment>`
@@ -124,13 +126,13 @@ and the markers themselves.
   - lines 62-104 (block)
   - lines 234-342 (block)
 - `apps/api/test/statistics.e2e-spec.ts`
-  - lines 40-80 (block)
-  - lines 146-155 (block)
-  - lines 162-214 (block)
+  - lines 40-103 (block)
+  - lines 169-178 (block)
+  - lines 185-306 (block)
 - `apps/api/prisma/schema.prisma`
   - line 44: `subscriptions           Subscription[] // <module:payment>`
   - line 45: `paymentTransactions     PaymentTransaction[] // <module:payment>`
-  - lines 254-350 (block)
+  - lines 270-389 (block)
 - `apps/api/prisma/seed.ts`
   - lines 424-615 (block)
   - lines 711-728 (block)

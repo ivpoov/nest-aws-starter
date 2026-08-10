@@ -27,7 +27,7 @@ and the markers themselves.
   - line 83: `ApiKeyModule, // <module:api-key>`
 - `apps/api/prisma/schema.prisma`
   - line 43: `apiKeys                 ApiKey[] // <module:api-key>`
-  - lines 228-252 (block)
+  - lines 244-268 (block)
 - `packages/shared/src/index.ts`
   - line 12: `export * from './api-keys/constants/api-key-error-codes.constants.js'; // <module:api-key>`
   - line 13: `export * from './api-keys/interfaces/api-demo-whoami-response.interface.js'; // <module:api-key>`

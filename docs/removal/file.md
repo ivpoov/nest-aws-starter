@@ -51,7 +51,7 @@ and the markers themselves.
   - lines 129-232 (block)
 - `apps/api/prisma/schema.prisma`
   - line 42: `files                   File[] // <module:file>`
-  - lines 192-226 (block)
+  - lines 208-242 (block)
 - `apps/web/src/pages/NotesPage.tsx`
   - line 2: `FileIntentEnum, // <module:file>`
   - line 8: `import { AttachmentsCard } from '../components/Attachments/AttachmentsCard'; // <module:file>`

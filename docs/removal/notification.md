@@ -97,7 +97,7 @@ and the markers themselves.
   - line 46: `notificationPreferences NotificationPreference[] // <module:notification>`
   - line 47: `notifications           Notification[] // <module:notification>`
   - line 48: `notificationReceipts    NotificationReceipt[] // <module:notification>`
-  - lines 352-400 (block)
+  - lines 391-439 (block)
 - `apps/api/prisma/seed.ts`
   - lines 771-913 (block)
   - lines 941-943 (block)
