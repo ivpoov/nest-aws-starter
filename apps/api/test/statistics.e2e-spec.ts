@@ -77,6 +77,29 @@ describe('admin statistics', () => {
 
     return { planId: plan.id, amountCents };
   }
+
+  // Two charges that individually fit in Postgres' int4 amountCents column
+  // but whose sum does not.
+  async function seedAboveInt32Revenue(): Promise<number> {
+    const halfCents = 1_500_000_000;
+    const subscription = await prisma.subscription.findFirstOrThrow({ where: { userId } });
+
+    for (const _index of [0, 1]) {
+      await prisma.paymentTransaction.create({
+        data: {
+          userId,
+          subscriptionId: subscription.id,
+          status: 'SUCCEEDED',
+          amountCents: halfCents,
+          currency: 'USD',
+          provider: 'FAKE',
+          providerRef: `txn_${randomUUID()}`,
+        },
+      });
+    }
+
+    return halfCents * 2;
+  }
   // </module:payment>
 
   beforeAll(async () => {
@@ -186,7 +209,7 @@ describe('admin statistics', () => {
     expect(after.body.totals.mrrCents - before.body.totals.mrrCents).toBe(fixture.amountCents);
 
     const planRow = after.body.revenueByPlan.find(
-      (row: { planId: string }) => row.planId === fixture.planId,
+      (row: { planId: string | null }) => row.planId === fixture.planId,
     );
 
     expect(planRow).toEqual({
@@ -194,6 +217,75 @@ describe('admin statistics', () => {
       planName: expect.any(String),
       amountCents: fixture.amountCents,
     });
+  });
+
+  // The by-plan breakdown and the revenue total sit on one dashboard, so
+  // they have to add up. They used not to: the breakdown inner-joined
+  // subscriptions and silently dropped every transaction without one.
+  it('reconciles the by-plan breakdown against totals.revenueCents', async () => {
+    await prisma.paymentTransaction.create({
+      data: {
+        userId,
+        status: 'SUCCEEDED',
+        amountCents: 4_321,
+        currency: 'USD',
+        provider: 'FAKE',
+        providerRef: `txn_${randomUUID()}`,
+      },
+    });
+
+    await redis.del('statistic:overview');
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/admin/statistics/overview')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    const breakdownTotal: number = response.body.revenueByPlan.reduce(
+      (total: number, row: { amountCents: number }): number => total + row.amountCents,
+      0,
+    );
+
+    expect(breakdownTotal).toBe(response.body.totals.revenueCents);
+
+    const unattributed = response.body.revenueByPlan.find(
+      (row: { planId: string | null }) => row.planId === null,
+    );
+
+    expect(unattributed).toBeDefined();
+    expect(unattributed.planName).toBeNull();
+    expect(unattributed.amountCents).toBeGreaterThanOrEqual(4_321);
+  });
+
+  // The aggregates used to be cast back to int32: past 2_147_483_647 cents
+  // (~$21.5M) in any one bucket Postgres raises `integer out of range` and
+  // the endpoint 500s permanently rather than wrapping quietly. Every route
+  // that reads a revenue aggregate is exercised here.
+  it('serves revenue totals above the int32 boundary instead of erroring', async () => {
+    const seededCents: number = await seedAboveInt32Revenue();
+
+    expect(seededCents).toBeGreaterThan(2_147_483_647);
+
+    await redis.del('statistic:overview');
+
+    const overview = await request(app.getHttpServer())
+      .get('/api/v1/admin/statistics/overview')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(overview.body.totals.revenueCents).toBeGreaterThan(2_147_483_647);
+    expect(
+      Math.max(
+        ...overview.body.revenueByPlan.map((row: { amountCents: number }) => row.amountCents),
+      ),
+    ).toBeGreaterThan(2_147_483_647);
+
+    const series = await request(app.getHttpServer())
+      .get('/api/v1/admin/statistics/series?metric=REVENUE&days=1')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(series.body.points[0].value).toBeGreaterThan(2_147_483_647);
   });
 
   it('serves REVENUE series points reflecting the day-bucketed transaction totals', async () => {

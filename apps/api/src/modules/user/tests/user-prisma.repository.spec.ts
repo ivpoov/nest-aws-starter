@@ -31,18 +31,77 @@ describe('UserPrismaRepository.findMethodsByUserId', () => {
 
 describe('UserPrismaRepository.findManyForAdmin', () => {
   it('keysets the cursor into the where clause instead of offsetting past it', async () => {
-    const { repository, user } = createRepository();
+    const { repository, user, authMethod } = createRepository();
+
+    authMethod.findMany.mockResolvedValue([{ userId: 'user-9' }, { userId: 'user-9' }]);
 
     await repository.findManyForAdmin({ search: 'ada', cursor: 'user-0', limit: 20 });
 
     expect(user.findMany).toHaveBeenCalledWith({
       where: {
-        OR: [
-          { displayName: { contains: 'ada', mode: 'insensitive' } },
-          { authMethods: { some: { email: { contains: 'ada', mode: 'insensitive' } } } },
-        ],
+        OR: [{ displayName: { contains: 'ada', mode: 'insensitive' } }, { id: { in: ['user-9'] } }],
         id: { lt: 'user-0' },
       },
+      include: { authMethods: { select: { type: true, email: true } } },
+      take: 20,
+      orderBy: { id: 'desc' },
+    });
+  });
+
+  // The email half used to ride along as an `authMethods: { some: ... }`
+  // sub-condition, which Postgres cannot fold into a BitmapOr with the
+  // display-name predicate — so the users table was scanned in full however
+  // it was indexed. Resolving it to ids first is what makes both sides
+  // index-scannable, and the lookup itself has to stay bounded and cursored.
+  it('resolves the email half to a bounded, cursored id list of its own', async () => {
+    const { repository, authMethod } = createRepository();
+
+    await repository.findManyForAdmin({ search: 'ada', cursor: 'user-0', limit: 20 });
+
+    expect(authMethod.findMany).toHaveBeenCalledWith({
+      where: {
+        email: { contains: 'ada', mode: 'insensitive' },
+        userId: { lt: 'user-0' },
+      },
+      select: { userId: true },
+      orderBy: { userId: 'desc' },
+      take: 80,
+    });
+  });
+
+  // `contains` interpolates the term into a LIKE pattern unescaped, so a
+  // search for `%` used to match every row and `_` every single character.
+  it('escapes LIKE metacharacters so a wildcard is searched for literally', async () => {
+    const { repository, user, authMethod } = createRepository();
+
+    await repository.findManyForAdmin({ search: '100%_off\\', cursor: null, limit: 20 });
+
+    const escaped = '100\\%\\_off\\\\';
+
+    expect(authMethod.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          email: { contains: escaped, mode: 'insensitive' },
+        }),
+      }),
+    );
+    expect(user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [{ displayName: { contains: escaped, mode: 'insensitive' } }, { id: { in: [] } }],
+        }),
+      }),
+    );
+  });
+
+  it('does not query auth methods at all when no search term is given', async () => {
+    const { repository, authMethod, user } = createRepository();
+
+    await repository.findManyForAdmin({ search: null, cursor: null, limit: 20 });
+
+    expect(authMethod.findMany).not.toHaveBeenCalled();
+    expect(user.findMany).toHaveBeenCalledWith({
+      where: {},
       include: { authMethods: { select: { type: true, email: true } } },
       take: 20,
       orderBy: { id: 'desc' },

@@ -223,13 +223,26 @@ export class UserPrismaRepository implements UserRepositoryInterface {
   // drops the cursor row from the result set — and `skip: 1`, which exists only
   // to step past the cursor row, then eats the next legitimate user instead.
   // Comparing ids in the `where` never depends on the cursor row surviving.
+  //
+  // The email half of the search runs as its own query rather than as a
+  // `authMethods: { some: ... }` sub-condition. Both are substring matches
+  // that only a trigram index can serve, and Postgres will not combine an
+  // indexable predicate with a correlated subquery into one BitmapOr — so
+  // with the subquery in place the users table was scanned in full whatever
+  // indexes existed, which is exactly the plan this is fixing. Resolving the
+  // email side to a list of ids first leaves two index-scannable predicates
+  // on one table, which the planner does combine.
   public async findManyForAdmin(query: AdminUsersQueryInterface): Promise<AdminUserInterface[]> {
+    const search: string | null = query.search ? this.escapeLikePattern(query.search) : null;
+    const emailMatchIds: string[] = search
+      ? await this.findUserIdsByEmailSearch(search, query.cursor, query.limit)
+      : [];
     const users = await this.prisma.user.findMany({
       where: {
-        ...(query.search && {
+        ...(search && {
           OR: [
-            { displayName: { contains: query.search, mode: 'insensitive' } },
-            { authMethods: { some: { email: { contains: query.search, mode: 'insensitive' } } } },
+            { displayName: { contains: search, mode: 'insensitive' } },
+            { id: { in: emailMatchIds } },
           ],
         }),
         // `lt` pairs with `id: 'desc'` — UUIDv7 ids are time-ordered.
@@ -241,6 +254,41 @@ export class UserPrismaRepository implements UserRepositoryInterface {
     });
 
     return users.map((user): AdminUserInterface => this.toAdminDomain(user));
+  }
+
+  // Prisma's `contains` drops the value straight into a LIKE pattern without
+  // escaping it, so `%` searched for everything and `_` matched any single
+  // character — an admin typing a literal `%` got the whole table back rather
+  // than the accounts with a percent sign in them. Backslash is LIKE's default
+  // escape character, so escaping the three metacharacters (and the escape
+  // itself, first) is enough; no ESCAPE clause is needed, which matters
+  // because Prisma gives no way to add one.
+  private escapeLikePattern(search: string): string {
+    return search.replace(/[\\%_]/g, '\\$&');
+  }
+
+  // Bounded, and still exact for the page being built: the caller orders by
+  // `id` descending and keeps `limit` rows, so any user in that page is also
+  // within its own branch's top `limit` — fetching more of this branch could
+  // never change the answer. `@@unique([userId, type])` caps a user at one
+  // method per type, so taking `limit` times the number of types guarantees
+  // at least `limit` distinct users whenever that many match.
+  private async findUserIdsByEmailSearch(
+    search: string,
+    cursor: string | null,
+    limit: number,
+  ): Promise<string[]> {
+    const methods: { userId: string }[] = await this.prisma.authMethod.findMany({
+      where: {
+        email: { contains: search, mode: 'insensitive' },
+        ...(cursor && { userId: { lt: cursor } }),
+      },
+      select: { userId: true },
+      orderBy: { userId: 'desc' },
+      take: limit * Object.keys(AuthMethodType).length,
+    });
+
+    return [...new Set(methods.map((method: { userId: string }): string => method.userId))];
   }
 
   public async findByIdForAdmin(id: string): Promise<AdminUserInterface | null> {

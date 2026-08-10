@@ -39,12 +39,12 @@ and the markers themselves.
   - line 9: `import { ContactUsModule } from '@modules/contact-us/contact-us.module.js'; // <module:contact-us>`
   - line 82: `ContactUsModule, // <module:contact-us>`
 - `apps/api/prisma/schema.prisma`
-  - lines 167-190 (block)
+  - lines 183-206 (block)
 - `apps/api/prisma/seed.ts`
-  - lines 316-378 (block)
-  - lines 685-702 (block)
-  - lines 821-834 (block)
-  - lines 890-892 (block)
+  - lines 360-422 (block)
+  - lines 729-746 (block)
+  - lines 865-878 (block)
+  - lines 934-936 (block)
 - `apps/web/src/App.tsx`
   - line 10: `import { ContactPage } from './pages/ContactPage'; // <module:contact-us>`
   - lines 33-35 (block)

@@ -79,14 +79,14 @@ describe('StatisticTypedSqlRepository', () => {
   // <module:payment>
   it('formats revenueByDay rows as YYYY-MM-DD points, defaulting null amounts to zero', async () => {
     const { repository, queryRawTyped } = createRepository([
-      { day: new Date('2026-08-01T00:00:00.000Z'), amountCents: 2000 },
+      { day: new Date('2026-08-01T00:00:00.000Z'), amountCents: 2_000n },
       { day: new Date('2026-08-02T00:00:00.000Z'), amountCents: null },
     ]);
 
     const points: StatisticsDayPointInterface[] = await repository.findRevenueByDay(2);
 
     expect(points).toEqual([
-      { date: '2026-08-01', count: 2000 },
+      { date: '2026-08-01', count: 2_000 },
       { date: '2026-08-02', count: 0 },
     ]);
     expect(queryRawTyped).toHaveBeenCalledOnce();
@@ -110,16 +110,58 @@ describe('StatisticTypedSqlRepository', () => {
 
   it('maps revenueByPlan rows, defaulting null amounts to zero', async () => {
     const { repository } = createRepository([
-      { planId: 'plan-1', planName: 'Pro', amountCents: 3000 },
+      { planId: 'plan-1', planName: 'Pro', amountCents: 3_000n },
       { planId: 'plan-2', planName: 'Basic', amountCents: null },
     ]);
 
     const rows: StatisticsRevenueByPlanRowInterface[] = await repository.findRevenueByPlan(30);
 
     expect(rows).toEqual([
-      { planId: 'plan-1', planName: 'Pro', amountCents: 3000 },
+      { planId: 'plan-1', planName: 'Pro', amountCents: 3_000 },
       { planId: 'plan-2', planName: 'Basic', amountCents: 0 },
     ]);
+  });
+
+  // The LEFT JOIN in revenueByPlan.sql produces one row with no plan behind
+  // it; TypedSQL's generated type claims those columns are non-null, so the
+  // mapping has to normalize them itself.
+  it('maps the unattributed revenueByPlan row to null plan fields', async () => {
+    const { repository } = createRepository([
+      { planId: null, planName: null, amountCents: 259_000n },
+    ]);
+
+    const rows: StatisticsRevenueByPlanRowInterface[] = await repository.findRevenueByPlan(30);
+
+    expect(rows).toEqual([{ planId: null, planName: null, amountCents: 259_000 }]);
+  });
+
+  // Regression guard for the int32 cast these queries used to carry: any
+  // bucket past 2_147_483_647 cents (~$21.5M) made Postgres raise `integer
+  // out of range` and 500 the whole endpoint. The aggregates are bigint now,
+  // so the repository has to carry bigint through to the JSON number.
+  it('maps revenue amounts above the int32 boundary without loss', async () => {
+    const aboveInt32Max: bigint = 2_147_483_648n;
+    const { repository } = createRepository([
+      { day: new Date('2026-08-01T00:00:00.000Z'), amountCents: aboveInt32Max },
+      { day: new Date('2026-08-02T00:00:00.000Z'), amountCents: 9_000_000_000_000n },
+    ]);
+
+    const points: StatisticsDayPointInterface[] = await repository.findRevenueByDay(2);
+
+    expect(points).toEqual([
+      { date: '2026-08-01', count: 2_147_483_648 },
+      { date: '2026-08-02', count: 9_000_000_000_000 },
+    ]);
+  });
+
+  it('clamps revenue beyond the safe-integer ceiling instead of silently rounding', async () => {
+    const { repository } = createRepository([
+      { planId: 'plan-1', planName: 'Pro', amountCents: BigInt(Number.MAX_SAFE_INTEGER) + 10n },
+    ]);
+
+    const rows: StatisticsRevenueByPlanRowInterface[] = await repository.findRevenueByPlan(30);
+
+    expect(rows[0]?.amountCents).toBe(Number.MAX_SAFE_INTEGER);
   });
   // </module:payment>
 });

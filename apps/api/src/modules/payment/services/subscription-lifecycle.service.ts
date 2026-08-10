@@ -12,7 +12,10 @@ import {
   PLAN_REPOSITORY,
   SUBSCRIPTION_REPOSITORY,
 } from '@modules/payment/constants/payment.constants.js';
-import { EXPIRY_GRACE_PERIOD_MS } from '@modules/payment/constants/subscription-lifecycle.constants.js';
+import {
+  EXPIRY_GRACE_PERIOD_MS,
+  EXPIRY_SWEEP_BATCH_LIMIT,
+} from '@modules/payment/constants/subscription-lifecycle.constants.js';
 import type { ActivateFromCheckoutDataInterface } from '@modules/payment/interfaces/activate-from-checkout-data.interface.js';
 import type { CreatePaymentTransactionResultInterface } from '@modules/payment/interfaces/create-payment-transaction-result.interface.js';
 import type { CreateSubscriptionResultInterface } from '@modules/payment/interfaces/create-subscription-result.interface.js';
@@ -223,7 +226,10 @@ export class SubscriptionLifecycleService implements SubscriptionLifecycleInterf
 
   public async expireOverdue(): Promise<void> {
     const cutoff: Date = new Date(Date.now() - EXPIRY_GRACE_PERIOD_MS);
-    const overdue: SubscriptionInterface[] = await this.subscriptionRepository.findOverdue(cutoff);
+    const overdue: SubscriptionInterface[] = await this.subscriptionRepository.findOverdue(
+      cutoff,
+      EXPIRY_SWEEP_BATCH_LIMIT,
+    );
 
     for (const subscription of overdue) await this.expireOne(subscription);
 

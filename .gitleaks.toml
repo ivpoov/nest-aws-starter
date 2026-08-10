@@ -66,6 +66,43 @@ regexes = ['''^[0-9a-f]{64}$|^[0-9a-f]{96}$''']
 
 [[allowlists]]
 description = """
+Token-allowlist repository unit fixtures. The three matched strings are
+hand-written JWT-shaped literals, all sharing the header `{"alg":"HS256"}` and
+the payload `{"sub":"user-1","sessionId":"sess-1"}`, and differing only in a
+signature segment of twenty repeated `a`, `b` or `c` characters. Nothing signed
+them and nothing verifies them: the spec feeds them to TokenRedisRepository to
+prove the stored value is a SHA-256 digest and NOT the token, so the literal
+has to look like a real token for the assertion to mean anything. They are
+values a test compares against, never credentials — no secret, no environment,
+no account.
+
+Both rules are listed because both fire on the same three lines: `jwt` on the
+token shape itself, `generic-api-key` on the `const NAME = '<value>'`
+assignment around it.
+
+Scoped to the one spec file AND to the exact three literals, enumerated rather
+than pattern-matched, so anything else in this file is still scanned normally.
+Verified by injecting five credentials into this very file and re-running the
+gate: `AKIA4KTZQ7NR2WVMJX3D` (aws-access-token), a 40-character AWS secret
+(generic-api-key), `ghp_…` (github-pat), a 64-character hex secret
+(generic-api-key), and a fourth JWT-shaped fixture whose signature segment is
+not one of the three enumerated here (jwt). All five were reported. Note when
+repeating that test: gitleaks' bundled config allowlists anything containing
+`EXAMPLE`, so the canonical `AKIAIOSFODNN7EXAMPLE` pair proves nothing — use a
+key that is merely realistic.
+"""
+targetRules = ["jwt", "generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''apps/api/src/modules/token/tests/token-redis\.repository\.spec\.ts''',
+]
+regexes = [
+  '''^eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiJ1c2VyLTEiLCJzZXNzaW9uSWQiOiJzZXNzLTEifQ\.(a{20}|b{20}|c{20})$''',
+]
+
+[[allowlists]]
+description = """
 Terraform map keys literally named `key`. The generic-api-key rule fires on the
 assignment shape, not on the value: `key = "actual-50"` in the budget module is
 a notification identifier used to index a for_each map, and the equivalents in

@@ -21,6 +21,7 @@ import type { SessionForUserInterface } from '@modules/session/interfaces/sessio
 import type { SessionRepositoryInterface } from '@modules/session/interfaces/session-repository.interface.js';
 import { TOKEN_REPOSITORY } from '@modules/token/constants/token.constants.js';
 import type { RefreshTokenClaimsInterface } from '@modules/token/interfaces/refresh-token-claims.interface.js';
+import type { RotationGracePairInterface } from '@modules/token/interfaces/rotation-grace-pair.interface.js';
 import type { TokenPairInterface } from '@modules/token/interfaces/token-pair.interface.js';
 import type { TokenRepositoryInterface } from '@modules/token/interfaces/token-repository.interface.js';
 import { TokenService } from '@modules/token/services/token.service.js';
@@ -73,20 +74,30 @@ export class SessionService {
   public async refresh(oldRefreshToken: string): Promise<TokenPairInterface> {
     const claims: RefreshTokenClaimsInterface =
       await this.tokenService.verifyRefreshToken(oldRefreshToken);
-    const current: string | null = await this.tokenRepository.getRefreshToken(
-      claims.userId,
-      claims.sessionId,
-    );
-    const previous: string | null = await this.tokenRepository.getPreviousRefreshToken(
-      claims.userId,
-      claims.sessionId,
-    );
+    // Concurrent refresh inside the grace window: idempotent replay of the
+    // pair the winning request minted, never a second rotation.
+    const replay: RotationGracePairInterface | null =
+      await this.tokenRepository.findRotationGraceReplay(
+        claims.userId,
+        claims.sessionId,
+        oldRefreshToken,
+      );
 
-    if (oldRefreshToken === previous && current !== null) {
-      return this.replayCurrentPair(claims, current);
+    if (replay) {
+      return {
+        accessToken: replay.accessToken,
+        refreshToken: replay.refreshToken,
+        expiresInSec: this.config.accessTtlSec,
+      };
     }
 
-    if (oldRefreshToken !== current) {
+    const isCurrent: boolean = await this.tokenRepository.matchesRefreshToken(
+      claims.userId,
+      claims.sessionId,
+      oldRefreshToken,
+    );
+
+    if (!isCurrent) {
       await this.handleInvalidRefresh(claims);
     }
 
@@ -141,26 +152,6 @@ export class SessionService {
     this.logger.log(`All sessions revoked for user ${userId}: ${count}`);
 
     return count;
-  }
-
-  private async replayCurrentPair(
-    claims: RefreshTokenClaimsInterface,
-    currentRefreshToken: string,
-  ): Promise<TokenPairInterface> {
-    const accessToken: string | null = await this.tokenRepository.getAccessToken(
-      claims.userId,
-      claims.sessionId,
-    );
-
-    if (accessToken === null) throw new UnauthorizedError(AUTH_REFRESH_INVALID);
-
-    // Concurrent refresh inside the grace window: idempotent replay, never a
-    // second rotation.
-    return {
-      accessToken,
-      refreshToken: currentRefreshToken,
-      expiresInSec: this.config.accessTtlSec,
-    };
   }
 
   private async handleInvalidRefresh(claims: RefreshTokenClaimsInterface): Promise<never> {
@@ -218,10 +209,11 @@ export class SessionService {
       refreshTtlSec: window.ttlSec,
     });
 
-    await this.tokenRepository.setPreviousRefreshToken(
+    await this.tokenRepository.setRotationGrace(
       claims.userId,
       claims.sessionId,
       oldRefreshToken,
+      { accessToken: pair.accessToken, refreshToken: pair.refreshToken },
       this.config.refreshGraceSec,
     );
     await this.sessionRepository.setActiveUntil(claims.sessionId, window.activeUntil);
