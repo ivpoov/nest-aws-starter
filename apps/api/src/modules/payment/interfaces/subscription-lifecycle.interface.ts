@@ -1,12 +1,12 @@
 import type { ActivateFromCheckoutDataInterface } from '@modules/payment/interfaces/activate-from-checkout-data.interface.js';
 import type { RecordRenewalDataInterface } from '@modules/payment/interfaces/record-renewal-data.interface.js';
 
-// The only state-transition owner for subscriptions (plan §"Global
-// Constraints") — SubscriptionLifecycleService (PR 7) implements this for
-// real; every other caller (webhook dispatch, the expiry job, later admin
-// actions) reaches subscriptions exclusively through this contract.
+// The only state-transition owner for subscriptions —
+// SubscriptionLifecycleService implements this for real; every other caller
+// (webhook dispatch, the expiry job, later admin actions) reaches
+// subscriptions exclusively through this contract.
 //
-// Idempotency (binding, per PR 6's handoff): SQS redelivery after a
+// Idempotency (binding): SQS redelivery after a
 // dispatch-succeeded/markProcessed-failed race means every method below WILL
 // be called twice for the same provider event. Every implementation must
 // tolerate that without double-writing or double-emitting.

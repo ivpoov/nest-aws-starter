@@ -35,8 +35,7 @@ interface SeededRowInterface {
 // the app-lifecycle loop (PAYMENT_WEBHOOK_CONSUMER_ENABLED=false in this
 // env — see .env / ci.yml) — deterministic, no poll-interval race. Real
 // Postgres row + real Redis lock + real LocalStack SQS message throughout;
-// only the SubscriptionLifecycleInterface no-op binding is spied on, per
-// PR 6's brief (PR 7 supplies the real one).
+// only the SubscriptionLifecycleInterface binding is spied on.
 describe('webhook consumer (real postgres/redis/localstack, manual drive)', () => {
   let app: NestFastifyApplication;
   let prisma: PrismaService;

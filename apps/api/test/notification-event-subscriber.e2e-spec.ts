@@ -39,8 +39,7 @@ import { waitForActivity } from './helpers/wait-for-activity.helper.js';
 // Socket.IO (a connected client actually receiving the fan-out). Domain
 // events are emitted directly via EventBusService rather than through the
 // feature flow that would normally trigger them (login, admin block, ...)
-// — this suite owns the event subscriber, not those flows, matching the brief's
-// "emit a real domain event through the real EventBus" instruction.
+// — this suite owns the event subscriber, not those flows.
 describe('notification event subscriber (persist-first, e2e)', () => {
   let app: NestFastifyApplication;
   let baseUrl: string;

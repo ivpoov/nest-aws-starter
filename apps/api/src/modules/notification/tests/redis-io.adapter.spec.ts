@@ -1,10 +1,12 @@
 import type { AppConfig } from '@configs/app.config.js';
+import type { CorsOriginDelegateType } from '@modules/common/types/cors-origin-delegate.type.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { RedisIoAdapter } from '@modules/notification/adapters/redis-io.adapter.js';
 import type { INestApplicationContext } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { REDIS_CLIENT } from '@providers/redis/constants/redis.constants.js';
+import type { ServerOptions } from 'socket.io';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 interface FakeRedisClient {
@@ -21,6 +23,27 @@ function createDuplicate(): FakeRedisClient {
   };
 }
 
+// Socket CORS is no longer a plain array: `createIOServer` hands Socket.IO
+// the shared origin delegate (create-cors-origin-delegate.helper.ts), the
+// same value configure-app.helper.ts hands @fastify/cors. Asserting what the
+// delegate answers — not that some particular array reached the server — is
+// what still proves the adapter reads AppConfig and nothing of its own.
+function askDelegate(origin: string, options: ServerOptions | undefined): boolean {
+  const delegate: CorsOriginDelegateType = (
+    options as unknown as { cors: { origin: CorsOriginDelegateType } }
+  ).cors.origin;
+  const answers: boolean[] = [];
+
+  delegate(origin, (error: Error | null, isAllowed: boolean): void => {
+    expect(error).toBeNull();
+    answers.push(isAllowed);
+  });
+
+  expect(answers).toHaveLength(1);
+
+  return answers[0] === true;
+}
+
 // Stands in for the real container: the adapter must reach socket CORS
 // through the same `ConfigService.getOrThrow('app')` object the HTTP layer
 // uses, never through a second env read of its own.
@@ -28,10 +51,11 @@ function createApp(
   pub: FakeRedisClient,
   sub: FakeRedisClient,
   corsOrigins: string[] = CONFIGURED_ORIGINS,
+  env: AppConfig['env'] = 'production',
 ): INestApplicationContext {
   const duplicate = vi.fn().mockReturnValueOnce(pub).mockReturnValueOnce(sub);
   const configService = {
-    getOrThrow: vi.fn().mockReturnValue({ corsOrigins } as AppConfig),
+    getOrThrow: vi.fn().mockReturnValue({ corsOrigins, env } as AppConfig),
   };
   const get = vi.fn((token: unknown): unknown => {
     if (token === ConfigService) return configService;
@@ -93,9 +117,9 @@ describe('RedisIoAdapter', () => {
   // compute its own CORS list from process.env at module-import time, which
   // runs before loadEnv(), so a .env-configured deploy silently got the
   // localhost fallback on the socket endpoint while HTTP CORS got the real
-  // origins. Socket CORS must come from AppConfig.corsOrigins — the one
-  // field configure-app.helper.ts feeds to enableCors.
-  it('takes socket CORS from AppConfig.corsOrigins, the same field the HTTP layer uses', async () => {
+  // origins. Socket CORS must come from AppConfig — through the same origin
+  // delegate configure-app.helper.ts feeds to enableCors.
+  it('takes socket CORS from AppConfig, the same object the HTTP layer uses', async () => {
     const createIOServerSpy = vi
       .spyOn(IoAdapter.prototype, 'createIOServer')
       .mockReturnValue({ adapter: vi.fn() });
@@ -106,11 +130,15 @@ describe('RedisIoAdapter', () => {
     await adapter.connectToRedis();
     adapter.createIOServer(3000, { path: '/socket.io' } as never);
 
+    const options: ServerOptions | undefined = createIOServerSpy.mock.calls[0]?.[1];
+
     expect(app.get(ConfigService).getOrThrow).toHaveBeenCalledWith('app');
     expect(createIOServerSpy).toHaveBeenCalledWith(
       3000,
-      expect.objectContaining({ path: '/socket.io', cors: { origin: CONFIGURED_ORIGINS } }),
+      expect.objectContaining({ path: '/socket.io', cors: { origin: expect.any(Function) } }),
     );
+    expect(askDelegate(CONFIGURED_ORIGINS[0] ?? '', options)).toBe(true);
+    expect(askDelegate('https://evil.example', options)).toBe(false);
   });
 
   it('never falls back to a CORS list of its own when the app config changes', async () => {
@@ -126,10 +154,52 @@ describe('RedisIoAdapter', () => {
     await adapter.connectToRedis();
     adapter.createIOServer(0);
 
-    expect(createIOServerSpy).toHaveBeenCalledWith(
-      0,
-      expect.objectContaining({ cors: { origin: origins } }),
+    const options: ServerOptions | undefined = createIOServerSpy.mock.calls[0]?.[1];
+
+    expect(askDelegate('https://only-source-of-truth.example', options)).toBe(true);
+    expect(askDelegate(CONFIGURED_ORIGINS[0] ?? '', options)).toBe(false);
+  });
+
+  // The socket transport carries the development loopback latitude because it
+  // is built from the same AppConfig — including `env`. A regression that read
+  // only `corsOrigins` here would leave a developer on an unusual Vite port
+  // with working HTTP calls and a silently blocked socket.
+  it('carries the development loopback rule onto the socket transport', async () => {
+    const createIOServerSpy = vi
+      .spyOn(IoAdapter.prototype, 'createIOServer')
+      .mockReturnValue({ adapter: vi.fn() });
+
+    const adapter: RedisIoAdapter = new RedisIoAdapter(
+      createApp(createDuplicate(), createDuplicate(), CONFIGURED_ORIGINS, 'development'),
     );
+
+    await adapter.connectToRedis();
+    adapter.createIOServer(0);
+
+    const options: ServerOptions | undefined = createIOServerSpy.mock.calls[0]?.[1];
+
+    expect(askDelegate('http://localhost:61234', options)).toBe(true);
+    expect(askDelegate('http://localhost.evil.tld', options)).toBe(false);
+  });
+
+  // ...and never in production: `env` is the only switch, and it is the
+  // resolved config value, not something the adapter can be talked into.
+  it('refuses every loopback origin on the socket transport in production', async () => {
+    const createIOServerSpy = vi
+      .spyOn(IoAdapter.prototype, 'createIOServer')
+      .mockReturnValue({ adapter: vi.fn() });
+
+    const adapter: RedisIoAdapter = new RedisIoAdapter(
+      createApp(createDuplicate(), createDuplicate(), CONFIGURED_ORIGINS, 'production'),
+    );
+
+    await adapter.connectToRedis();
+    adapter.createIOServer(0);
+
+    const options: ServerOptions | undefined = createIOServerSpy.mock.calls[0]?.[1];
+
+    expect(askDelegate('http://localhost:61234', options)).toBe(false);
+    expect(askDelegate('http://127.0.0.1:5173', options)).toBe(false);
   });
 
   it('closes the io server then quits both duplicated Redis clients', async () => {

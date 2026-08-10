@@ -77,8 +77,8 @@ function createSubscriber(
   const gateway = { server: { to } } as unknown as NotificationGateway;
   const emailService = { sendIfEnabled } as unknown as NotificationEmailService;
   // The subscriber delegates fan-out to a real NotificationFanOutService
-  // wired with the same leaf mocks (PR 5 code review's extraction) — the
-  // mocking pattern below is unchanged, only which constructor it feeds.
+  // wired with the same leaf mocks — the mocking pattern below is the same
+  // as before the fan-out extraction, only which constructor it feeds.
   const fanOutService = new NotificationFanOutService(
     websocket,
     notificationRepository,

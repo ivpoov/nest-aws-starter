@@ -244,9 +244,42 @@ describe('websocket notification gateway', () => {
       expect(fromSocket).toBe(fromHttp);
     });
 
-    it('never allows the gateway’s former hard-coded localhost fallback', async () => {
-      expect(await socketAllowOrigin('http://localhost:5173')).toBeUndefined();
-      expect(await httpAllowOrigin('http://localhost:5173')).toBeUndefined();
+    // Outside production every loopback port is allowed on purpose — see
+    // create-cors-origin-delegate.helper.ts — so the socket endpoint has to
+    // grant this suite's unconfigured localhost ports exactly as HTTP does.
+    // A port no .env.example ever mentions is what proves the grant comes
+    // from the shared delegate and not from a list either side kept.
+    it('allows a loopback origin on an unconfigured port on both transports', async () => {
+      const origin: string = 'http://localhost:61234';
+      const fromHttp: string | undefined = await httpAllowOrigin(origin);
+      const fromSocket: string | undefined = await socketAllowOrigin(origin);
+
+      expect(fromHttp).toBe(origin);
+      expect(fromSocket).toBe(fromHttp);
+    });
+
+    // Was "never allows the gateway's former hard-coded localhost fallback",
+    // asserting `undefined` on both transports. The loopback rule now grants
+    // that origin outside production deliberately, so `undefined` is no
+    // longer the right answer — but the property this test exists to protect
+    // is untouched and is still asserted: the socket endpoint must never
+    // answer an origin question from a source of its own. The production case,
+    // where the loopback rule is off and this exact origin is refused, is
+    // pinned in cors.e2e-spec.ts.
+    it('answers the gateway’s former hard-coded localhost fallback identically on both transports', async () => {
+      const fromHttp: string | undefined = await httpAllowOrigin('http://localhost:5173');
+      const fromSocket: string | undefined = await socketAllowOrigin('http://localhost:5173');
+
+      expect(fromSocket).toBe(fromHttp);
+      expect(fromSocket).toBe('http://localhost:5173');
+    });
+
+    it('refuses a localhost lookalike host on both transports', async () => {
+      const fromHttp: string | undefined = await httpAllowOrigin('http://localhost.evil.tld');
+      const fromSocket: string | undefined = await socketAllowOrigin('http://localhost.evil.tld');
+
+      expect(fromHttp).toBeUndefined();
+      expect(fromSocket).toBe(fromHttp);
     });
   });
 

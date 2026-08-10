@@ -9,7 +9,7 @@ export interface NotificationRepositoryInterface {
   // USER audience: the row and its single reader receipt are created
   // together (eager). ADMIN audience: only the row — one per admin cohort,
   // never fanned out into per-admin receipts (those are created lazily by
-  // markRead/markAllRead, PR 4's history API — see notification.service.ts).
+  // markRead/markAllRead in the history API — see notification.service.ts).
   create(data: CreateNotificationDataInterface): Promise<NotificationInterface>;
   findById(id: string): Promise<NotificationInterface | null>;
   findManyAfter(

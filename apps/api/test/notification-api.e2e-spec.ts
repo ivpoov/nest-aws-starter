@@ -23,7 +23,7 @@ interface NotificationBodyInterface {
   readonly readAt: string | null;
 }
 
-// History API (Task 4): GET /notifications (own, cursor, merged for admins),
+// History API: GET /notifications (own, cursor, merged for admins),
 // GET /notifications/unread-count, PATCH /notifications/:id/read (idempotent),
 // POST /notifications/read-all. Rows are seeded directly via Prisma (matching
 // what the persist-first event subscriber itself writes) so each test controls
@@ -374,7 +374,7 @@ describe('notification history API (e2e)', () => {
     return `01890a5d-ac96-774b-bcce-${randomUUID().replaceAll('-', '').slice(-12)}`;
   }
 
-  // Plan Task 1: "unread count for admins = notifications newer than the
+  // Binding rule: "unread count for admins = notifications newer than the
   // admin's account minus their receipts". Without the bound, a newly created
   // or promoted admin inherits the entire historical ADMIN backlog as unread
   // (badge in the thousands on first login) and every 60s badge poll

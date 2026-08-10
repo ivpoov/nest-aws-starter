@@ -1,4 +1,5 @@
 import type { CacheStoreInterface } from '@providers/cache/interfaces/cache-store.interface.js';
+import { resolveClusterMasters } from '@providers/redis/helpers/resolve-cluster-masters.helper.js';
 import type { RedisClientType } from '@providers/redis/types/redis-client.type.js';
 import { Cluster, type Redis } from 'ioredis';
 
@@ -21,7 +22,7 @@ export class RedisCacheStore implements CacheStoreInterface {
 
   public async deleteByPrefix(prefix: string): Promise<void> {
     if (this.redis instanceof Cluster) {
-      const masters: Redis[] = this.redis.nodes('master');
+      const masters: Redis[] = await resolveClusterMasters(this.redis);
 
       await Promise.all(
         masters.map((node: Redis): Promise<void> => this.deleteByPrefixOnNode(node, prefix)),

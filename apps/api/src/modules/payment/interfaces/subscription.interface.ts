@@ -2,7 +2,7 @@ import type { SubscriptionStatusEnum } from '@nest-aws-starter/shared';
 
 // planName/amountCents/currency are embedded flat rather than nested (a
 // `plan: PlanInterface`): this is the "current subscription" read model, the
-// only shape this PR's repository produces, and it is joined straight off
+// only shape the repository produces for it, and it is joined straight off
 // Subscription→Plan in one query — no second lookup, no risk of the two
 // falling out of sync mid-request. A future richer read model (e.g. history)
 // can define its own interface without touching this one.
