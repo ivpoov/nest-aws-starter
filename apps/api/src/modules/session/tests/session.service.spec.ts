@@ -8,6 +8,7 @@ import { SessionService } from '@modules/session/services/session.service.js';
 import type { RotateTokensDataInterface } from '@modules/token/interfaces/rotate-tokens-data.interface.js';
 import type { RotationGracePairInterface } from '@modules/token/interfaces/rotation-grace-pair.interface.js';
 import type { RotationStateInterface } from '@modules/token/interfaces/rotation-state.interface.js';
+import type { TokenPairInterface } from '@modules/token/interfaces/token-pair.interface.js';
 import type { TokenRepositoryInterface } from '@modules/token/interfaces/token-repository.interface.js';
 import { TokenService } from '@modules/token/services/token.service.js';
 import type { UserInterface } from '@modules/user/interfaces/user.interface.js';
@@ -308,6 +309,101 @@ describe('SessionService management', () => {
 
     expect(count).toBe(2);
     expect([...tokens.keys.keys()].filter((key) => key.startsWith(`${user.id}:`))).toHaveLength(0);
+  });
+});
+
+// Fail-safe cross-store ordering (conventions §7a). verifyAccessToken authorizes
+// on allowlist membership ALONE — it never reads activeUntil — so the Redis
+// delete is the write that actually revokes and the row write is bookkeeping.
+// A happy-path assertion passes under either order, so each test here induces a
+// real failure BETWEEN the two writes and asserts the surviving state is
+// restrictive (token dead, row stale) rather than permissive (row revoked, token
+// still usable for its full TTL). Restore the original order and every one of
+// them goes red on the verifyAccessToken assertion.
+describe('SessionService revocation ordering under an induced mid-operation failure', () => {
+  function expectDeadToken(pair: TokenPairInterface, tokens: FakeTokenRepository): Promise<void> {
+    const tokenService: TokenService = new TokenService(config, tokens);
+
+    return expect(tokenService.verifyAccessToken(pair.accessToken)).rejects.toSatisfy(
+      (caught: unknown): boolean =>
+        caught instanceof UnauthorizedError && caught.args.code === 'AUTH_TOKEN_INVALID',
+    ) as Promise<void>;
+  }
+
+  it('revokeSession: the token is dead even though the row write never landed', async () => {
+    const { service, tokens, sessions } = createService();
+    const pair: TokenPairInterface = await service.createSession(user, context);
+    const before: SessionInterface | null = await sessions.findById('session-1');
+    // The process dies between the two cross-store writes: the row write is
+    // never applied at all, which is the state a crash actually leaves.
+    const spy = vi
+      .spyOn(sessions, 'setActiveUntil')
+      .mockRejectedValue(new Error('induced failure mid-revocation'));
+
+    await expect(service.revokeSession(user.id, 'session-1')).rejects.toThrow(
+      'induced failure mid-revocation',
+    );
+
+    // Restrictive half: access is already gone.
+    await expectDeadToken(pair, tokens);
+    // Stale half: the row still says active. Annoying to look at, never unsafe.
+    expect((await sessions.findById('session-1'))?.activeUntil.getTime()).toBe(
+      before?.activeUntil.getTime(),
+    );
+
+    spy.mockRestore();
+
+    // Self-correcting: the next revoke finishes the bookkeeping.
+    await service.revokeSession(user.id, 'session-1');
+
+    expect((await sessions.findById('session-1'))?.activeUntil.getTime()).toBeLessThanOrEqual(
+      Date.now(),
+    );
+  });
+
+  it('revokeAllForUser: every allowlist key is gone before the row write can fail', async () => {
+    const { service, tokens, sessions } = createService();
+    const first: TokenPairInterface = await service.createSession(user, context);
+    const second: TokenPairInterface = await service.createSession(user, context);
+    const spy = vi
+      .spyOn(sessions, 'endAllByUserId')
+      .mockRejectedValue(new Error('induced failure mid-revocation'));
+
+    await expect(service.revokeAllForUser(user.id)).rejects.toThrow(
+      'induced failure mid-revocation',
+    );
+
+    await expectDeadToken(first, tokens);
+    await expectDeadToken(second, tokens);
+    expect([...tokens.keys.keys()].filter((key) => key.startsWith(`${user.id}:`))).toHaveLength(0);
+
+    spy.mockRestore();
+
+    // The count still comes from the row write, which now runs second: it
+    // reports the rows that were active when it ran, unchanged by the reorder.
+    expect(await service.revokeAllForUser(user.id)).toBe(2);
+  });
+
+  it('refresh-reuse tripwire: the thief loses the access token even if the row write fails', async () => {
+    const { service, tokens, sessions } = createService();
+    const first: TokenPairInterface = await service.createSession(user, context);
+    const live: TokenPairInterface = await service.refresh(first.refreshToken);
+
+    tokens.keys.delete(`${user.id}:session-1:prev`); // grace TTL elapsed
+
+    const spy = vi
+      .spyOn(sessions, 'setActiveUntil')
+      .mockRejectedValue(new Error('induced failure mid-revocation'));
+
+    await expect(service.refresh(first.refreshToken)).rejects.toThrow(
+      'induced failure mid-revocation',
+    );
+
+    // The path where this matters most: the thief already holds a live access
+    // token, so the allowlist delete must survive a failed row write.
+    await expectDeadToken(live, tokens);
+
+    spy.mockRestore();
   });
 });
 
