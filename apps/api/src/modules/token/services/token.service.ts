@@ -25,6 +25,55 @@ export class TokenService {
 
   public async issuePair(data: IssuePairDataInterface): Promise<TokenPairInterface> {
     const refreshTtlSec: number = data.refreshTtlSec ?? this.config.refreshTtlSec;
+    const pair: TokenPairInterface = await this.mintPair(data, refreshTtlSec);
+
+    await this.tokenRepository.setAccessToken(
+      data.userId,
+      data.sessionId,
+      pair.accessToken,
+      this.config.accessTtlSec,
+    );
+    await this.tokenRepository.setRefreshToken(
+      data.userId,
+      data.sessionId,
+      pair.refreshToken,
+      refreshTtlSec,
+    );
+
+    return pair;
+  }
+
+  // Rotation, all-or-nothing: the presented token's replacement is recorded
+  // and installed in one atomic step, and only while the presented token is
+  // still the current one. Resolves null when a concurrent refresher won that
+  // swap — the pair minted here never reached the allowlist, so it is inert,
+  // and the caller falls back to replaying the winner's pair.
+  public async rotatePair(
+    data: IssuePairDataInterface,
+    expectedRefreshToken: string,
+  ): Promise<TokenPairInterface | null> {
+    const refreshTtlSec: number = data.refreshTtlSec ?? this.config.refreshTtlSec;
+    const pair: TokenPairInterface = await this.mintPair(data, refreshTtlSec);
+    const isRotated: boolean = await this.tokenRepository.rotateTokens({
+      userId: data.userId,
+      sessionId: data.sessionId,
+      expectedRefreshToken,
+      accessToken: pair.accessToken,
+      accessTtlSec: this.config.accessTtlSec,
+      refreshToken: pair.refreshToken,
+      refreshTtlSec,
+      graceTtlSec: this.config.refreshGraceSec,
+    });
+
+    return isRotated ? pair : null;
+  }
+
+  // Signs a pair without touching the allowlist — an unstored JWT is inert,
+  // which is what lets rotatePair() mint first and commit only if it wins.
+  private async mintPair(
+    data: IssuePairDataInterface,
+    refreshTtlSec: number,
+  ): Promise<TokenPairInterface> {
     const accessToken: string = await this.sign(
       {
         role: data.role,
@@ -37,19 +86,6 @@ export class TokenService {
     const refreshToken: string = await this.sign(
       { sessionId: data.sessionId },
       data.userId,
-      refreshTtlSec,
-    );
-
-    await this.tokenRepository.setAccessToken(
-      data.userId,
-      data.sessionId,
-      accessToken,
-      this.config.accessTtlSec,
-    );
-    await this.tokenRepository.setRefreshToken(
-      data.userId,
-      data.sessionId,
-      refreshToken,
       refreshTtlSec,
     );
 

@@ -1,3 +1,4 @@
+import type { UnlinkMethodResultEnum } from '@modules/user/enums/unlink-method-result.enum.js';
 import type { AdminUserInterface } from '@modules/user/interfaces/admin-user.interface.js';
 import type { AdminUsersQueryInterface } from '@modules/user/interfaces/admin-users-query.interface.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
@@ -22,7 +23,12 @@ export interface UserRepositoryInterface {
   addOauthMethod(userId: string, data: CreateOauthMethodDataInterface): Promise<void>;
   addEmailMethod(userId: string, email: string, passwordHash: string): Promise<void>;
   findMethodsByUserId(userId: string): Promise<AuthMethodInterface[]>;
-  removeMethod(userId: string, type: CreateOauthMethodDataInterface['type']): Promise<boolean>;
+  // Deletes the method only while the account keeps at least one other way
+  // in, enforced under a lock rather than by a preceding read.
+  removeMethodUnlessLast(
+    userId: string,
+    type: CreateOauthMethodDataInterface['type'],
+  ): Promise<UnlinkMethodResultEnum>;
   findEmailMethodByUserId(userId: string): Promise<AuthMethodInterface | null>;
   markEmailVerified(methodId: string): Promise<void>;
   updatePasswordHash(methodId: string, passwordHash: string): Promise<void>;

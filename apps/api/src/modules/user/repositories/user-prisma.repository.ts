@@ -2,7 +2,10 @@ import { MAX_PAGE_SIZE } from '@constants/pagination.constants.js';
 import { Prisma } from '@generated/prisma/client.js';
 import { AuthMethodType, UserStatus } from '@generated/prisma/enums.js';
 import type { AuthMethodModel, UserModel } from '@generated/prisma/models.js';
+import { lockUserRow } from '@generated/prisma/sql.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
+import type { PrismaTransactionType } from '@modules/prisma/types/prisma-transaction.type.js';
+import { UnlinkMethodResultEnum } from '@modules/user/enums/unlink-method-result.enum.js';
 import type { AdminUserInterface } from '@modules/user/interfaces/admin-user.interface.js';
 import type { AdminUsersQueryInterface } from '@modules/user/interfaces/admin-users-query.interface.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
@@ -130,23 +133,42 @@ export class UserPrismaRepository implements UserRepositoryInterface {
     );
   }
 
-  public async removeMethod(
+  // Guarded delete: the "is this the last method?" question and the delete
+  // that answers it happen inside one transaction that first takes a write
+  // lock on the owning user row. Concurrent unlinks for the same account
+  // therefore queue behind that lock and re-read committed state, so two
+  // different method types can never both pass the check — the database, not
+  // an application read, is what keeps the account reachable.
+  public async removeMethodUnlessLast(
     userId: string,
     type: CreateOauthMethodDataInterface['type'],
-  ): Promise<boolean> {
-    try {
-      await this.prisma.authMethod.delete({
-        where: { userId_type: { userId, type: AuthMethodType[type] } },
-      });
+  ): Promise<UnlinkMethodResultEnum> {
+    return this.prisma.$transaction(
+      async (tx: PrismaTransactionType): Promise<UnlinkMethodResultEnum> => {
+        await tx.$queryRawTyped(lockUserRow(userId));
 
-      return true;
-    } catch (caught) {
-      if (caught instanceof Prisma.PrismaClientKnownRequestError && caught.code === 'P2025') {
-        return false;
-      }
+        const methods: { type: AuthMethodType }[] = await tx.authMethod.findMany({
+          where: { userId },
+          select: { type: true },
+        });
 
-      throw caught;
-    }
+        const isLinked: boolean = methods.some(
+          (method: { type: AuthMethodType }): boolean => method.type === AuthMethodType[type],
+        );
+
+        if (!isLinked) {
+          return UnlinkMethodResultEnum.NOT_FOUND;
+        }
+
+        if (methods.length <= 1) return UnlinkMethodResultEnum.LAST_METHOD;
+
+        await tx.authMethod.delete({
+          where: { userId_type: { userId, type: AuthMethodType[type] } },
+        });
+
+        return UnlinkMethodResultEnum.REMOVED;
+      },
+    );
   }
 
   public async findEmailMethodByUserId(userId: string): Promise<AuthMethodInterface | null> {

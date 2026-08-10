@@ -172,10 +172,10 @@ describe('auth (email + password)', () => {
     const claims: { sub: string; sessionId: string } = decodeJwtPayload(tokens.accessToken);
 
     const storedRefresh: string | null = await redis.get(
-      `users:${claims.sub}:sessions:${claims.sessionId}:refresh`,
+      `users:{${claims.sub}}:sessions:${claims.sessionId}:refresh`,
     );
     const storedAccess: string | null = await redis.get(
-      `users:${claims.sub}:sessions:${claims.sessionId}:access`,
+      `users:{${claims.sub}}:sessions:${claims.sessionId}:access`,
     );
 
     expect(storedRefresh).not.toBeNull();
@@ -191,7 +191,7 @@ describe('auth (email + password)', () => {
       .set('authorization', `Bearer ${tokens.accessToken}`)
       .expect(200);
 
-    await redis.del(`users:${claims.sub}:sessions:${claims.sessionId}:access`);
+    await redis.del(`users:{${claims.sub}}:sessions:${claims.sessionId}:access`);
 
     await request(app.getHttpServer())
       .get('/api/v1/users/me')
@@ -210,7 +210,7 @@ describe('auth (email + password)', () => {
     const tokens = await register(uniqueEmail());
     const redis = app.get<RedisClientType>(REDIS_CLIENT);
     const claims: { sub: string; sessionId: string } = decodeJwtPayload(tokens.accessToken);
-    const accessKey = `users:${claims.sub}:sessions:${claims.sessionId}:access`;
+    const accessKey = `users:{${claims.sub}}:sessions:${claims.sessionId}:access`;
 
     // Put the key back the way the previous release wrote it.
     await redis.set(accessKey, tokens.accessToken, 'EX', 900);
@@ -246,7 +246,7 @@ describe('auth (email + password)', () => {
       .expect(200);
 
     // Close the grace window rather than waiting it out.
-    await redis.del(`users:${claims.sub}:sessions:${claims.sessionId}:refresh:prev`);
+    await redis.del(`users:{${claims.sub}}:sessions:${claims.sessionId}:refresh:prev`);
 
     const reused = await request(app.getHttpServer())
       .post('/api/v1/auth/refresh')
