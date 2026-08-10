@@ -230,9 +230,20 @@ which is what stops a renamed doc from silently orphaning a reference.
 
 ## What CI gates
 
-Everything in [`.github/workflows/`](./.github/workflows). Three of them have
-something to say about a pull request; the rest are release and deployment
-machinery that only runs after a merge.
+Everything lives in [`.github/workflows/`](./.github/workflows). Seven of those
+workflows can run on a pull request; the rest (`deploy`, `release`,
+`release-check`, `promote`) are release and deployment machinery that never
+does.
+
+Two run on **every** pull request — [`ci.yml`](./.github/workflows/ci.yml) and
+[`security.yml`](./.github/workflows/security.yml) — plus the fast half of
+[`subtraction.yml`](./.github/workflows/subtraction.yml). Four more are
+path-filtered and stay quiet unless you touched what they cover:
+[`codeql.yml`](./.github/workflows/codeql.yml) on any JS/TS file,
+[`docs.yml`](./.github/workflows/docs.yml) on `docs/**` or `apps/docs/**`,
+[`infra.yml`](./.github/workflows/infra.yml) on `infra/**`, and
+[`image.yml`](./.github/workflows/image.yml) on anything that can change the API
+container. The three worth knowing in detail:
 
 **[`ci.yml`](./.github/workflows/ci.yml)** — every pull request, plus pushes to
 `main`. Four jobs run in parallel:
