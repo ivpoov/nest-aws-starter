@@ -13,7 +13,7 @@ above: `File` rows can end up `PENDING` forever when a client never PUTs to
 the presigned URL, never calls `confirm`, or PUTs an object that
 `confirmUpload` would have rejected.
 
-Registered through the Task 2 scheduler (Redis-locked, per the operational
+Registered through the task scheduler (Redis-locked, per the operational
 rules in `docs/conventions/backend.md`), it runs daily
 (`FILE_SWEEP_CRON_EXPRESSION`, `0 3 * * *` — the 24h staleness threshold makes
 a tighter cadence pointless) and, for every `PENDING` row older than
