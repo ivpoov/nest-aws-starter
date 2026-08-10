@@ -104,9 +104,20 @@ export class EmailFlowService {
 
     if (!method) throw new UnauthorizedError(AUTH_ONE_TIME_TOKEN_INVALID);
 
-    await this.userService.updatePasswordHash(method.id, await hash(password, ARGON2_OPTIONS));
-    // A reset means the password may have been compromised — everything dies.
+    // Fail-safe ordering (§7a): the session store is Redis-backed and cannot
+    // join the database unit of work, so these two writes can never be atomic —
+    // only ordered. Revoke FIRST. A crash after the revoke leaves the account
+    // logged out with the OLD password still valid, and the user simply asks
+    // for another reset. The old order left the NEW password live with every
+    // pre-reset session — including the attacker's — still authenticated,
+    // which is the exact property a reset exists to guarantee.
+    //
+    // The argon2 hash is computed before the revoke so the window between the
+    // two writes stays as short as possible.
+    const passwordHash: string = await hash(password, ARGON2_OPTIONS);
+
     await this.sessionService.revokeAllForUser(userId);
+    await this.userService.updatePasswordHash(method.id, passwordHash);
     this.logger.log(`Password reset completed for user ${userId}`);
     this.eventBus.emit(AUTH_PASSWORD_CHANGED_EVENT, { userId, sessionId: null });
   }
@@ -124,9 +135,15 @@ export class EmailFlowService {
       throw new UnauthorizedError(AUTH_INVALID_CREDENTIALS);
     }
 
-    await this.userService.updatePasswordHash(method.id, await hash(password, ARGON2_OPTIONS));
-    // The actor proved possession of the current password — their session stays.
+    // Same fail-safe ordering as resetPassword, same reason: a Redis-backed
+    // session store cannot join the database unit of work. Revoke first, so a
+    // crash between the two leaves other devices logged out under the unchanged
+    // password rather than logged in under the new one. The actor proved
+    // possession of the current password, so their own session stays.
+    const passwordHash: string = await hash(password, ARGON2_OPTIONS);
+
     await this.sessionService.revokeOtherSessions(userId, sessionId);
+    await this.userService.updatePasswordHash(method.id, passwordHash);
     this.logger.log(`Password changed for user ${userId}`);
     this.eventBus.emit(AUTH_PASSWORD_CHANGED_EVENT, { userId, sessionId });
   }
