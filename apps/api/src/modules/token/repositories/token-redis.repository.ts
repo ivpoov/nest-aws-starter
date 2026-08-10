@@ -110,18 +110,33 @@ export class TokenRedisRepository implements TokenRepositoryInterface {
     );
   }
 
+  // Force-logout must be total, so it sweeps the pre-hash-tag key layout as
+  // well. Those keys are unreachable by any lookup (see accessKey for why that
+  // was chosen), but unreachable is not the same as gone: without the second
+  // pattern a SCAN steps straight past them and leaves them to idle out on
+  // their own refresh TTL. Dropping them from lookup is deliberate; leaving
+  // them lying around silently is not. Droppable together with
+  // matchesPreDigestKey, on the same schedule.
   public async deleteAllForUser(userId: string): Promise<void> {
+    const patterns: string[] = [`users:{${userId}}:sessions:*`, `users:${userId}:sessions:*`];
+
     if (this.redis instanceof Cluster) {
       const masters: Redis[] = this.redis.nodes('master');
 
       await Promise.all(
-        masters.map((node: Redis): Promise<void> => this.deleteByPatternOnNode(node, userId)),
+        masters.flatMap((node: Redis): Promise<void>[] =>
+          patterns.map(
+            (pattern: string): Promise<void> => this.deleteByPatternOnNode(node, pattern),
+          ),
+        ),
       );
 
       return;
     }
 
-    await this.deleteByPatternOnNode(this.redis, userId);
+    for (const pattern of patterns) {
+      await this.deleteByPatternOnNode(this.redis, pattern);
+    }
   }
 
   private async matches(key: string, token: string): Promise<boolean> {
@@ -194,14 +209,14 @@ export class TokenRedisRepository implements TokenRepositoryInterface {
     return timingSafeEqual(leftBytes, rightBytes);
   }
 
-  private async deleteByPatternOnNode(node: Redis, userId: string): Promise<void> {
+  private async deleteByPatternOnNode(node: Redis, pattern: string): Promise<void> {
     let cursor: string = '0';
 
     do {
       const [nextCursor, keys]: [string, string[]] = await node.scan(
         cursor,
         'MATCH',
-        `users:${userId}:sessions:*`,
+        pattern,
         'COUNT',
         100,
       );
@@ -212,17 +227,34 @@ export class TokenRedisRepository implements TokenRepositoryInterface {
     } while (cursor !== '0');
   }
 
+  // The `{userId}` hash tag pins every key of one user to a single cluster
+  // slot. Without it the rotation script below — and the multi-key DEL in
+  // deleteAllForSession — are CROSSSLOT errors the moment REDIS_IS_CLUSTER is
+  // on, and rotation cannot be made atomic at all.
+  //
+  // Renaming the keys means no lookup can reach a pre-tag key, so every
+  // session that existed before this change ends at deploy and its owner logs
+  // in once more. That was deliberate, and the cost of it was literally zero
+  // when it was made: this repository had never been deployed by anyone — it
+  // was a pre-publication starter with no installations, so there were no live
+  // sessions to weigh. Recorded here so a later reader deciding whether to add
+  // a legacy-key lookup path knows the continuity was given up for free, not
+  // traded away against real users. It is still the right trade if you have
+  // them: reaching a legacy key costs a second Redis round trip inside
+  // refresh(), and refresh() reading more than once is the precise shape that
+  // force-logged legitimate users out — see readRotationState.
   private accessKey(userId: string, sessionId: string): string {
-    return `users:${userId}:sessions:${sessionId}:access`;
+    return `users:{${userId}}:sessions:${sessionId}:access`;
   }
 
   private refreshKey(userId: string, sessionId: string): string {
-    return `users:${userId}:sessions:${sessionId}:refresh`;
+    return `users:{${userId}}:sessions:${sessionId}:refresh`;
   }
 
-  // Same key the previous-refresh-token grace window used, so a deploy does
-  // not leave an orphaned key behind under the old name.
+  // Same suffix the previous-refresh-token grace window used, under the tagged
+  // name — deleteAllForUser sweeps the untagged layout, so nothing is left
+  // orphaned under the old one either.
   private rotationGraceKey(userId: string, sessionId: string): string {
-    return `users:${userId}:sessions:${sessionId}:refresh:prev`;
+    return `users:{${userId}}:sessions:${sessionId}:refresh:prev`;
   }
 }

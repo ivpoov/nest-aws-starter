@@ -13,9 +13,9 @@ const REFRESH_TOKEN =
 const ROTATED_REFRESH_TOKEN =
   'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEiLCJzZXNzaW9uSWQiOiJzZXNzLTEifQ.cccccccccccccccccccc';
 
-const REFRESH_KEY = 'users:user-1:sessions:sess-1:refresh';
-const ACCESS_KEY = 'users:user-1:sessions:sess-1:access';
-const GRACE_KEY = 'users:user-1:sessions:sess-1:refresh:prev';
+const REFRESH_KEY = 'users:{user-1}:sessions:sess-1:refresh';
+const ACCESS_KEY = 'users:{user-1}:sessions:sess-1:access';
+const GRACE_KEY = 'users:{user-1}:sessions:sess-1:refresh:prev';
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
