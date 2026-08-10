@@ -37,9 +37,10 @@ function baseEvent(overrides: Partial<WebhookEventInterface> = {}): WebhookEvent
   };
 }
 
-// Inline stand-in for the unit of work: runs the callback against a stub handle
-// so the spec exercises composition. Real rollback is proven against Postgres in
-// test/webhook-consumer.e2e-spec.ts.
+// Inline stand-in for the unit of work: runs the callback against a stub handle,
+// so these specs prove only that both writes joined ONE unit. A stub cannot
+// prove rollback — that is proven against real Postgres by the induced-failure
+// spec in test/webhook-consumer.e2e-spec.ts.
 function fakeUnitOfWork(): UnitOfWorkInterface {
   return {
     run: <ResultType>(

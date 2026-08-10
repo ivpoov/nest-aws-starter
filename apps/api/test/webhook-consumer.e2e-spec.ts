@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import type { TransactionContextInterface } from '@interfaces/transaction-context.interface.js';
+import { WEBHOOK_EVENT_REPOSITORY } from '@modules/payment/constants/payment.constants.js';
+import { MAX_WEBHOOK_ATTEMPTS } from '@modules/payment/constants/webhook-consumer.constants.js';
 import { NormalizedEventTypeEnum } from '@modules/payment/enums/normalized-event-type.enum.js';
 import { WebhookEventStatusEnum } from '@modules/payment/enums/webhook-event-status.enum.js';
+import type { WebhookEventRepositoryInterface } from '@modules/payment/interfaces/webhook-event-repository.interface.js';
 import { PaymentWebhookConsumerService } from '@modules/payment/services/payment-webhook-consumer.service.js';
 import { WebhookEventDispatcherService } from '@modules/payment/services/webhook-event-dispatcher.service.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
@@ -174,6 +178,57 @@ describe('webhook consumer (real postgres/redis/localstack, manual drive)', () =
 
     expect(remaining.some((candidate) => candidate.messageId === message.messageId)).toBe(false);
 
+    dispatchSpy.mockRestore();
+  });
+
+  // The atomicity proof for the failure-recording path (conventions §7a). The
+  // test above proves the attempt counter progresses; it passes with or without
+  // a transaction. This one induces a failure BETWEEN the two writes — after the
+  // second has really hit Postgres — and asserts the committed row shows
+  // neither, which only a real ROLLBACK can satisfy.
+  //
+  // Without the unit of work, the increment to the ceiling commits while the
+  // FAILED status does not: WebhookRetryService.retryFailed selects FAILED rows
+  // only, so the row is stranded at the ceiling where no sweep will ever see it.
+  it('recordDispatchFailure is atomic: an induced failure leaves the attempt count and status untouched', async () => {
+    const seeded = await seedEvent(NormalizedEventTypeEnum.CHECKOUT_COMPLETED, {
+      checkoutData: { userId: 'user-1', planId: 'plan-1', customerRef: 'cus_1' },
+    });
+    // One attempt below the ceiling, so this delivery is the one that would
+    // cross it and write FAILED.
+    await prisma.webhookEvent.update({
+      where: { id: seeded.id },
+      data: { attempts: MAX_WEBHOOK_ATTEMPTS - 1 },
+    });
+
+    const message = await sendAndReceive(seeded.id);
+    const dispatcher = app.get(WebhookEventDispatcherService);
+    const dispatchSpy = vi
+      .spyOn(dispatcher, 'dispatch')
+      .mockRejectedValue(new Error('lifecycle unreachable'));
+    const repository = app.get<WebhookEventRepositoryInterface>(WEBHOOK_EVENT_REPOSITORY);
+    const realMarkFailed = repository.markFailed.bind(repository);
+    const markFailedSpy = vi
+      .spyOn(repository, 'markFailed')
+      .mockImplementation(async (id: string, tx?: TransactionContextInterface): Promise<void> => {
+        // Let the status write really happen on the transaction's connection,
+        // THEN die — both statements are now pending in the same unit.
+        await realMarkFailed(id, tx);
+
+        throw new Error('induced failure mid-transaction');
+      });
+
+    await expect(consumer.processMessage(message)).rejects.toThrow(
+      'induced failure mid-transaction',
+    );
+
+    // Read on the autocommit connection: this is what actually committed.
+    const row = await prisma.webhookEvent.findUniqueOrThrow({ where: { id: seeded.id } });
+
+    expect(row.attempts).toBe(MAX_WEBHOOK_ATTEMPTS - 1);
+    expect(row.status).toBe(WebhookEventStatusEnum.RECEIVED);
+
+    markFailedSpy.mockRestore();
     dispatchSpy.mockRestore();
   });
 
