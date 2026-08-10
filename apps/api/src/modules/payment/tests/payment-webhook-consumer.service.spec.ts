@@ -1,4 +1,6 @@
 import type { PaymentConfig } from '@configs/payment.config.js';
+import type { TransactionContextInterface } from '@interfaces/transaction-context.interface.js';
+import type { UnitOfWorkInterface } from '@interfaces/unit-of-work.interface.js';
 import { WEBHOOK_FAILED_EVENT } from '@modules/event/constants/event-names.constants.js';
 import type { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
@@ -32,6 +34,18 @@ function baseEvent(overrides: Partial<WebhookEventInterface> = {}): WebhookEvent
     createdAt: new Date('2026-08-04T00:00:00Z'),
     processedAt: null,
     ...overrides,
+  };
+}
+
+// Inline stand-in for the unit of work: runs the callback against a stub handle
+// so the spec exercises composition. Real rollback is proven against Postgres in
+// test/webhook-consumer.e2e-spec.ts.
+function fakeUnitOfWork(): UnitOfWorkInterface {
+  return {
+    run: <ResultType>(
+      work: (tx: TransactionContextInterface) => Promise<ResultType>,
+      parent?: TransactionContextInterface,
+    ): Promise<ResultType> => work(parent ?? { id: 'tx-1' }),
   };
 }
 
@@ -85,6 +99,7 @@ function createService(
   const service: PaymentWebhookConsumerService = new PaymentWebhookConsumerService(
     webhookEventRepository,
     sqsProvider,
+    fakeUnitOfWork(),
     redisLock as unknown as RedisLockService,
     dispatcher as unknown as WebhookEventDispatcherService,
     eventBus as unknown as EventBusService,
@@ -167,9 +182,12 @@ describe('PaymentWebhookConsumerService.processMessage', () => {
 
     await service.processMessage(message());
 
+    // The third argument is the unit-of-work handle: the attempt counter and the
+    // status it decides are written in one transaction.
     expect(webhookEventRepository.recordFailure).toHaveBeenCalledWith(
       baseEvent().id,
       'provider unreachable',
+      { id: 'tx-1' },
     );
     expect(webhookEventRepository.markFailed).not.toHaveBeenCalled();
     expect(sqsProvider.deleteMessage).not.toHaveBeenCalled();
@@ -186,7 +204,9 @@ describe('PaymentWebhookConsumerService.processMessage', () => {
 
     await service.processMessage(message());
 
-    expect(webhookEventRepository.markFailed).toHaveBeenCalledWith(baseEvent().id);
+    expect(webhookEventRepository.markFailed).toHaveBeenCalledWith(baseEvent().id, {
+      id: 'tx-1',
+    });
     expect(sqsProvider.deleteMessage).toHaveBeenCalled();
     expect(eventBus.emit).toHaveBeenCalledWith(WEBHOOK_FAILED_EVENT, {
       webhookEventId: baseEvent().id,
@@ -213,7 +233,9 @@ describe('PaymentWebhookConsumerService.processMessage', () => {
     // comment) — the redelivery still reaches the ceiling branch and
     // idempotently marks FAILED again, but must not mint a second
     // WEBHOOK_FAILED_EVENT / admin notification for the same failure.
-    expect(webhookEventRepository.markFailed).toHaveBeenCalledWith(baseEvent().id);
+    expect(webhookEventRepository.markFailed).toHaveBeenCalledWith(baseEvent().id, {
+      id: 'tx-1',
+    });
     expect(sqsProvider.deleteMessage).toHaveBeenCalled();
     expect(eventBus.emit).not.toHaveBeenCalled();
   });
@@ -267,6 +289,7 @@ describe('PaymentWebhookConsumerService.processMessages (loop containment)', () 
       const service: PaymentWebhookConsumerService = new PaymentWebhookConsumerService(
         webhookEventRepository,
         sqsProvider,
+        fakeUnitOfWork(),
         redisLock as unknown as RedisLockService,
         dispatcher as unknown as WebhookEventDispatcherService,
         eventBus as unknown as EventBusService,

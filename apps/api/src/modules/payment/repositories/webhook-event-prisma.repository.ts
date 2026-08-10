@@ -1,10 +1,12 @@
 import { Prisma } from '@generated/prisma/client.js';
 import type { WebhookEventModel } from '@generated/prisma/models.js';
+import type { TransactionContextInterface } from '@interfaces/transaction-context.interface.js';
 import { WebhookEventStatusEnum } from '@modules/payment/enums/webhook-event-status.enum.js';
 import type { ProviderEventInterface } from '@modules/payment/interfaces/provider-event.interface.js';
 import type { UpsertWebhookEventResultInterface } from '@modules/payment/interfaces/upsert-webhook-event-result.interface.js';
 import type { WebhookEventInterface } from '@modules/payment/interfaces/webhook-event.interface.js';
 import type { WebhookEventRepositoryInterface } from '@modules/payment/interfaces/webhook-event-repository.interface.js';
+import { resolvePrismaClient } from '@modules/prisma/helpers/resolve-prisma-client.helper.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import { Injectable } from '@nestjs/common';
 
@@ -64,15 +66,22 @@ export class WebhookEventPrismaRepository implements WebhookEventRepositoryInter
     });
   }
 
-  public async markFailed(id: string): Promise<void> {
-    await this.prisma.webhookEvent.update({
+  public async markFailed(id: string, tx?: TransactionContextInterface): Promise<void> {
+    const client: Prisma.TransactionClient = resolvePrismaClient(this.prisma, tx);
+
+    await client.webhookEvent.update({
       where: { id },
       data: { status: WebhookEventStatusEnum.FAILED, processedAt: new Date() },
     });
   }
 
-  public async recordFailure(id: string, error: string): Promise<number> {
-    const updated: WebhookEventModel = await this.prisma.webhookEvent.update({
+  public async recordFailure(
+    id: string,
+    error: string,
+    tx?: TransactionContextInterface,
+  ): Promise<number> {
+    const client: Prisma.TransactionClient = resolvePrismaClient(this.prisma, tx);
+    const updated: WebhookEventModel = await client.webhookEvent.update({
       where: { id },
       data: { attempts: { increment: 1 }, lastError: error },
     });

@@ -1,3 +1,5 @@
+import type { TransactionContextInterface } from '@interfaces/transaction-context.interface.js';
+import type { UnitOfWorkInterface } from '@interfaces/unit-of-work.interface.js';
 import { EventBusService } from '@modules/event/services/event-bus.service.js';
 import { EXPIRY_SWEEP_BATCH_LIMIT } from '@modules/payment/constants/subscription-lifecycle.constants.js';
 import type { ActivateFromCheckoutDataInterface } from '@modules/payment/interfaces/activate-from-checkout-data.interface.js';
@@ -47,11 +49,30 @@ function fakeSubscription(overrides: Partial<SubscriptionInterface> = {}): Subsc
   };
 }
 
+// Runs the callback inline against a stub handle and remembers every handle it
+// minted, so a spec can assert that composed writes shared ONE unit. Real
+// BEGIN/ROLLBACK behaviour is not mockable and is proven against Postgres in
+// test/subscription-lifecycle.e2e-spec.ts instead.
+function fakeUnitOfWork(contexts: TransactionContextInterface[]): UnitOfWorkInterface {
+  return {
+    run: <ResultType>(
+      work: (tx: TransactionContextInterface) => Promise<ResultType>,
+      parent?: TransactionContextInterface,
+    ): Promise<ResultType> => {
+      const context: TransactionContextInterface = parent ?? { id: `tx-${contexts.length + 1}` };
+      contexts.push(context);
+
+      return work(context);
+    },
+  };
+}
+
 describe('SubscriptionLifecycleService', () => {
   let subscriptionRepository: SubscriptionRepositoryInterface;
   let transactionRepository: PaymentTransactionRepositoryInterface;
   let planRepository: PlanRepositoryInterface;
   let eventBus: EventBusService;
+  let contexts: TransactionContextInterface[];
   let service: SubscriptionLifecycleService;
 
   beforeEach(() => {
@@ -72,10 +93,12 @@ describe('SubscriptionLifecycleService', () => {
     };
     planRepository = { findActiveById: vi.fn(), findManyActive: vi.fn() };
     eventBus = { emit: vi.fn() } as unknown as EventBusService;
+    contexts = [];
     service = new SubscriptionLifecycleService(
       subscriptionRepository,
       transactionRepository,
       planRepository,
+      fakeUnitOfWork(contexts),
       eventBus,
     );
   });
@@ -199,6 +222,7 @@ describe('SubscriptionLifecycleService', () => {
       expect(subscriptionRepository.updatePeriodEnd).toHaveBeenCalledWith(
         subscription.id,
         baseData.periodEndsAt,
+        contexts[0],
       );
       expect(eventBus.emit).toHaveBeenCalledWith('subscription.renewed', {
         userId: subscription.userId,
@@ -254,6 +278,7 @@ describe('SubscriptionLifecycleService', () => {
       expect(subscriptionRepository.updatePeriodEnd).toHaveBeenCalledWith(
         subscription.id,
         baseData.periodEndsAt,
+        contexts[0],
       );
       expect(eventBus.emit).not.toHaveBeenCalled();
     });
@@ -312,11 +337,15 @@ describe('SubscriptionLifecycleService', () => {
       expect(subscriptionRepository.updateStatus).toHaveBeenCalledWith(
         'sub-row-1',
         SubscriptionStatusEnum.CANCELED,
+        contexts[0],
       );
       expect(subscriptionRepository.setCanceledAt).toHaveBeenCalledWith(
         'sub-row-1',
         expect.any(Date),
+        contexts[0],
       );
+      // Both writes joined the SAME unit — one transaction, not two.
+      expect(contexts).toHaveLength(1);
       expect(eventBus.emit).toHaveBeenCalledWith('subscription.canceled', {
         userId: 'user-1',
         subscriptionId: 'sub-row-1',
