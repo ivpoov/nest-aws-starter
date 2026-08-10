@@ -1,7 +1,7 @@
 import type { PaymentProviderInterface } from '@modules/payment/interfaces/payment-provider.interface.js';
 import { Injectable } from '@nestjs/common';
 
-// Provider modules (Stripe in PR 4, others later) register themselves when
+// Provider modules (Stripe, others later) register themselves when
 // their config is enabled — a disabled/unconfigured provider simply does not
 // exist here. Mirrors OauthProviderRegistryService.
 @Injectable()

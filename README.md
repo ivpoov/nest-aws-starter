@@ -168,6 +168,13 @@ pnpm --dir apps/web run dev      # user app  → http://localhost:5173
 pnpm --dir apps/admin run dev    # admin app → http://localhost:5174
 ```
 
+Vite quietly falls back to the next free port when 5173/5174 are taken, which is
+harmless here: outside production the API accepts any `http://localhost:<port>`
+or `http://127.0.0.1:<port>` origin, so a web app that landed on 5175 still
+reaches it. That latitude is development-only — under `NODE_ENV=production` the
+`CORS_ORIGINS` list is the entire allowlist, and the app refuses to boot if it
+holds a wildcard or a loopback address.
+
 ### Sign in
 
 The seed creates four demo accounts. **Development only** — the seed refuses to

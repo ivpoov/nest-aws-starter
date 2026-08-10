@@ -2,7 +2,7 @@ export const NOTIFICATION_EMAIL_THROTTLE_REPOSITORY = Symbol(
   'NOTIFICATION_EMAIL_THROTTLE_REPOSITORY',
 );
 
-// Plan Task 3's binding rule: max 1 email per (user, type) per hour — a
+// Binding rule: max 1 email per (user, type) per hour — a
 // webhook/login storm may persist N rows but must never send N mails.
 export const NOTIFICATION_EMAIL_THROTTLE_WINDOW_SEC: number = 3600;
 

@@ -12,7 +12,7 @@ export function AppLayout(): ReactElement {
   const isImpersonating: boolean = useIsImpersonating();
 
   return (
-    <div className="min-h-screen">
+    <div className="flex min-h-screen flex-col">
       {isImpersonating ? <Banner>Viewing as this user — session started by an admin</Banner> : null}
       <header className="flex items-center justify-between border-b border-edge px-6 py-3">
         <nav className="flex gap-4 text-sm">
@@ -42,7 +42,7 @@ export function AppLayout(): ReactElement {
           </button>
         </div>
       </header>
-      <main className="mx-auto max-w-3xl px-6 py-8">
+      <main className="mx-auto w-full max-w-3xl grow px-6 py-8">
         <Outlet />
       </main>
       {/* <module:contact-us> */}

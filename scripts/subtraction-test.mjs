@@ -434,16 +434,13 @@ export const MODULES = [
     ],
   },
   {
-    // Task 1 shipped schema-only (no module folder). Task 2 (this round)
-    // adds the Socket.IO gateway — its own module folder plus e2e spec are
-    // included here in the same commit series (see task-1-report.md's note
-    // for PR 2-5 implementers: v0.4's payment entry missed this once and
-    // briefly broke the subtracted tree). Tasks 3-5 extend `paths` further
-    // as the event subscriber/history API/email digest land in the same folder.
+    // Whenever this module grows a new folder or e2e spec, `paths` is
+    // extended here in the same commit series — v0.4's payment entry missed
+    // this once and briefly broke the subtracted tree.
     id: 'notification',
     summary:
       'Notification/receipt/preference schema, WS gateway, the persist-first event subscriber (IN_APP + ' +
-      'the per-type/per-channel EMAIL gate, PR 5), the history API ' +
+      'the per-type/per-channel EMAIL gate), the history API ' +
       '(list/unread-count/mark-read/read-all), and the preferences API (GET/PUT matrix).',
     paths: [
       'apps/api/src/modules/notification',
@@ -526,13 +523,13 @@ export const MODULES = [
   },
 ];
 
-// Documented for docs/removal/README.md — investigated during Task 14 and
-// found not (currently) cleanly removable. Not exercised by the script.
+// Documented for docs/removal/README.md — investigated and found not
+// (currently) cleanly removable. Not exercised by the script.
 const NON_REMOVABLE = [
   {
     id: 'account-security',
     reason:
-      'Fenceable in principle — multi-line/block fences exist elsewhere in this PR — ' +
+      'Fenceable in principle — multi-line/block fences exist elsewhere in the tree — ' +
       'but disproportionately invasive here: it is a synchronous security gate inside ' +
       'AuthService.login() (LoginLockoutService.assertNotLocked() blocks credential ' +
       'verification; NewDeviceService.check() branches AUTH_NEW_DEVICE_EVENT emission), ' +
@@ -608,7 +605,7 @@ const DEFERRED_PROVIDERS = [
       'Coupled into core auth: `EmailFlowService` (verify/reset emails, `auth` module) calls ' +
       '`MAIL_TRANSPORT` unconditionally; `NewDeviceService` (`account-security`) also ' +
       "injects it directly, gated only by its own `newDeviceEmailEnabled` flag, not by mail's " +
-      "own `isEnabled`. `NotificationEmailService` (`notification`, PR 5) checks mail's own " +
+      "own `isEnabled`. `NotificationEmailService` (`notification`) checks mail's own " +
       '`isEnabled` before every send, so it degrades cleanly — but it is still a removable ' +
       "module's unconditional dependency on this deferred provider. Removing mail outright " +
       'breaks core auth email flows.',
@@ -1275,8 +1272,8 @@ Two couplings were not mechanical and are worth knowing before adding a module:
 ## Scope note: v0.1 providers
 
 Only \`cloudfront\` is exercised this round. S3/SQS/SNS/SES(mail)/Lambda are also optional,
-disable-fallback providers, but they predate the fence-marker convention introduced in this
-PR (Task 14, v0.3). Retrofitting fences onto all of them is deliberately deferred to a
+disable-fallback providers, but they predate the fence-marker convention introduced in
+v0.3. Retrofitting fences onto all of them is deliberately deferred to a
 dedicated pass rather than folded into this release. The coupling shape differs per
 provider — investigated individually rather than deferred on a blanket excuse:
 

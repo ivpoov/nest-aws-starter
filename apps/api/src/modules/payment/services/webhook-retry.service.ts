@@ -27,8 +27,8 @@ export class WebhookRetryService {
   ) {}
 
   // Two independent sweeps sharing one staleness cutoff: FAILED events under
-  // the retry ceiling (the brief's core ask), and stale RECEIVED events
-  // whose ingest-time enqueue never reached SQS (the PR 5 TODO in
+  // the retry ceiling, and stale RECEIVED events
+  // whose ingest-time enqueue never reached SQS (the gap documented in
   // WebhookIngestService.enqueue — a swallowed send failure otherwise leaves
   // the row invisible to reprocessing forever). Order matters: the stale
   // RECEIVED sweep must run BEFORE the FAILED retry, because retryFailed

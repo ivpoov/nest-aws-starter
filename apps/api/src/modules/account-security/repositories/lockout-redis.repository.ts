@@ -11,7 +11,9 @@ import { InternalError } from '@modules/common/errors/internal.error.js';
 import { LockoutScopeEnum } from '@nest-aws-starter/shared';
 import { Inject, Injectable } from '@nestjs/common';
 import { REDIS_CLIENT } from '@providers/redis/constants/redis.constants.js';
+import { resolveClusterMasters } from '@providers/redis/helpers/resolve-cluster-masters.helper.js';
 import type { RedisClientType } from '@providers/redis/types/redis-client.type.js';
+import { Cluster, type Redis } from 'ioredis';
 
 const COUNTER_PREFIX = 'suspicious:fail';
 const LOCK_PREFIX = 'suspicious:lockout';
@@ -79,8 +81,16 @@ export class LockoutRedisRepository implements LockoutRepositoryInterface {
     await this.redis.del(this.counterKey(scope, value));
   }
 
+  // Two DELs, not one multi-key DEL: the lock and the counter carry different
+  // prefixes, so they hash to different slots and a single `DEL lock counter`
+  // is a CROSSSLOT error in cluster mode. There is nothing to co-locate them
+  // for — no operation ever reads or writes the pair as a unit — so releasing
+  // is two independent deletes rather than a hash tag over the key layout.
   public async release(scope: LockoutScopeEnum, value: string): Promise<void> {
-    await this.redis.del(this.lockKey(scope, value), this.counterKey(scope, value));
+    await Promise.all([
+      this.redis.del(this.lockKey(scope, value)),
+      this.redis.del(this.counterKey(scope, value)),
+    ]);
   }
 
   // Capped: GET /admin/account-security/lockouts takes no `limit`, and a
@@ -98,15 +108,43 @@ export class LockoutRedisRepository implements LockoutRepositoryInterface {
     );
   }
 
+  // SCAN carries no key, so a Cluster client cannot route it: ioredis sends it
+  // to one arbitrary master and the walk sees only that node's slots. Lockout
+  // keys are hashed by email or IP and land wherever their slot lives, so the
+  // admin listing came back partial or empty. The walk therefore runs per
+  // master, the same shape as `RedisCacheStore.deleteByPrefix` and
+  // `TokenRedisRepository.deleteAllForUser`.
+  //
+  // Nodes are walked in sequence rather than in parallel because `limit` is a
+  // budget over the MERGED result: once it is filled, the remaining masters are
+  // never contacted at all. A `Promise.all` fan-out would read up to `limit`
+  // keys from every master and throw away all but the first.
+  private async scanKeys(pattern: string, limit: number): Promise<string[]> {
+    if (!(this.redis instanceof Cluster)) {
+      return this.scanKeysOnNode(this.redis, pattern, limit);
+    }
+
+    const masters: Redis[] = await resolveClusterMasters(this.redis);
+    const keys: string[] = [];
+
+    for (const node of masters) {
+      if (keys.length >= limit) break;
+
+      keys.push(...(await this.scanKeysOnNode(node, pattern, limit - keys.length)));
+    }
+
+    return keys;
+  }
+
   // SCAN returns an unbounded number of keys across its cursor walk, so the
   // limit is enforced inside the loop: stopping early leaves the remaining
   // keys unread rather than materializing them and slicing afterwards.
-  private async scanKeys(pattern: string, limit: number): Promise<string[]> {
+  private async scanKeysOnNode(node: Redis, pattern: string, limit: number): Promise<string[]> {
     const keys: string[] = [];
     let cursor: string = '0';
 
     do {
-      const [nextCursor, batch]: [string, string[]] = await this.redis.scan(
+      const [nextCursor, batch]: [string, string[]] = await node.scan(
         cursor,
         'MATCH',
         pattern,

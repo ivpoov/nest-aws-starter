@@ -13,7 +13,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Two real Nest apps against one Redis, exactly as the brief asks. Cron
+// Two real Nest apps against one Redis. Cron
 // wall-time is never awaited: the job is registered post-boot on both
 // instances and its lock-guarded run is triggered directly (the same path
 // SchedulerRegistry's onTick would call), so the outcome is deterministic

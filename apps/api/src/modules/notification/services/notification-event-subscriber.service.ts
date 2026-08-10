@@ -47,22 +47,21 @@ import { NotificationFanOutService } from '@modules/notification/services/notifi
 import { NotificationAudienceEnum, NotificationTypeEnum } from '@nest-aws-starter/shared';
 import { Inject, Injectable } from '@nestjs/common';
 
-// The only bus subscriber in the module (task-3-brief.md's event -> type
-// matrix, all 11 rows mapped). Every handler below funnels into dispatch():
+// The only bus subscriber in the module (all 11 rows of the event -> type
+// matrix are mapped). Every handler below funnels into dispatch():
 // persist first, fan out second — a channel/socket failure must never lose
 // or roll back the row (backend.md §11a's "persist-first" rule), and a
 // persistence failure must never break the emitting feature (§11a's
 // "subscribers never break the emitter", same containment pattern as
 // ActivityListener.safeRecord). The fan-out itself
 // (IN_APP socket push, unread-count push, EMAIL channel — each
-// independently contained) lives in NotificationFanOutService (PR 5 code
-// review: extracted so this file stays a thin event -> type mapping layer,
-// and a future channel entangles the orchestrator, not this matrix).
+// independently contained) lives in NotificationFanOutService — extracted so
+// this file stays a thin event -> type mapping layer, and a future channel
+// entangles the orchestrator, not this matrix.
 //
 // webhook.failed's WEBHOOK_FAILED_EVENT is emitted by
-// PaymentWebhookConsumerService at the FAILED ceiling (payment module) —
-// the release plan's matrix line, not this module's brief, governs that
-// emit site; see task-3-report.md for the correction.
+// PaymentWebhookConsumerService at the FAILED ceiling (payment module), not
+// from this module.
 @Injectable()
 export class NotificationEventSubscriberService {
   private readonly logger = new CustomLoggerService(NotificationEventSubscriberService.name);

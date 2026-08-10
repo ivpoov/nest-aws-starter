@@ -5,6 +5,7 @@ import type { RotationStateInterface } from '@modules/token/interfaces/rotation-
 import type { TokenRepositoryInterface } from '@modules/token/interfaces/token-repository.interface.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { REDIS_CLIENT } from '@providers/redis/constants/redis.constants.js';
+import { resolveClusterMasters } from '@providers/redis/helpers/resolve-cluster-masters.helper.js';
 import type { RedisClientType } from '@providers/redis/types/redis-client.type.js';
 import { Cluster, type Redis } from 'ioredis';
 
@@ -152,7 +153,7 @@ export class TokenRedisRepository implements TokenRepositoryInterface {
     const patterns: string[] = [`users:{${userId}}:sessions:*`, `users:${userId}:sessions:*`];
 
     if (this.redis instanceof Cluster) {
-      const masters: Redis[] = this.redis.nodes('master');
+      const masters: Redis[] = await resolveClusterMasters(this.redis);
 
       await Promise.all(
         masters.flatMap((node: Redis): Promise<void>[] =>

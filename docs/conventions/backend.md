@@ -941,6 +941,22 @@ one greppable thread, across services, repositories, and providers.
   to a CSRF exposure. A failing browser call is fixed in `CORS_ORIGINS` or the
   allowed-header list, never by flipping that flag; flipping it is only correct as
   part of a deliberate move to cookie auth, with the CSRF defences that implies.
+- **One loopback exception, and it is development-only.** Outside production the
+  origin check also accepts any `http://localhost:<port>`, `http://127.0.0.1:<port>`
+  or `http://[::1]:<port>` — Vite silently falls back to the next free port, and a
+  developer who lands on 5175 should not meet an opaque browser CORS error. It lives
+  in `createCorsOriginDelegate` (`@helpers/create-cors-origin-delegate.helper.ts`) as
+  an *origin-matching function*, deliberately not as extra `CORS_ORIGINS` entries:
+  `CORS_ORIGINS` is what the production boot guard inspects (§9a), so widening it
+  would either trip that guard or force it to learn exceptions. The switch is the
+  resolved `AppConfig.env`, so `NODE_ENV=production` gets the configured allowlist
+  and nothing else, with no env var, header or pattern that re-enables the rule.
+  The match is a parsed-`URL` hostname comparison — never `startsWith`, `includes`
+  or a regex — so `http://localhost.evil.tld`, `http://localhost:5173.evil.tld`,
+  `http://localhost:5173@evil.tld` and `http://evil.tld/?x=localhost` are all
+  refused. `https://localhost:<port>` is refused too: a TLS-terminating dev server
+  is a deliberate setup and its origin belongs in `CORS_ORIGINS`; the port is what
+  Vite picks for you, the scheme is not.
 - **`X-Forwarded-For` is trusted only under `TRUST_PROXY`.** The flag is read in two
   places — the Fastify adapter (`request.ip`) and `ThrottlerBehindProxyGuard` — and
   they must agree. Any new per-ip logic reads `request.ip`; a second place that
@@ -1011,6 +1027,54 @@ public async wrap<T>(key: string, ttlMs: number, factory: () => Promise<T>): Pro
 - HTTP-layer caching (browser, CloudFront, S3) is a separate concern: responses opt
   in via explicit `Cache-Control` headers; the API defaults to `no-store` on
   authenticated endpoints.
+
+## 10c. Redis in cluster mode
+
+`REDIS_IS_CLUSTER=true` swaps the shared client from `Redis` to `Cluster`, and the two
+are **not** interchangeable at the command level. The default is `false`, so cluster
+mode is the path least likely to have been executed — write for it anyway, because the
+failures it produces are the quiet kind.
+
+- **A command with no key is routed to one arbitrary node.** `SCAN` is the one that
+  matters: a bare `redis.scan(...)` on a `Cluster` client walks a single master and
+  silently returns a *partial* keyspace — no error, just missing rows. Every key walk
+  fans out instead:
+
+  ```typescript
+  if (this.redis instanceof Cluster) {
+    const masters: Redis[] = await resolveClusterMasters(this.redis);
+    // …walk each master, merge the results…
+  }
+  ```
+
+  Use `resolveClusterMasters` (`@providers/redis/helpers/...`) rather than
+  `nodes('master')` directly: the client is built with `lazyConnect`, so before its
+  first command the slot map is empty and `nodes('master')` returns `[]` — a fan-out
+  over nothing, reported as success.
+
+- **A capped walk spends its cap across the merged result**, and walks the masters in
+  sequence so a filled cap stops the remaining nodes from being contacted at all. A
+  parallel fan-out reads `limit` keys per master and discards all but the first.
+
+- **Multi-key commands need every key in one slot.** `DEL a b`, `MGET`, and any Lua
+  script with `numkeys > 1` are `CROSSSLOT` errors unless the keys share a slot. Two
+  ways out, and the choice is about whether the keys are *one thing*:
+  - Keys that are read or written as a unit get a **hash tag** so they co-locate —
+    `users:{userId}:sessions:…`, which is what makes the token rotation script atomic.
+  - Keys that merely happen to be adjacent get **separate single-key commands**. The
+    lockout repository releases its lock and its counter as two `DEL`s for exactly
+    this reason: nothing ever treats the pair as one unit, so there is no atomicity to
+    buy with a hash tag.
+
+- **`rediss://` and URL credentials do not reach discovered nodes on their own.**
+  ioredis applies a seed URL to the seed connection; nodes learned from
+  `CLUSTER SLOTS` are rebuilt from host and port and merged with `redisOptions` only.
+  Build every client through `createRedisClient` — never `new Cluster([url])` at a
+  call site.
+
+- **There is only db 0**, so `SELECT` and logical-database isolation are unavailable
+  (the e2e helpers skip their `FLUSHDB` accordingly), and non-sharded pub/sub is
+  broadcast over the cluster bus, so `PUBLISH`/`SUBSCRIBE` work unchanged.
 
 ## 11. Errors
 
@@ -1128,8 +1192,10 @@ gateway's. Reference: `notification`'s `NotificationGateway` + adapters.
   DI exists. Anything configuration-dependent (CORS origins above all) is
   injected at bootstrap by the adapter, which resolves it from the same
   `ConfigService` object the HTTP layer uses. One parse, one source: socket
-  CORS comes from `AppConfig.corsOrigins`, the same field
-  `configure-app.helper.ts` feeds to `enableCors`.
+  CORS is `createCorsOriginDelegate(AppConfig)` — the same delegate, built from
+  the same resolved config object, that `configure-app.helper.ts` feeds to
+  `enableCors` (§10a). The two transports cannot answer an origin question
+  differently, development loopback rule included.
 - **The adapter is the off-switch.** `<X>_ENABLED=false` for a socket transport
   means the server never attaches a socket endpoint and opens no adapter Redis
   connections (§12: no third state). Bootstrap installs the real Redis-backed

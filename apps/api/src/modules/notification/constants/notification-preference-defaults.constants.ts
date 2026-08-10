@@ -16,8 +16,8 @@ export const USER_NOTIFICATION_TYPES: readonly NotificationTypeEnum[] = [
   NotificationTypeEnum.SUBSCRIPTION_ENDED,
 ];
 
-// Single source of truth for the "no stored row yet" default (task-5-brief.md:
-// "all EMAIL on except SUBSCRIPTION_RENEWED (noise)"). Every other
+// Single source of truth for the "no stored row yet" default: all EMAIL on
+// except SUBSCRIPTION_RENEWED (noise). Every other
 // USER_NOTIFICATION_TYPES member defaults to EMAIL on. IN_APP has no entry
 // here — it is always on and never reads this map (see
 // NotificationPreferenceService).
