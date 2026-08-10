@@ -2,6 +2,7 @@
   "name": "nest-aws-starter",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "packageManager": "pnpm@11.9.0",
   "engines": {
     "node": ">=24.0.0"

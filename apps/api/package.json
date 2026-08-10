@@ -1,6 +1,7 @@
 {
   "name": "@nest-aws-starter/api",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "prisma generate --sql && tsc --noEmit -p tsconfig.build.json && swc src -d dist --strip-leading-paths --quiet",

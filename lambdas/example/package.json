@@ -1,5 +1,6 @@
 {
   "name": "@nest-aws-starter/example-lambda",
   "private": true,
+  "license": "MIT",
   "type": "module"
 }
