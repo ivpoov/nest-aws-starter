@@ -51,8 +51,10 @@ Controller  →  Service  →  RepositoryInterface  ←implements←  PrismaRepo
   event) — never the repository.
 - The generated Prisma client (`@generated/prisma/client.js`, `.../models.js`,
   `.../enums.js`, `.../sql.js`) may be imported only inside `*-prisma.repository.ts`
-  files, their unit specs, and Prisma infrastructure (`PrismaService`). Anywhere else
-  it is a review rejection — no lint rule encodes this one.
+  files, their unit specs, and the `prisma` module itself — the persistence adapter,
+  which today is `PrismaService`, `PrismaUnitOfWorkService` and
+  `prisma-transaction-registry.helper.ts` (§7a). Anywhere else it is a review rejection
+  — no lint rule encodes this one.
 - Repository methods accept scalars/domain inputs and return domain interfaces —
   never ORM models, never ORM generics, never query fragments.
 - Repositories expose named, intention-revealing methods (`findActiveByUserId`), not
@@ -368,7 +370,13 @@ file; the module binding is the only other line that changes.
 The only Prisma error codes a repository may branch on are `P2025` (not-found
 signal, e.g. `update`/`delete` on a missing row) and `P2002` (idempotent-replay
 signal, e.g. a unique-constraint hit on a repeated create) — both confined to the
-repository, never leaked as raw Prisma errors past its boundary.
+repository, never leaked as raw Prisma errors past its boundary. The `P2002` branch
+is legal only for a statement that autocommits alone: inside a unit of work a raised
+unique violation aborts the whole transaction, so a method that may take a `tx` uses
+`ON CONFLICT DO NOTHING` instead (§7a).
+
+Write methods additionally take an optional transaction handle so a service can
+compose several of them atomically without ever holding a Prisma type — §7a.
 
 ### TypedSQL — the blessed pattern for hand-optimized queries
 
@@ -546,6 +554,193 @@ export class NoteService {
   `CreateNoteDataInterface`; the service never imports a DTO class.
 - Event names are constants from the core `event` module, never inline strings.
 - Logger is a class field, never constructor-injected.
+
+## 7a. Unit of work (composing writes atomically)
+
+§1 says Prisma never leaves a repository. Taken alone that would also mean a service
+can never say "these two writes are one thing", because the only object that can
+open a transaction is the database client. This section is how both hold at once.
+
+### When a transaction is REQUIRED
+
+Wrap writes in a unit of work when **a crash between them leaves a state the system
+cannot reach on purpose and cannot repair on its own**. Concretely, all three:
+
+1. Two or more statements **mutate** rows (a read followed by a write is not a unit of
+   work — see optimistic guards below).
+2. They land in the **same database**. Redis, S3, SQS, SES and any HTTP call cannot
+   join a database transaction; see "Writes that cannot be atomic" below.
+3. A partial application is **wrong**, not merely stale.
+
+The sharpest test is criterion 3 plus repairability: ask *what does the next retry
+see?* `SubscriptionLifecycleService.cancel` writes the status and then `canceledAt`,
+and short-circuits on a terminal status — so a crash in between left the row CANCELED
+with `canceledAt = null` and **every** replay returned at the guard. Not eventually
+consistent: permanently corrupt. That is the shape a transaction exists to prevent.
+
+A transaction is **not** required, and should not be added, when:
+
+- Only one statement mutates. `update ... where currentPeriodEndsAt < $1` is already
+  atomic; a transaction around it buys nothing and costs a connection.
+- The second write is idempotent and a retry re-runs it from a state that still
+  qualifies. Idempotency and transactions solve different problems — redelivery vs.
+  crash mid-operation — and neither replaces the other. Keep both where both apply.
+- The writes are in different stores. Ordering is your only lever there.
+
+### How a repository accepts a transaction
+
+A write method that needs to participate in a unit of work takes an **optional, opaque** `tx` as
+its last parameter. This is adopted per method, not repo-wide: today 6 of ~38 write methods carry
+one, because only those six have a caller that composes. Adding it is a non-breaking change — the
+parameter is optional and last, so every existing call site keeps autocommitting — so add it when
+a composing caller appears, not pre-emptively.
+
+```typescript
+// interfaces/subscription-repository.interface.ts
+import type { TransactionContextInterface } from '@interfaces/transaction-context.interface.js';
+
+setCanceledAt(
+  id: string,
+  canceledAt: Date,
+  tx?: TransactionContextInterface,
+): Promise<SubscriptionInterface>;
+```
+
+`TransactionContextInterface` lives in `common` and declares exactly one readable
+field, `id`, for logs. It names no database, no driver and no Prisma type — so adding
+it to a contract does not weaken §1.
+
+The handle is a **frozen `{ id }` and nothing else**: the live client is held in a
+`WeakMap` keyed on the context's identity, private to
+`prisma-transaction-registry.helper.ts`. Nothing hangs off the object, so no reflection
+route reaches the client — not `Object.getOwnPropertySymbols`, not `Reflect.ownKeys` —
+and, the case that would actually bite, `{...tx}` or `Object.assign` into a log line, an
+event payload or a DTO **copies no client**. A copy is a different identity, so it is not
+in the map and `resolvePrismaClient` rejects it rather than silently autocommitting. A
+property on the context — even under a `unique symbol` — would fail every one of those:
+symbols are enumerable by reflection and are copied by spread. The specs in
+`prisma-unit-of-work.service.spec.ts` assert each route explicitly, so the claim in this
+paragraph is executable rather than aspirational.
+
+The implementation resolves it in one line and uses the result for every statement:
+
+```typescript
+// repositories/subscription-prisma.repository.ts — still the only Prisma zone
+public async setCanceledAt(
+  id: string,
+  canceledAt: Date,
+  tx?: TransactionContextInterface,
+): Promise<SubscriptionInterface> {
+  const client: Prisma.TransactionClient = resolvePrismaClient(this.prisma, tx);
+  const updated: SubscriptionWithPlan = await client.subscription.update({
+    where: { id },
+    data: { canceledAt },
+    include: { plan: true },
+  });
+
+  return this.toDomain(updated);
+}
+```
+
+`resolvePrismaClient` (`@modules/prisma/helpers/`) returns `this.prisma` when `tx` is
+absent — so an un-passed handle means autocommit, exactly the previous behaviour — and
+throws `PRISMA_FOREIGN_TRANSACTION_CONTEXT` when handed a context minted by a
+different adapter, rather than silently autocommitting writes the caller believes are
+transactional. It is a free function, not a base class: repositories keep their flat
+`constructor(private readonly prisma: PrismaService)` and inherit nothing.
+
+Two rules inside a transaction-aware repository:
+
+- **Every statement in the method uses the resolved `client`, including reads.** A
+  read-back through `this.prisma` while a unit is open runs on a different connection
+  and cannot see the uncommitted row — it silently returns stale data. Private helpers
+  that read take the already-resolved client as a parameter.
+- **Never signal idempotency by catching a constraint violation inside a unit of
+  work.** In Postgres a raised unique violation aborts the *whole* transaction, so the
+  follow-up read fails with "current transaction is aborted" and takes the caller's
+  other writes with it. Use `createMany({ skipDuplicates: true })` (`ON CONFLICT DO
+  NOTHING`) plus a read-back — see `PaymentTransactionPrismaRepository`. The
+  catch-`P2002` pattern (§6) stays legal only for a statement that autocommits alone.
+
+### How a service composes one
+
+```typescript
+constructor(
+  @Inject(SUBSCRIPTION_REPOSITORY)
+  private readonly subscriptionRepository: SubscriptionRepositoryInterface,
+  @Inject(UNIT_OF_WORK)
+  private readonly unitOfWork: UnitOfWorkInterface,
+) {}
+
+await this.unitOfWork.run(async (tx: TransactionContextInterface): Promise<void> => {
+  await this.subscriptionRepository.updateStatus(id, SubscriptionStatusEnum.CANCELED, tx);
+  await this.subscriptionRepository.setCanceledAt(id, new Date(), tx);
+});
+
+// Side effects come AFTER — a rollback cannot un-emit an event or un-send a mail.
+this.eventBus.emit(SUBSCRIPTION_CANCELED_EVENT, { userId, subscriptionId: id });
+```
+
+`UNIT_OF_WORK` and `UnitOfWorkInterface` live in `common`; `PrismaUnitOfWorkService`
+implements them in the (global) `prisma` module. A *feature* service's type universe
+therefore still contains zero Prisma: swapping the store rewrites the `prisma` module —
+`PrismaService`, `PrismaUnitOfWorkService`, the registry helper and the
+`*-prisma.repository.ts` files, which are the persistence adapter and are *supposed* to
+name Prisma — plus one binding per token, and touches no feature service. A
+`NoteMongooseRepository` family ships its own unit-of-work implementation bound to the
+same token.
+
+Binding rules for the body of `run`:
+
+- **Database work only.** No `eventBus.emit`, no mail, no Redis, no S3, no HTTP.
+  Anything the rollback cannot undo happens after `run` resolves. Anything slow held a
+  connection and a row lock while it ran.
+- **Keep it short.** A unit of work holds a pooled connection for its whole duration;
+  Prisma's interactive transaction also has a timeout. Compute hashes, call providers
+  and build payloads *before* opening one.
+- **Never nest `run`.** A nested call would open a second, independent transaction on
+  another connection that cannot see the first one's uncommitted rows, and can
+  deadlock against it. A method that may run inside someone else's unit takes `tx?`
+  and passes it as `run`'s second argument, which joins instead of nesting. No path
+  needs this yet — every current unit is opened and closed inside one service method —
+  so `run`'s `parent` exists as the sanctioned answer to the nesting hazard, covered by
+  spec, and is deliberately kept rather than left for the first composer to reinvent.
+- **Let it throw.** Do not catch inside the callback to "clean up": the throw *is* the
+  rollback. Catch outside `run` if the caller needs to react.
+
+### Writes that cannot be atomic — order them fail-safe
+
+The database transaction stops at the database. When a DB write pairs with a Redis,
+S3, SES or provider call, atomicity is off the table and **ordering is the whole
+design**. Order so that the failure mode is restrictive, never permissive:
+
+> Do the write that **removes** access first, and the write that **grants or changes**
+> it second.
+
+`EmailFlowService.resetPassword` revokes every session *before* storing the new
+password hash. A crash between them leaves the account logged out with the old
+password still valid — annoying, and the user simply requests another reset. The
+opposite order left the new password live while every pre-reset session, including an
+attacker's, stayed authenticated: the exact property a password reset exists to
+guarantee. `UserAdminService.updateStatus` revokes before flipping a user to BLOCKED
+for the same reason. Write the reasoning in a comment at the call site — the order
+looks arbitrary otherwise, and the next reader will "tidy" it.
+
+Where ordering is not enough, prefer a design that needs no cross-store atomicity at
+all: an idempotent consumer replaying from a durable log (the webhook pipeline), or a
+monotonic guard in the `where` clause that makes re-application a no-op
+(`updatePeriodEnd`).
+
+### Testing a transaction
+
+A test that calls the happy path proves nothing about transactions — it passes
+identically with the transaction deleted. **Induce a failure between the writes and
+assert the committed state shows none of them.** The reference is
+`test/subscription-lifecycle.e2e-spec.ts`: it stubs the second repository call to
+perform its real write and *then* throw, and asserts the row read back on the
+autocommit connection is untouched. Unit specs stub the unit of work to run the
+callback inline and assert both writes received the *same* handle — enough to prove
+composition, never enough to prove rollback, which needs real Postgres.
 
 ## 8. Controller (the perfect endpoint)
 
@@ -1263,7 +1458,7 @@ No module merges untested; tests land in the same commit series.
 | Loose `*.controller.ts`/`*.service.ts` at module root | Dedicated folder per artifact kind, even for a single file (`controllers/`, `services/`, `repositories/`, `constants/`) |
 | Service depending on a concrete repository class | Contract interface via injection token |
 | Module exporting a repository | Export the service; others ask the service |
-| `@generated/prisma/*` outside `*-prisma.repository.ts` | New named contract method |
+| `@generated/prisma/*` outside `*-prisma.repository.ts` or the `prisma` module | New named contract method |
 | Repository returning an ORM model or response DTO | `toDomain()` → domain interface |
 | Business logic in a controller (pre-checks, casts) | Service method (`deleteById` owns the 404) |
 | `type` for an object shape | `interface` in `interfaces/` |
@@ -1276,3 +1471,7 @@ No module merges untested; tests land in the same commit series.
 | Service throwing `HttpException`/`NotFoundException` | Domain `AppError` (`NotFoundError`, …); transports map at the edge |
 | Feature module adding codes to a shared errors file | Module-owned `<module>-errors.constants.ts` |
 | Feature module importing a feature module | Event bus or core dependency |
+| Two dependent writes issued back to back, no unit of work | `unitOfWork.run` with the `tx` threaded into both (§7a) |
+| Service holding a `Prisma.TransactionClient` (or `$transaction` outside a repository) | Opaque `TransactionContextInterface` + `UNIT_OF_WORK` (§7a) |
+| Event, mail, or cache write inside `unitOfWork.run` | After it resolves — a rollback cannot un-send them (§7a) |
+| DB write granting access before the Redis write revoking it | Revoke first: fail safe, not fail open (§7a) |

@@ -3,9 +3,11 @@ import {
   FAILED_LOGIN_WINDOW_SEC,
   LOCKOUT_TTL_SEC,
 } from '@modules/account-security/constants/account-security.constants.js';
+import { ACCOUNT_SECURITY_LOCKOUT_COUNTER_UNAVAILABLE } from '@modules/account-security/constants/account-security-errors.constants.js';
 import type { LockoutKeyInterface } from '@modules/account-security/interfaces/lockout-key.interface.js';
 import type { LockoutRecordInterface } from '@modules/account-security/interfaces/lockout-record.interface.js';
 import type { LockoutRepositoryInterface } from '@modules/account-security/interfaces/lockout-repository.interface.js';
+import { InternalError } from '@modules/common/errors/internal.error.js';
 import { LockoutScopeEnum } from '@nest-aws-starter/shared';
 import { Inject, Injectable } from '@nestjs/common';
 import { REDIS_CLIENT } from '@providers/redis/constants/redis.constants.js';
@@ -20,11 +22,35 @@ const LOCK_PREFIX = 'suspicious:lockout';
 export class LockoutRedisRepository implements LockoutRepositoryInterface {
   constructor(@Inject(REDIS_CLIENT) private readonly redis: RedisClientType) {}
 
+  // INCR and EXPIRE go in one MULTI — the same "two writes are one unit"
+  // discipline as a database transaction (conventions §7a), applied in the store
+  // that actually owns this state.
+  //
+  // As two separate commands, a failure between them left the counter with NO
+  // TTL, and the old `count === 1` guard meant no later increment ever re-armed
+  // it. The counter then climbed forever, so once it passed the threshold EVERY
+  // subsequent failed login re-locked the moment the previous lock's TTL
+  // lapsed: a permanent self-inflicted lockout of that email or IP, escapable
+  // only by a successful login (which the lock prevents) or an admin `release`.
+  //
+  // `EXPIRE ... NX` (Redis >= 7) arms the window only when the key has none, so
+  // a replay never pushes a live window out — the same reason `lock()` below
+  // uses SET NX. Legacy immortal keys self-heal: their next increment finds no
+  // TTL and arms one.
   public async incrementFailedAttempts(scope: LockoutScopeEnum, value: string): Promise<number> {
     const key: string = this.counterKey(scope, value);
-    const count: number = await this.redis.incr(key);
+    const results: [Error | null, unknown][] | null = await this.redis
+      .multi()
+      .incr(key)
+      .expire(key, FAILED_LOGIN_WINDOW_SEC, 'NX')
+      .exec();
+    const count: unknown = results?.[0]?.[1];
 
-    if (count === 1) await this.redis.expire(key, FAILED_LOGIN_WINDOW_SEC);
+    // Never guess a count: a wrong one either skips a lockout that was due or
+    // triggers one that was not.
+    if (typeof count !== 'number') {
+      throw new InternalError(ACCOUNT_SECURITY_LOCKOUT_COUNTER_UNAVAILABLE);
+    }
 
     return count;
   }

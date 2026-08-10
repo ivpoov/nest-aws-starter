@@ -1,10 +1,12 @@
 import { Prisma } from '@generated/prisma/client.js';
 import { SubscriptionStatus } from '@generated/prisma/enums.js';
 import type { SubscriptionGetPayload } from '@generated/prisma/models.js';
+import type { TransactionContextInterface } from '@interfaces/transaction-context.interface.js';
 import type { CreateSubscriptionDataInterface } from '@modules/payment/interfaces/create-subscription-data.interface.js';
 import type { CreateSubscriptionResultInterface } from '@modules/payment/interfaces/create-subscription-result.interface.js';
 import type { SubscriptionInterface } from '@modules/payment/interfaces/subscription.interface.js';
 import type { SubscriptionRepositoryInterface } from '@modules/payment/interfaces/subscription-repository.interface.js';
+import { resolvePrismaClient } from '@modules/prisma/helpers/prisma-transaction-registry.helper.js';
 import { PrismaService } from '@modules/prisma/services/prisma.service.js';
 import { SubscriptionStatusEnum } from '@nest-aws-starter/shared';
 import { Injectable } from '@nestjs/common';
@@ -85,20 +87,28 @@ export class SubscriptionPrismaRepository implements SubscriptionRepositoryInter
   // currentPeriodEndsAt is earlier than the incoming value, so a replayed
   // renewal event never shrinks or re-applies the same extension. Returns
   // the current row regardless of whether this call actually updated it.
-  public async updatePeriodEnd(id: string, periodEndsAt: Date): Promise<SubscriptionInterface> {
-    await this.prisma.subscription.updateMany({
+  public async updatePeriodEnd(
+    id: string,
+    periodEndsAt: Date,
+    tx?: TransactionContextInterface,
+  ): Promise<SubscriptionInterface> {
+    const client: Prisma.TransactionClient = resolvePrismaClient(this.prisma, tx);
+
+    await client.subscription.updateMany({
       where: { id, currentPeriodEndsAt: { lt: periodEndsAt } },
       data: { currentPeriodEndsAt: periodEndsAt },
     });
 
-    return this.findByIdOrThrow(id);
+    return this.findByIdOrThrow(id, client);
   }
 
   public async updateStatus(
     id: string,
     status: SubscriptionStatusEnum,
+    tx?: TransactionContextInterface,
   ): Promise<SubscriptionInterface> {
-    const updated: SubscriptionWithPlan = await this.prisma.subscription.update({
+    const client: Prisma.TransactionClient = resolvePrismaClient(this.prisma, tx);
+    const updated: SubscriptionWithPlan = await client.subscription.update({
       where: { id },
       data: { status: SubscriptionStatus[status] },
       include: { plan: true },
@@ -107,8 +117,13 @@ export class SubscriptionPrismaRepository implements SubscriptionRepositoryInter
     return this.toDomain(updated);
   }
 
-  public async setCanceledAt(id: string, canceledAt: Date): Promise<SubscriptionInterface> {
-    const updated: SubscriptionWithPlan = await this.prisma.subscription.update({
+  public async setCanceledAt(
+    id: string,
+    canceledAt: Date,
+    tx?: TransactionContextInterface,
+  ): Promise<SubscriptionInterface> {
+    const client: Prisma.TransactionClient = resolvePrismaClient(this.prisma, tx);
+    const updated: SubscriptionWithPlan = await client.subscription.update({
       where: { id },
       data: { canceledAt },
       include: { plan: true },
@@ -135,8 +150,14 @@ export class SubscriptionPrismaRepository implements SubscriptionRepositoryInter
     );
   }
 
-  private async findByIdOrThrow(id: string): Promise<SubscriptionInterface> {
-    const subscription: SubscriptionWithPlan = await this.prisma.subscription.findUniqueOrThrow({
+  // Takes the already-resolved client so the read-back happens on the SAME
+  // connection as the write above it: an autocommit read inside an open unit of
+  // work would not see that unit's uncommitted row and would return stale data.
+  private async findByIdOrThrow(
+    id: string,
+    client: Prisma.TransactionClient,
+  ): Promise<SubscriptionInterface> {
+    const subscription: SubscriptionWithPlan = await client.subscription.findUniqueOrThrow({
       where: { id },
       include: { plan: true },
     });

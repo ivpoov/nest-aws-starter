@@ -31,9 +31,22 @@ export class LoginLockoutService {
     if (locked) throw new UnauthorizedError(AUTH_TEMPORARILY_LOCKED);
   }
 
+  // The two scopes are independent accounting, so neither may be lost to the
+  // other's failure: `allSettled` means an EMAIL error still leaves the IP
+  // counter incremented (and vice versa). The first rejection is re-thrown
+  // afterwards so the caller still logs a real failure — the listener that owns
+  // this call contains and logs it.
   public async recordFailedLogin(email: string, ip: string): Promise<void> {
-    await this.recordFailure(LockoutScopeEnum.EMAIL, email);
-    await this.recordFailure(LockoutScopeEnum.IP, ip);
+    const outcomes: PromiseSettledResult<void>[] = await Promise.allSettled([
+      this.recordFailure(LockoutScopeEnum.EMAIL, email),
+      this.recordFailure(LockoutScopeEnum.IP, ip),
+    ]);
+    const failure: PromiseRejectedResult | undefined = outcomes.find(
+      (outcome: PromiseSettledResult<void>): outcome is PromiseRejectedResult =>
+        outcome.status === 'rejected',
+    );
+
+    if (failure) throw failure.reason;
   }
 
   public async resetFailedAttempts(email: string, ip: string): Promise<void> {
