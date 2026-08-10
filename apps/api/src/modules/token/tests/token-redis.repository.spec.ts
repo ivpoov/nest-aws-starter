@@ -21,8 +21,9 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
-// Minimal Redis stand-in: the repository only needs GET/SET/DEL here, and the
-// TTL argument is recorded rather than honoured so a test can assert it.
+// Minimal Redis stand-in: the repository only needs GET/MGET/SET/DEL/EVAL
+// here, and the TTL argument is recorded rather than honoured so a test can
+// assert it.
 class FakeRedis {
   public readonly values: Map<string, string> = new Map();
   public readonly ttlSecByKey: Map<string, number> = new Map();
@@ -41,6 +42,35 @@ class FakeRedis {
     return this.values.get(key) ?? null;
   }
 
+  public async mget(...keys: string[]): Promise<(string | null)[]> {
+    return keys.map((key: string): string | null => this.values.get(key) ?? null);
+  }
+
+  // Transcribes ROTATE_SCRIPT rather than running Lua: enough to pin what the
+  // rotation *writes* (digests, grace shape, TTLs), which is what this spec is
+  // about. That the real script is indivisible — the property the transcription
+  // cannot show — is proven against a real Redis in token-rotation.e2e-spec.ts.
+  public async eval(_script: string, _keyCount: number, ...args: string[]): Promise<number> {
+    const [accessKey, refreshKey, graceKey]: string[] = args.slice(0, 3);
+    const [
+      expectedDigest,
+      grace,
+      refreshDigest,
+      refreshTtl,
+      graceTtl,
+      accessDigest,
+      accessTtl,
+    ]: string[] = args.slice(3);
+
+    if ((this.values.get(refreshKey ?? '') ?? null) !== expectedDigest) return 0;
+
+    await this.set(graceKey ?? '', grace ?? '', 'EX', Number(graceTtl));
+    await this.set(refreshKey ?? '', refreshDigest ?? '', 'EX', Number(refreshTtl));
+    await this.set(accessKey ?? '', accessDigest ?? '', 'EX', Number(accessTtl));
+
+    return 1;
+  }
+
   public async del(...keys: string[]): Promise<number> {
     let removed = 0;
 
@@ -48,6 +78,36 @@ class FakeRedis {
 
     return removed;
   }
+}
+
+// The rotation write, as the repository's own contract expresses it.
+async function rotate(
+  repository: TokenRedisRepository,
+  expectedRefreshToken: string,
+  issued: RotationGracePairInterface,
+  graceTtlSec: number = 30,
+): Promise<boolean> {
+  return repository.rotateTokens({
+    userId: 'user-1',
+    sessionId: 'sess-1',
+    expectedRefreshToken,
+    accessToken: issued.accessToken,
+    accessTtlSec: 900,
+    refreshToken: issued.refreshToken,
+    refreshTtlSec: 2_592_000,
+    graceTtlSec,
+  });
+}
+
+async function isCurrent(repository: TokenRedisRepository, token: string): Promise<boolean> {
+  return (await repository.readRotationState('user-1', 'sess-1', token)).isCurrent;
+}
+
+async function replayOf(
+  repository: TokenRedisRepository,
+  token: string,
+): Promise<RotationGracePairInterface | null> {
+  return (await repository.readRotationState('user-1', 'sess-1', token)).replay;
 }
 
 function createRepository(): { repository: TokenRedisRepository; redis: FakeRedis } {
@@ -91,10 +151,8 @@ describe('TokenRedisRepository', () => {
 
     await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 60);
 
-    expect(await repository.matchesRefreshToken('user-1', 'sess-1', REFRESH_TOKEN)).toBe(true);
-    expect(await repository.matchesRefreshToken('user-1', 'sess-1', ROTATED_REFRESH_TOKEN)).toBe(
-      false,
-    );
+    expect(await isCurrent(repository, REFRESH_TOKEN)).toBe(true);
+    expect(await isCurrent(repository, ROTATED_REFRESH_TOKEN)).toBe(false);
   });
 
   // Revocation is key deletion, and it has to keep working now that the value
@@ -106,20 +164,18 @@ describe('TokenRedisRepository', () => {
     await repository.setAccessToken('user-1', 'sess-1', ACCESS_TOKEN, 60);
     await repository.deleteAllForSession('user-1', 'sess-1');
 
-    expect(await repository.matchesRefreshToken('user-1', 'sess-1', REFRESH_TOKEN)).toBe(false);
+    expect(await isCurrent(repository, REFRESH_TOKEN)).toBe(false);
     expect(await repository.matchesAccessToken('user-1', 'sess-1', ACCESS_TOKEN)).toBe(false);
   });
 
   it('deletes the rotation grace key along with the session', async () => {
     const { repository, redis } = createRepository();
 
-    await repository.setRotationGrace(
-      'user-1',
-      'sess-1',
-      REFRESH_TOKEN,
-      { accessToken: ACCESS_TOKEN, refreshToken: ROTATED_REFRESH_TOKEN },
-      30,
-    );
+    await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 60);
+    await rotate(repository, REFRESH_TOKEN, {
+      accessToken: ACCESS_TOKEN,
+      refreshToken: ROTATED_REFRESH_TOKEN,
+    });
     await repository.deleteAllForSession('user-1', 'sess-1');
 
     expect(redis.values.has(GRACE_KEY)).toBe(false);
@@ -135,26 +191,21 @@ describe('TokenRedisRepository', () => {
       refreshToken: ROTATED_REFRESH_TOKEN,
     };
 
-    await repository.setRotationGrace('user-1', 'sess-1', REFRESH_TOKEN, issued, 30);
+    await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 60);
+    await rotate(repository, REFRESH_TOKEN, issued);
 
-    expect(await repository.findRotationGraceReplay('user-1', 'sess-1', REFRESH_TOKEN)).toEqual(
-      issued,
-    );
-    expect(
-      await repository.findRotationGraceReplay('user-1', 'sess-1', ROTATED_REFRESH_TOKEN),
-    ).toBeNull();
+    expect(await replayOf(repository, REFRESH_TOKEN)).toEqual(issued);
+    expect(await replayOf(repository, ROTATED_REFRESH_TOKEN)).toBeNull();
   });
 
   it('does not store the replaced token in the grace key', async () => {
     const { repository, redis } = createRepository();
 
-    await repository.setRotationGrace(
-      'user-1',
-      'sess-1',
-      REFRESH_TOKEN,
-      { accessToken: ACCESS_TOKEN, refreshToken: ROTATED_REFRESH_TOKEN },
-      30,
-    );
+    await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 60);
+    await rotate(repository, REFRESH_TOKEN, {
+      accessToken: ACCESS_TOKEN,
+      refreshToken: ROTATED_REFRESH_TOKEN,
+    });
 
     expect(redis.values.get(GRACE_KEY)).not.toContain(REFRESH_TOKEN);
     expect(redis.ttlSecByKey.get(GRACE_KEY)).toBe(30);
@@ -163,7 +214,7 @@ describe('TokenRedisRepository', () => {
   it('reports no replay when no rotation grace key exists', async () => {
     const { repository } = createRepository();
 
-    expect(await repository.findRotationGraceReplay('user-1', 'sess-1', REFRESH_TOKEN)).toBeNull();
+    expect(await replayOf(repository, REFRESH_TOKEN)).toBeNull();
   });
 
   // Deploy compatibility: keys written by the previous release hold the token
@@ -173,7 +224,7 @@ describe('TokenRedisRepository', () => {
 
     redis.values.set(REFRESH_KEY, REFRESH_TOKEN);
 
-    expect(await repository.matchesRefreshToken('user-1', 'sess-1', REFRESH_TOKEN)).toBe(true);
+    expect(await isCurrent(repository, REFRESH_TOKEN)).toBe(true);
     expect(redis.values.get(REFRESH_KEY)).toBe(sha256(REFRESH_TOKEN));
     expect(redis.setModes).toContain('KEEPTTL');
   });
@@ -190,10 +241,10 @@ describe('TokenRedisRepository', () => {
 
     const digest: string = redis.values.get(REFRESH_KEY) ?? '';
 
-    expect(await repository.matchesRefreshToken('user-1', 'sess-1', digest)).toBe(false);
+    expect(await isCurrent(repository, digest)).toBe(false);
     // The key is untouched, so the real token still works.
     expect(redis.values.get(REFRESH_KEY)).toBe(digest);
-    expect(await repository.matchesRefreshToken('user-1', 'sess-1', REFRESH_TOKEN)).toBe(true);
+    expect(await isCurrent(repository, REFRESH_TOKEN)).toBe(true);
   });
 
   it('still rejects a wrong token against a pre-digest key', async () => {
@@ -201,9 +252,7 @@ describe('TokenRedisRepository', () => {
 
     redis.values.set(REFRESH_KEY, REFRESH_TOKEN);
 
-    expect(await repository.matchesRefreshToken('user-1', 'sess-1', ROTATED_REFRESH_TOKEN)).toBe(
-      false,
-    );
+    expect(await isCurrent(repository, ROTATED_REFRESH_TOKEN)).toBe(false);
     expect(redis.values.get(REFRESH_KEY)).toBe(REFRESH_TOKEN);
   });
 
@@ -212,6 +261,6 @@ describe('TokenRedisRepository', () => {
 
     redis.values.set(GRACE_KEY, REFRESH_TOKEN);
 
-    expect(await repository.findRotationGraceReplay('user-1', 'sess-1', REFRESH_TOKEN)).toBeNull();
+    expect(await replayOf(repository, REFRESH_TOKEN)).toBeNull();
   });
 });

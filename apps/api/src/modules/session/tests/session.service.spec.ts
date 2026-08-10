@@ -5,7 +5,9 @@ import type { CreateSessionDataInterface } from '@modules/session/interfaces/cre
 import type { SessionInterface } from '@modules/session/interfaces/session.interface.js';
 import type { SessionRepositoryInterface } from '@modules/session/interfaces/session-repository.interface.js';
 import { SessionService } from '@modules/session/services/session.service.js';
+import type { RotateTokensDataInterface } from '@modules/token/interfaces/rotate-tokens-data.interface.js';
 import type { RotationGracePairInterface } from '@modules/token/interfaces/rotation-grace-pair.interface.js';
+import type { RotationStateInterface } from '@modules/token/interfaces/rotation-state.interface.js';
 import type { TokenRepositoryInterface } from '@modules/token/interfaces/token-repository.interface.js';
 import { TokenService } from '@modules/token/services/token.service.js';
 import type { UserInterface } from '@modules/user/interfaces/user.interface.js';
@@ -62,18 +64,6 @@ class FakeTokenRepository implements TokenRepositoryInterface {
     this.ttlSecByKey.set(`${userId}:${sessionId}:refresh`, ttlSec);
   }
 
-  public async setRotationGrace(
-    userId: string,
-    sessionId: string,
-    replacedToken: string,
-    issued: RotationGracePairInterface,
-    ttlSec: number,
-  ): Promise<void> {
-    this.keys.set(`${userId}:${sessionId}:prev`, replacedToken);
-    this.replays.set(`${userId}:${sessionId}:prev`, issued);
-    this.ttlSecByKey.set(`${userId}:${sessionId}:prev`, ttlSec);
-  }
-
   public async matchesAccessToken(
     userId: string,
     sessionId: string,
@@ -82,24 +72,38 @@ class FakeTokenRepository implements TokenRepositoryInterface {
     return this.keys.get(`${userId}:${sessionId}:access`) === token;
   }
 
-  public async matchesRefreshToken(
+  public async readRotationState(
     userId: string,
     sessionId: string,
     token: string,
-  ): Promise<boolean> {
-    return this.keys.get(`${userId}:${sessionId}:refresh`) === token;
+  ): Promise<RotationStateInterface> {
+    const graceKey: string = `${userId}:${sessionId}:prev`;
+
+    return {
+      isCurrent: this.keys.get(`${userId}:${sessionId}:refresh`) === token,
+      replay: this.keys.get(graceKey) === token ? (this.replays.get(graceKey) ?? null) : null,
+    };
   }
 
-  public async findRotationGraceReplay(
-    userId: string,
-    sessionId: string,
-    token: string,
-  ): Promise<RotationGracePairInterface | null> {
-    const key: string = `${userId}:${sessionId}:prev`;
+  // Mirrors the Lua script's all-or-nothing semantics: compare first, then
+  // write the grace entry and both keys, or write nothing at all.
+  public async rotateTokens(data: RotateTokensDataInterface): Promise<boolean> {
+    const refreshKey: string = `${data.userId}:${data.sessionId}:refresh`;
 
-    if (this.keys.get(key) !== token) return null;
+    if (this.keys.get(refreshKey) !== data.expectedRefreshToken) return false;
 
-    return this.replays.get(key) ?? null;
+    const graceKey: string = `${data.userId}:${data.sessionId}:prev`;
+
+    this.keys.set(graceKey, data.expectedRefreshToken);
+    this.replays.set(graceKey, {
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+    });
+    this.ttlSecByKey.set(graceKey, data.graceTtlSec);
+    await this.setRefreshToken(data.userId, data.sessionId, data.refreshToken, data.refreshTtlSec);
+    await this.setAccessToken(data.userId, data.sessionId, data.accessToken, data.accessTtlSec);
+
+    return true;
   }
 
   public async deleteAllForSession(userId: string, sessionId: string): Promise<void> {

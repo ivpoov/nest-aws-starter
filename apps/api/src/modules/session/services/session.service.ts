@@ -22,6 +22,7 @@ import type { SessionRepositoryInterface } from '@modules/session/interfaces/ses
 import { TOKEN_REPOSITORY } from '@modules/token/constants/token.constants.js';
 import type { RefreshTokenClaimsInterface } from '@modules/token/interfaces/refresh-token-claims.interface.js';
 import type { RotationGracePairInterface } from '@modules/token/interfaces/rotation-grace-pair.interface.js';
+import type { RotationStateInterface } from '@modules/token/interfaces/rotation-state.interface.js';
 import type { TokenPairInterface } from '@modules/token/interfaces/token-pair.interface.js';
 import type { TokenRepositoryInterface } from '@modules/token/interfaces/token-repository.interface.js';
 import { TokenService } from '@modules/token/services/token.service.js';
@@ -74,30 +75,19 @@ export class SessionService {
   public async refresh(oldRefreshToken: string): Promise<TokenPairInterface> {
     const claims: RefreshTokenClaimsInterface =
       await this.tokenService.verifyRefreshToken(oldRefreshToken);
-    // Concurrent refresh inside the grace window: idempotent replay of the
-    // pair the winning request minted, never a second rotation.
-    const replay: RotationGracePairInterface | null =
-      await this.tokenRepository.findRotationGraceReplay(
-        claims.userId,
-        claims.sessionId,
-        oldRefreshToken,
-      );
-
-    if (replay) {
-      return {
-        accessToken: replay.accessToken,
-        refreshToken: replay.refreshToken,
-        expiresInSec: this.config.accessTtlSec,
-      };
-    }
-
-    const isCurrent: boolean = await this.tokenRepository.matchesRefreshToken(
+    // ONE snapshot for the whole decision. Asking "is there a grace replay?"
+    // and "is this the current token?" as two reads let a rotation commit
+    // between them, and the honest second tab then answered no to both and got
+    // treated as a token thief — revoking every session the user had.
+    const state: RotationStateInterface = await this.tokenRepository.readRotationState(
       claims.userId,
       claims.sessionId,
       oldRefreshToken,
     );
 
-    if (!isCurrent) {
+    if (state.replay) return this.replayGracePair(claims, state.replay);
+
+    if (!state.isCurrent) {
       await this.handleInvalidRefresh(claims);
     }
 
@@ -154,6 +144,35 @@ export class SessionService {
     return count;
   }
 
+  // Concurrent refresh inside the grace window: idempotent replay of the pair
+  // the winner recorded, never a second rotation. The grace entry carries that
+  // pair whole, so replaying it needs no further reads and the access token can
+  // never belong to a different generation than the refresh token beside it.
+  //
+  // ACCEPTED RISK, stated plainly: for as long as the grace entry lives,
+  // whoever presents the superseded token is handed the recorded pair, and the
+  // tripwire stays silent — an attacker holding a captured superseded token can
+  // trade it for the live one. This is inherent to a grace window, not an
+  // oversight: inside it an honest second tab and a replay are byte-for-byte
+  // indistinguishable, since the only signal that separates them (client
+  // identity) is not carried on this endpoint. The exposure is bounded — it is
+  // exactly AUTH_REFRESH_GRACE_SEC, after which the token matches neither the
+  // current key nor a grace entry and handleInvalidRefresh() revokes the whole
+  // session. Narrowing it is a knob, not a code change: lower the config value.
+  // Closing it needs client binding (ip/device on the refresh call), which
+  // trades this risk for spurious logouts on network changes and is a product
+  // decision, not one to smuggle into a correctness fix.
+  private async replayGracePair(
+    claims: RefreshTokenClaimsInterface,
+    replay: RotationGracePairInterface,
+  ): Promise<TokenPairInterface> {
+    return {
+      accessToken: replay.accessToken,
+      refreshToken: replay.refreshToken,
+      expiresInSec: this.config.accessTtlSec,
+    };
+  }
+
   private async handleInvalidRefresh(claims: RefreshTokenClaimsInterface): Promise<never> {
     const session: SessionInterface | null = await this.sessionRepository.findById(
       claims.sessionId,
@@ -201,21 +220,24 @@ export class SessionService {
     // claim alive.
     const signedAsAdminId: string | null = session.signedAsAdminId;
     const window: RotatedWindowInterface = this.rotatedWindow(session);
-    const pair: TokenPairInterface = await this.tokenService.issuePair({
-      userId: claims.userId,
-      role: user.role,
-      sessionId: claims.sessionId,
-      actAsBy: signedAsAdminId,
-      refreshTtlSec: window.ttlSec,
-    });
-
-    await this.tokenRepository.setRotationGrace(
-      claims.userId,
-      claims.sessionId,
+    // Atomic: the replacing pair is recorded in the grace entry and installed
+    // as the current one in a single indivisible Redis step, gated on the
+    // presented token still being current. No observer ever sees a half-rotated
+    // session, so no honest tab is left holding a token that matches neither —
+    // the only thing that used to trip the tripwire falsely.
+    const pair: TokenPairInterface | null = await this.tokenService.rotatePair(
+      {
+        userId: claims.userId,
+        role: user.role,
+        sessionId: claims.sessionId,
+        actAsBy: signedAsAdminId,
+        refreshTtlSec: window.ttlSec,
+      },
       oldRefreshToken,
-      { accessToken: pair.accessToken, refreshToken: pair.refreshToken },
-      this.config.refreshGraceSec,
     );
+
+    if (pair === null) return this.resolveLostRotation(claims, oldRefreshToken);
+
     await this.sessionRepository.setActiveUntil(claims.sessionId, window.activeUntil);
     void this.sessionRepository
       .touchLastActive(claims.sessionId, new Date())
@@ -224,6 +246,26 @@ export class SessionService {
       );
 
     return pair;
+  }
+
+  // The compare-and-swap was lost, so another refresher rotated this session
+  // between our read and our write. Its rotation is atomic, so by now the
+  // presented token either has a grace entry (an honest concurrent tab — replay
+  // the winner's pair) or has none (a replay of a token already superseded
+  // twice — still a thief, still trips the tripwire).
+  private async resolveLostRotation(
+    claims: RefreshTokenClaimsInterface,
+    oldRefreshToken: string,
+  ): Promise<TokenPairInterface> {
+    const state: RotationStateInterface = await this.tokenRepository.readRotationState(
+      claims.userId,
+      claims.sessionId,
+      oldRefreshToken,
+    );
+
+    if (state.replay) return this.replayGracePair(claims, state.replay);
+
+    return this.handleInvalidRefresh(claims);
   }
 
   private async createSessionRecord(
