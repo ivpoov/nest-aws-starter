@@ -74,12 +74,18 @@ const SKIP_DIR_NAMES = new Set(['node_modules', 'dist', 'generated', '.git']);
 // relabelling a real break as a footnote.
 //
 // `manualPaths` are folders a removal must delete that the script deliberately
-// does NOT, because doing so breaks a build step it cannot then repair. The
-// `packages/shared/src/<module>` folders are all in this bucket:
-// `packages/shared/src/index.ts` re-exports them and those export lines are
-// not fenced, so deleting the folder alone makes `build shared` fail on a
-// barrel pointing at nothing. They are still listed in the recipe — the reader
-// deletes them together with the matching `index.ts` lines from `manualSteps`.
+// does NOT, because doing so would break a build step it cannot then repair.
+// They are still listed in the recipe, for the reader to delete by hand.
+//
+// **No module uses this bucket today, and that is the point.** It existed for
+// the `packages/shared/src/<module>` folders back when `packages/shared/src/
+// index.ts` re-exported them through unfenced `export *` lines — deleting a
+// folder on its own left the barrel pointing at nothing and `build shared`
+// failed. Those export lines are now fenced line by line, so the stripper
+// removes the folder and its barrel entries in one pass and nothing is left
+// for a human. assertFrontendFencedClaims() below refuses to let an entry
+// claim `frontendFenced` while still listing a `manualPaths` value, which is
+// what keeps the bucket empty rather than merely observing that it is.
 //
 // `frontendFenced: true` asserts a module has nothing left in `manualPaths`
 // and no `manualSteps` under apps/web, apps/admin or packages/shared, which is
@@ -1144,11 +1150,9 @@ ${renderFenceSection(fenceResults)}
 ### Not yet fence-marked (edit by hand)
 
 These references are **not** fenced, so \`scripts/subtraction-test.mjs\` neither strips
-them nor proves they were handled. Any \`packages/shared/src/*\` folder marked "delete by
-hand" in section 1 belongs here too: the script leaves it in place because
-\`packages/shared/src/index.ts\` re-exports it through unfenced \`export *\` lines, so
-deleting the folder on its own would break \`build shared\`. Delete the folder and those
-export lines together. Work through the list by hand:
+them nor proves they were handled. Every one of them is a hole in the proof: the
+subtracted tree was type-checked and unit-tested *without* these edits applied, so it is
+on you to make them and to re-run the suites afterwards. Work through the list by hand:
 
 ${renderManualStepsSection(module.manualSteps)}
 
