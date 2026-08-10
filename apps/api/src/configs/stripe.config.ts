@@ -16,7 +16,7 @@ const configSchema = z.discriminatedUnion('isEnabled', [
     webhookSecret: z.string().min(1),
     apiVersion: z.literal(STRIPE_API_VERSION),
     // Base URL Checkout redirects back to — `/billing/success` and
-    // `/billing/canceled` are appended by the provider (Task 9 web routes).
+    // `/billing/canceled` are appended by the provider (web app routes).
     portalReturnUrl: z.url(),
   }),
 ]);

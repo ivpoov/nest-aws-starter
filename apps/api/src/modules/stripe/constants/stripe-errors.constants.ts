@@ -5,7 +5,7 @@ export const PLAN_PROVIDER_REF_MISSING: ErrorArgsInterface = {
   details: 'This plan is not configured for the Stripe provider',
 };
 
-// Category: ValidationError (400). The webhook ingest endpoint (PR 5) is the
+// Category: ValidationError (400). The webhook ingest endpoint is the
 // only caller — a bad/rotated signature is a malformed request from
 // Stripe's perspective, not a server fault, so it maps to 400 like any
 // other request the server can't trust, not 401/500.

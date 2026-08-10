@@ -1,6 +1,6 @@
 // Failure handling: after this many failed attempts the event is marked
 // FAILED (message deleted) instead of being left for SQS visibility-timeout
-// redelivery — it resurfaces via the retry job (Task 12) instead.
+// redelivery — it resurfaces via the retry job instead.
 export const MAX_WEBHOOK_ATTEMPTS = 5;
 
 // Lock TTL for the per-event Redis lock — generous relative to expected

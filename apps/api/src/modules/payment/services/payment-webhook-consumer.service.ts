@@ -29,8 +29,8 @@ import { SQS_PROVIDER } from '@providers/sqs/constants/sqs.constants.js';
 import type { SqsMessageInterface } from '@providers/sqs/interfaces/sqs-message.interface.js';
 import type { SqsProviderInterface } from '@providers/sqs/interfaces/sqs-provider.interface.js';
 
-// Idempotency levels 2 (status short-circuit) + 3 (per-event Redis lock)
-// from the plan. The long-poll loop is app-lifecycle managed
+// Idempotency levels 2 (status short-circuit) + 3 (per-event Redis lock).
+// The long-poll loop is app-lifecycle managed
 // (OnApplicationBootstrap/OnApplicationShutdown) but every step it drives is
 // also a public/exposed method so e2e suites can call processMessage()
 // directly instead of racing the loop's own poll interval — see
