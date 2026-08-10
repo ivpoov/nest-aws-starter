@@ -211,6 +211,51 @@ describe('TokenRedisRepository', () => {
     expect(redis.ttlSecByKey.get(GRACE_KEY)).toBe(30);
   });
 
+  // The grace entry is the single documented exception to "the allowlist holds
+  // digests, never tokens", so its contents are pinned exactly rather than
+  // spot-checked. Asserting only that the replaced token is absent would let
+  // any amount of extra raw material be added later without a test noticing —
+  // and every byte of raw material here is what makes a Redis dump taken
+  // inside the grace window a usable credential. See ADR 0003.
+  it('holds exactly the replacing pair and a digest of the token it replaced', async () => {
+    const { repository, redis } = createRepository();
+
+    await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 60);
+    await rotate(repository, REFRESH_TOKEN, {
+      accessToken: ACCESS_TOKEN,
+      refreshToken: ROTATED_REFRESH_TOKEN,
+    });
+
+    const entry: Record<string, unknown> = JSON.parse(redis.values.get(GRACE_KEY) ?? '{}');
+
+    // Exactly these three fields — a new one carrying token material fails here.
+    expect(Object.keys(entry).sort()).toEqual(['accessToken', 'refreshToken', 'replacedDigest']);
+    // The superseded token appears only as a digest, never verbatim.
+    expect(entry.replacedDigest).toBe(sha256(REFRESH_TOKEN));
+    expect(entry.replacedDigest).not.toBe(REFRESH_TOKEN);
+    // The replacing pair IS held verbatim: it has to be replayable, and a
+    // digest is one-way. Accepted, bounded by the grace TTL, documented.
+    expect(entry.accessToken).toBe(ACCESS_TOKEN);
+    expect(entry.refreshToken).toBe(ROTATED_REFRESH_TOKEN);
+  });
+
+  // The grace TTL is the bound on that exposure, so it is asserted to be the
+  // caller's window rather than any longer-lived TTL on the same session.
+  it('expires the grace entry with the window, not with the refresh token', async () => {
+    const { repository, redis } = createRepository();
+
+    await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 60);
+    await rotate(
+      repository,
+      REFRESH_TOKEN,
+      { accessToken: ACCESS_TOKEN, refreshToken: ROTATED_REFRESH_TOKEN },
+      10,
+    );
+
+    expect(redis.ttlSecByKey.get(GRACE_KEY)).toBe(10);
+    expect(redis.ttlSecByKey.get(REFRESH_KEY)).toBe(2_592_000);
+  });
+
   it('reports no replay when no rotation grace key exists', async () => {
     const { repository } = createRepository();
 

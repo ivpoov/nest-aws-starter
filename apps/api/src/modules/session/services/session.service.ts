@@ -152,19 +152,31 @@ export class SessionService {
   // pair whole, so replaying it needs no further reads and the access token can
   // never belong to a different generation than the refresh token beside it.
   //
-  // ACCEPTED RISK, stated plainly: for as long as the grace entry lives,
-  // whoever presents the superseded token is handed the recorded pair, and the
-  // tripwire stays silent — an attacker holding a captured superseded token can
-  // trade it for the live one. This is inherent to a grace window, not an
-  // oversight: inside it an honest second tab and a replay are byte-for-byte
-  // indistinguishable, since the only signal that separates them (client
-  // identity) is not carried on this endpoint. The exposure is bounded — it is
-  // exactly AUTH_REFRESH_GRACE_SEC, after which the token matches neither the
-  // current key nor a grace entry and handleInvalidRefresh() revokes the whole
-  // session. Narrowing it is a knob, not a code change: lower the config value.
-  // Closing it needs client binding (ip/device on the refresh call), which
-  // trades this risk for spurious logouts on network changes and is a product
-  // decision, not one to smuggle into a correctness fix.
+  // ACCEPTED RISK, stated plainly, in two parts.
+  //
+  // First: for as long as the grace entry lives, whoever presents the
+  // superseded token is handed the recorded pair and the tripwire stays silent
+  // — an attacker holding a captured superseded token can trade it for the live
+  // one. This is inherent to a grace window, not an oversight: inside it an
+  // honest second tab and a replay are byte-for-byte indistinguishable, since
+  // the only signal that separates them (client identity) is not carried on
+  // this endpoint.
+  //
+  // Second: to be replayable at all, that pair is stored in Redis VERBATIM —
+  // the live access and refresh token, not digests, because a digest is
+  // one-way and cannot be turned back into a token. It is the single exception
+  // to the allowlist's digests-only rule, so a Redis dump taken inside the
+  // window yields one usable pair per session that rotated in it. The token
+  // being replaced is stored only as a digest, and the entry's exact contents
+  // are pinned in TokenRedisRepository's spec so nothing raw creeps in later.
+  //
+  // Both parts are bounded by the same number: AUTH_REFRESH_GRACE_SEC (10s by
+  // default), after which the entry is gone, the token matches neither key, and
+  // handleInvalidRefresh() revokes the whole session. Narrowing is a knob, not
+  // a code change: lower the config value. Closing part one needs client
+  // binding (ip/device on the refresh call), which trades it for spurious
+  // logouts on network changes — a product decision, not one to smuggle into a
+  // correctness fix. See ADR 0003 for why encrypting the entry was rejected.
   private async replayGracePair(
     claims: RefreshTokenClaimsInterface,
     replay: RotationGracePairInterface,
