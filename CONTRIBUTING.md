@@ -109,8 +109,11 @@ are review-enforced, and two of them are about you rather than the code:
 - **Tests ship with the code**, in the same PR — not a follow-up. Every module
   ships unit *and* e2e tests.
 - **Docs ship with the behaviour.** If you changed an env var, an endpoint or a
-  fence marker, the README, `docs/conventions/` or the regenerated
-  `docs/removal/` recipes change in the same PR.
+  *fence marker* — the `// <module:x>` comment that marks a line or block as
+  belonging to an optional module, so removing the module can delete it
+  mechanically ([the subtraction test](#the-subtraction-test) below) — the
+  README, `docs/conventions/` or the regenerated `docs/removal/` recipes change
+  in the same PR.
 
 Title the PR the same way you title a commit — `feat(api): per-type
 notification preferences with email channel` is a real one.
@@ -182,35 +185,52 @@ node scripts/subtraction-test.mjs --emit-docs       # regenerate docs/removal/*.
 ```
 
 **If you add, remove or move a cross-module reference, re-run `--emit-docs` and
-commit the result.** CI regenerates the recipes and fails on any diff. See
-[`docs/removal/README.md`](./docs/removal/README.md) for what the recipes prove
-and what they only document.
+commit the result.** CI regenerates the recipes on every pull request and fails
+on any diff, so forgetting this fails your PR rather than the next nightly run.
+See [`docs/removal/README.md`](./docs/removal/README.md) for what the recipes
+prove and what they only document.
 
 ## What CI gates
 
-Two workflows, both in [`.github/workflows/`](./.github/workflows).
+Everything in [`.github/workflows/`](./.github/workflows). Three of them have
+something to say about a pull request; the rest are release and deployment
+machinery that only runs after a merge.
 
 **[`ci.yml`](./.github/workflows/ci.yml)** — every pull request, plus pushes to
-`main`. Three jobs run in parallel:
+`main`. Four jobs run in parallel:
 
 - **lint** — `pnpm install --frozen-lockfile`, then `pnpm exec biome ci .`.
 - **test** — brings up the compose stack with `--wait`, migrates, then runs
   `pnpm run build`, `pnpm run test`, the e2e type-check
   (`tsc --noEmit -p tsconfig.e2e.json`) and `pnpm run test:e2e` against real
   Postgres, Redis, LocalStack and MinIO.
-- **audit** — `pnpm audit --prod --audit-level high`. A new high-severity
-  advisory in a production dependency fails the build, so patching or overriding
-  it is part of the PR.
+- **bootstrap** — runs `scripts/bootstrap.mjs --dry-run` on the checkout and
+  asserts it wrote nothing. The README's headline command is the first thing a
+  newcomer runs, so it is worth a job of its own.
+- **audit** — `pnpm audit --prod --audit-level high`, then
+  `pnpm run license-check`. A new high-severity advisory in a production
+  dependency, or a dependency that relicensed under you, fails the build — so
+  patching, overriding or replacing it is part of the PR.
 
 In-progress runs are cancelled when you push again to the same ref.
 
-**[`subtraction.yml`](./.github/workflows/subtraction.yml)** — nightly at 03:00
-UTC, on pushes to `staging` and `main`, and on manual dispatch. It is too slow
-for every PR. It runs `scripts/subtraction-test.mjs` across every module, then
-re-emits the removal docs and fails if `docs/removal` drifted from the code.
+**[`subtraction.yml`](./.github/workflows/subtraction.yml)** — split in two,
+because its halves cost very different things:
 
-Because this one does *not* run on your PR, a fence-marker change is the case
-where running it locally actually matters.
+- **docs-drift** runs on **every pull request**. It re-emits the removal recipes
+  and fails if `docs/removal` drifted from the fence markers. No install, no
+  database, no worktrees — seconds.
+- **subtraction** runs nightly at 03:00 UTC, on pushes to `staging` and `main`,
+  and on manual dispatch. It runs `scripts/subtraction-test.mjs` across every
+  module, each in its own worktree, and is far too slow for a pull request.
+
+So a forgotten `--emit-docs` fails your PR, but an unfenced cross-reference that
+breaks an actual removal will not surface until the nightly run — which is the
+case where running the full script locally still matters.
+
+**[`docs.yml`](./.github/workflows/docs.yml)** — builds the documentation site
+when a pull request touches `docs/**` or `apps/docs/**`, and publishes it to
+GitHub Pages from `main`.
 
 ## Definition of done
 

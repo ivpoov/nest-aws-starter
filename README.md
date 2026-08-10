@@ -61,11 +61,19 @@ through GitHub OIDC — no AWS keys in the repository — with a migration gate 
 refuses to swap the task definition if migrations fail. Rollback is one command.
 
 ### Modular by subtraction
-The parts you don't want come out cleanly. Optional modules leave `// <module:x>`
-fence markers at their cross-module references, and `scripts/subtraction-test.mjs`
-both generates the 11 removal recipes in [`docs/removal/`](docs/removal/) and
-proves them by deleting each module in a throwaway worktree and rebuilding what
-is left. CI runs it nightly, so a recipe cannot drift from the code.
+The parts you don't want come out cleanly. Wherever an optional module is
+referenced from code that stays, the reference carries a **fence marker** — a
+`// <module:x>` comment that means *delete this line*, or a
+`// <module:x>` … `// </module:x>` pair that means *delete this block*. That
+makes every cross-reference machine-findable, so removal is a script rather than
+a search. `scripts/subtraction-test.mjs` reads those markers to generate the 11
+removal recipes in [`docs/removal/`](docs/removal/), and proves them by deleting
+each module in a throwaway worktree and rebuilding what is left
+([ADR 0008](docs/decisions/0008-modular-by-subtraction.md)).
+
+CI runs the drift check — regenerate the recipes, fail on any diff — on **every
+pull request**, so a recipe cannot fall out of step with the markers. The full
+removal proof is far slower and runs nightly and on pushes to release branches.
 
 ---
 
@@ -263,7 +271,7 @@ handle in `.github/CODEOWNERS`.
 
 `--drop-demo` does not reimplement deletion: it calls straight into
 `scripts/subtraction-test.mjs`, removing the `note` module's paths and its
-`// <module:note>` fences with the same code CI proves nightly. It then
+`// <module:note>` fences with the same code the nightly proof runs. It then
 regenerates `docs/removal/` and deletes itself, because a rename script has one
 job and you have now done it.
 
