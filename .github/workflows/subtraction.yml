@@ -2,14 +2,30 @@ name: subtraction
 
 # Proves "modular by subtraction": every optional module can be deleted
 # (folder + its fenced cross-references) and the rest of the app still
-# type-checks and passes its unit tests. Too slow to run on every PR — one
-# `pnpm install` + `tsc --noEmit` + unit-test pass per module, in its own
-# git worktree — so this runs nightly and on pushes to release branches only.
+# type-checks and passes its unit tests.
+#
+# Two jobs, on two schedules, because they cost two very different things.
+#
+#   docs-drift  — regenerates docs/removal/ from the fence markers and fails if
+#                 the committed recipes differ. Reads files and writes Markdown;
+#                 no worktrees, no install, no database, no build. Seconds. It
+#                 runs on EVERY pull request, because a stale recipe is
+#                 introduced by the pull request that moves a fence and is
+#                 cheapest to catch there.
+#   subtraction — the actual proof: one `pnpm install` + `tsc --noEmit` +
+#                 unit-test pass per module, each in its own git worktree.
+#                 Eleven modules, tens of minutes. Too slow for a pull request,
+#                 so it stays nightly and on pushes to release branches.
+#
+# Before the split, both lived in the slow job, so a pull request could move a
+# fence marker and merge green with the recipes left describing the old code —
+# the nightly run was the first thing to notice, hours later.
 on:
   schedule:
     - cron: '0 3 * * *'
   push:
     branches: [staging, main]
+  pull_request:
   workflow_dispatch:
 
 concurrency:
@@ -24,7 +40,27 @@ permissions:
   contents: read
 
 jobs:
+  # `--emit-docs` imports nothing outside node:* builtins and touches nothing
+  # but the fence markers already in the checkout, so this job needs neither
+  # `pnpm install` nor a database — which is exactly why it is cheap enough to
+  # gate every pull request with.
+  docs-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Regenerate removal docs and fail if they drifted
+        run: |
+          node scripts/subtraction-test.mjs --emit-docs
+          git diff --exit-code -- docs/removal
+
   subtraction:
+    # Everything except a pull request. The fast half above is the pull-request
+    # gate; running eleven worktree builds per push to a branch would make the
+    # check unusable and get it ignored.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -51,7 +87,3 @@ jobs:
       # it goes and exits non-zero if any module failed, so the job fails
       # and the log scrolls straight to the offending module's tsc/test output.
       - run: node scripts/subtraction-test.mjs
-      - name: Regenerate removal docs and fail if they drifted
-        run: |
-          node scripts/subtraction-test.mjs --emit-docs
-          git diff --exit-code -- docs/removal
