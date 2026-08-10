@@ -5,6 +5,7 @@ import { LockoutRedisRepository } from '@modules/account-security/repositories/l
 import { InternalError } from '@modules/common/errors/internal.error.js';
 import { LockoutScopeEnum } from '@nest-aws-starter/shared';
 import type { RedisClientType } from '@providers/redis/types/redis-client.type.js';
+import { Cluster, type Redis } from 'ioredis';
 import { describe, expect, it, vi } from 'vitest';
 
 const KEYS_PER_SCAN_PAGE = 40;
@@ -33,6 +34,38 @@ function createRepository(): {
   const redis = { scan, ttl: vi.fn().mockResolvedValue(60) } as unknown as RedisClientType;
 
   return { repository: new LockoutRedisRepository(redis), scan };
+}
+
+// A stand-in Cluster client. `instanceof Cluster` is the branch the repository
+// takes, so the stub has to carry the real prototype — a plain object literal
+// would silently exercise the single-instance path and prove nothing.
+function createClusterRepository(keysPerNode: number): {
+  repository: LockoutRedisRepository;
+  scans: ReturnType<typeof vi.fn>[];
+} {
+  const scans: ReturnType<typeof vi.fn>[] = [];
+  const masters: Redis[] = ['a', 'b', 'c'].map((nodeId: string): Redis => {
+    const scan = vi.fn().mockImplementation((): Promise<[string, string[]]> => {
+      const batch: string[] = Array.from(
+        { length: keysPerNode },
+        (_unused: unknown, index: number): string =>
+          `suspicious:lockout:IP:10.0.0.${index + 1}-${nodeId}`,
+      );
+
+      return Promise.resolve(['0', batch]);
+    });
+
+    scans.push(scan);
+
+    return { scan } as unknown as Redis;
+  });
+  const redis: RedisClientType = Object.assign(Object.create(Cluster.prototype), {
+    status: 'ready',
+    nodes: vi.fn().mockReturnValue(masters),
+    ttl: vi.fn().mockResolvedValue(60),
+  });
+
+  return { repository: new LockoutRedisRepository(redis), scans };
 }
 
 interface MultiStubInterface {
@@ -124,4 +157,32 @@ describe('LockoutRedisRepository.findAllLockouts', () => {
     // Three pages of forty pass the cap; pages four and five never run.
     expect(scan).toHaveBeenCalledTimes(3);
   });
+
+  // SCAN carries no key, so a Cluster client routes it to one arbitrary master
+  // and every lockout whose slot lives elsewhere is invisible. The admin
+  // listing was therefore partial or empty against a real cluster.
+  it('walks every master so lockouts are not lost to the slot their key hashed to', async () => {
+    const { repository, scans } = createClusterRepository(2);
+
+    const records: LockoutRecordInterface[] = await repository.findAllLockouts();
+
+    expect(records).toHaveLength(6);
+    for (const scan of scans) {
+      expect(scan).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  // The cap is a budget over the MERGED result, not a per-node one: the first
+  // master alone fills it, so the other two are never contacted.
+  it('spends the cap across the merged result and stops contacting masters once it is full', async () => {
+    const { repository, scans } = createClusterRepository(MAX_PAGE_SIZE);
+
+    const records: LockoutRecordInterface[] = await repository.findAllLockouts();
+
+    expect(records).toHaveLength(MAX_PAGE_SIZE);
+    expect(scans[0]).toHaveBeenCalledTimes(1);
+    expect(scans[1]).not.toHaveBeenCalled();
+    expect(scans[2]).not.toHaveBeenCalled();
+  });
 });
+
