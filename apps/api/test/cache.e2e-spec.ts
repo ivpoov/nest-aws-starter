@@ -3,22 +3,29 @@ import { CacheService } from '@providers/cache/services/cache.service.js';
 import { CacheInvalidationService } from '@providers/cache/services/cache-invalidation.service.js';
 import { MemoryCacheStore } from '@providers/cache/services/memory-cache-store.service.js';
 import { RedisCacheStore } from '@providers/cache/services/redis-cache-store.service.js';
-import { Redis } from 'ioredis';
+import { createRedisClient } from '@providers/redis/helpers/create-redis-client.helper.js';
+import type { RedisClientType } from '@providers/redis/types/redis-client.type.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const redisUrl: string = process.env.REDIS_URL ?? 'redis://localhost:6390';
-const config: RedisConfig = { url: redisUrl, isCluster: false };
+// Honour the same switch the application reads. Pinning `isCluster: false` here
+// built a plain client against a cluster node, which dies on the first MOVED
+// redirect it will not follow — so the one spec that covers the cluster-aware
+// half of `RedisCacheStore` could never be pointed at a cluster, and the fan-out
+// it covers went unexecuted. Clients come from the production factory for the
+// same reason: a bespoke constructor here would be a second thing to keep true.
+const config: RedisConfig = { url: redisUrl, isCluster: process.env.REDIS_IS_CLUSTER === 'true' };
 
 function waitFor(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 describe('RedisCacheStore (integration)', () => {
-  let redis: Redis;
+  let redis: RedisClientType;
   let store: RedisCacheStore;
 
   beforeAll(() => {
-    redis = new Redis(redisUrl);
+    redis = createRedisClient(config);
     store = new RedisCacheStore(redis);
   });
 
@@ -54,8 +61,8 @@ describe('RedisCacheStore (integration)', () => {
 });
 
 describe('cross-instance invalidation (integration)', () => {
-  let redisA: Redis;
-  let redisB: Redis;
+  let redisA: RedisClientType;
+  let redisB: RedisClientType;
   let invalidationA: CacheInvalidationService;
   let invalidationB: CacheInvalidationService;
   let memoryB: MemoryCacheStore;
@@ -63,8 +70,8 @@ describe('cross-instance invalidation (integration)', () => {
   let cacheB: CacheService;
 
   beforeAll(async () => {
-    redisA = new Redis(redisUrl);
-    redisB = new Redis(redisUrl);
+    redisA = createRedisClient(config);
+    redisB = createRedisClient(config);
     invalidationA = new CacheInvalidationService(redisA, config);
     invalidationB = new CacheInvalidationService(redisB, config);
     await invalidationA.onModuleInit();
