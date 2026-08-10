@@ -2,7 +2,7 @@ import type { NotificationAudienceEnum, NotificationTypeEnum } from '@nest-aws-s
 
 export interface CreateNotificationDataInterface {
   readonly audience: NotificationAudienceEnum;
-  // Non-null iff audience is USER — enforced by the dispatcher, not this
+  // Non-null iff audience is USER — enforced by the event subscriber, not this
   // shape (ADMIN rows address the whole cohort, not one row per admin).
   readonly userId: string | null;
   readonly type: NotificationTypeEnum;

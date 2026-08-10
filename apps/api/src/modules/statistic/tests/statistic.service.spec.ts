@@ -88,6 +88,46 @@ describe('StatisticService', () => {
     expect(overview.revenueByPlan).toEqual(revenueByPlanRows);
   });
 
+  // Buckets reach the endpoint already clamped, so a plain `+` reduction over
+  // thirty of them can leave the safe-integer range: past 2^53 the running
+  // total stops landing on the integer it should, and the figure an admin
+  // reads is then neither exact nor bounded. Summed as bigint, it is both.
+  it('sums revenue exactly past the safe-integer range and clamps the total', async () => {
+    const hugeDays: StatisticsDayPointInterface[] = Array.from(
+      { length: 30 },
+      (_value, index): StatisticsDayPointInterface => ({
+        date: `2026-08-${String(index + 1).padStart(2, '0')}`,
+        count: Number.MAX_SAFE_INTEGER,
+      }),
+    );
+    const { service } = createService({
+      findRevenueByDay: vi.fn().mockResolvedValue(hugeDays),
+    });
+
+    const overview = await service.getOverview();
+
+    expect(overview.totals.revenueCents).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
+  it('keeps a sub-ceiling total exact where a float sum would drift', async () => {
+    // The true total is exactly representable, but the running float sum is
+    // not: MAX_SAFE_INTEGER + 2 rounds to 2^53, and subtracting 2 from that
+    // lands one cent low. A refund arriving after a large charge is precisely
+    // this shape.
+    const points: StatisticsDayPointInterface[] = [
+      { date: '2026-08-01', count: Number.MAX_SAFE_INTEGER },
+      { date: '2026-08-02', count: 2 },
+      { date: '2026-08-03', count: -2 },
+    ];
+    const { service } = createService({
+      findRevenueByDay: vi.fn().mockResolvedValue(points),
+    });
+
+    const overview = await service.getOverview();
+
+    expect(overview.totals.revenueCents).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
   it('sums revenue over the trailing 30-day window and passes the reporting currency window', async () => {
     const { service, repository } = createService();
 

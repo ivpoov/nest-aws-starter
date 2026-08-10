@@ -1,6 +1,7 @@
 {
   "name": "@nest-aws-starter/api",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "prisma generate --sql && tsc --noEmit -p tsconfig.build.json && swc src -d dist --strip-leading-paths --quiet",
@@ -53,7 +54,6 @@
     "rxjs": "7.8.2",
     "socket.io": "4.8.3",
     "stripe": "22.3.0",
-    "ua-parser-js": "2.0.10",
     "zod": "4.4.3"
   },
   "devDependencies": {

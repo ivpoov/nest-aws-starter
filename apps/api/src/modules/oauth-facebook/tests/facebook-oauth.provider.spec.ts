@@ -71,7 +71,42 @@ describe('FacebookOauthProvider', () => {
     const tokenUrl: URL = new URL(request.mock.calls[0]?.[0].url);
 
     expect(tokenUrl.pathname).toBe('/v23.0/oauth/access_token');
-    expect(tokenUrl.searchParams.get('code')).toBe('fb-code');
+    // Form body, not query string — see the credential test below.
+    expect(request.mock.calls[0]?.[0].method).toBe('POST');
+    expect(request.mock.calls[0]?.[0].form.code).toBe('fb-code');
+  });
+
+  // The app secret and the user's access token used to travel as search
+  // params, which the HTTP client wrote to stdout on every login. Both now
+  // move the way Google and Discord move them: the secret in the POST form
+  // body, the token in an Authorization header. Asserted on the URLs rather
+  // than on the logger so the provider cannot regress independently of the
+  // client's redaction.
+  it('never puts the client secret or the access token in a url', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ access_token: 'fb-token' })
+      .mockResolvedValueOnce({ id: 'fb-user-3', name: 'Igor' });
+    const provider: FacebookOauthProvider = new FacebookOauthProvider(enabledConfig, {
+      request,
+    } as unknown as HttpClientService);
+
+    await provider.exchangeCode('fb-code');
+
+    const urls: string = request.mock.calls
+      .map((call: [{ url: string }]): string => call[0].url)
+      .join('\n');
+
+    expect(urls).not.toContain('fb-secret');
+    expect(urls).not.toContain('client_secret');
+    expect(urls).not.toContain('fb-token');
+    expect(urls).not.toContain('access_token=');
+
+    expect(request.mock.calls[0]?.[0].form.client_secret).toBe('fb-secret');
+    expect(request.mock.calls[1]?.[0].headers.authorization).toBe('Bearer fb-token');
+    expect(new URL(request.mock.calls[1]?.[0].url).searchParams.get('fields')).toBe(
+      'id,name,email,picture.type(large)',
+    );
   });
 
   it('treats a withheld email as unverified and absent', async () => {

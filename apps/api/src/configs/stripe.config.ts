@@ -1,5 +1,4 @@
-import { validateScheme } from '@helpers/validate-scheme.helper.js';
-import { Logger } from '@nestjs/common';
+import { validateConfigSchema } from '@helpers/validate-config-schema.helper.js';
 import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -9,7 +8,7 @@ import { z } from 'zod';
 // would silently desync the runtime payloads from the types checking them.
 const STRIPE_API_VERSION = '2026-06-24.dahlia' as const;
 
-const scheme = z.discriminatedUnion('isEnabled', [
+const configSchema = z.discriminatedUnion('isEnabled', [
   z.object({ isEnabled: z.literal(false) }),
   z.object({
     isEnabled: z.literal(true),
@@ -22,22 +21,21 @@ const scheme = z.discriminatedUnion('isEnabled', [
   }),
 ]);
 
-export type StripeConfig = z.infer<typeof scheme>;
+export type StripeConfig = z.infer<typeof configSchema>;
 
 export const stripeConfig = registerAs('stripe', (): StripeConfig => {
   const isEnabled: boolean = process.env.STRIPE_ENABLED === 'true';
 
-  const config: StripeConfig = isEnabled
-    ? {
-        isEnabled: true,
-        secretKey: process.env.STRIPE_SECRET_KEY ?? '',
-        webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
-        apiVersion: STRIPE_API_VERSION,
-        portalReturnUrl: process.env.STRIPE_PORTAL_RETURN_URL ?? '',
-      }
-    : { isEnabled: false };
-
-  validateScheme(scheme, config, new Logger('StripeConfig'));
-
-  return config;
+  return validateConfigSchema(
+    configSchema,
+    isEnabled
+      ? {
+          isEnabled: true,
+          secretKey: process.env.STRIPE_SECRET_KEY ?? '',
+          webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
+          apiVersion: STRIPE_API_VERSION,
+          portalReturnUrl: process.env.STRIPE_PORTAL_RETURN_URL ?? '',
+        }
+      : { isEnabled: false },
+  );
 });

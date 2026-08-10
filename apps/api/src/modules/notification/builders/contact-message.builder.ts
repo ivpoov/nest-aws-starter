@@ -5,8 +5,8 @@ export function buildContactMessageContent(
   payload: ContactReceivedPayloadInterface,
 ): NotificationContentInterface {
   return {
-    title: 'New contact message',
-    body: 'A new contact message was received.',
+    title: 'Contact form submission received',
+    body: 'Someone submitted the public contact form.',
     meta: { contactMessageId: payload.contactMessageId, ip: payload.ip },
   };
 }

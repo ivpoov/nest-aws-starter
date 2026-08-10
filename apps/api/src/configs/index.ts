@@ -1,3 +1,4 @@
+import { accountSecurityConfig } from '@configs/account-security.config.js';
 import { appConfig } from '@configs/app.config.js';
 import { authConfig } from '@configs/auth.config.js';
 import { cloudfrontConfig } from '@configs/cloudfront.config.js'; // <module:cloudfront>
@@ -15,7 +16,6 @@ import { schedulerConfig } from '@configs/scheduler.config.js';
 import { snsConfig } from '@configs/sns.config.js';
 import { sqsConfig } from '@configs/sqs.config.js';
 import { stripeConfig } from '@configs/stripe.config.js'; // <module:payment>
-import { suspiciousActivityConfig } from '@configs/suspicious-activity.config.js';
 import { swaggerConfig } from '@configs/swagger.config.js';
 import { webAppConfig } from '@configs/web-app.config.js';
 import { websocketConfig } from '@configs/websocket.config.js'; // <module:notification>
@@ -37,7 +37,7 @@ export const configs = [
   snsConfig,
   sqsConfig,
   stripeConfig, // <module:payment>
-  suspiciousActivityConfig,
+  accountSecurityConfig,
   swaggerConfig,
   webAppConfig,
   websocketConfig, // <module:notification>

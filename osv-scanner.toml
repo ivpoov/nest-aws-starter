@@ -32,4 +32,9 @@
 #     suppression is worse than no suppression, because it silently swallows
 #     the next advisory that happens to share the id.
 #
+# Licences are NOT this file's job and never were: osv-scanner reports
+# advisories. The licence policy — which obligations a fork of this MIT
+# starter refuses to inherit — lives in scripts/license-check.mjs and runs as
+# the `license-check` step of the `audit` job in ci.yml.
+#
 # Reviewed 2026-08-09 against pnpm-lock.yaml: 0 findings, 0 suppressed.

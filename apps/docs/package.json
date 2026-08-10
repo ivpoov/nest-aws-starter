@@ -1,6 +1,7 @@
 {
   "name": "@nest-aws-starter/docs",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "astro dev",

@@ -1,6 +1,7 @@
 {
   "name": "@nest-aws-starter/shared",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

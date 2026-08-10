@@ -14,6 +14,7 @@ import {
   USER_CANNOT_BLOCK_SELF,
   USER_NOT_FOUND,
 } from '@modules/user/constants/user-errors.constants.js';
+import { UnlinkMethodResultEnum } from '@modules/user/enums/unlink-method-result.enum.js';
 import type { AdminUserInterface } from '@modules/user/interfaces/admin-user.interface.js';
 import type { AdminUsersQueryInterface } from '@modules/user/interfaces/admin-users-query.interface.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
@@ -102,15 +103,20 @@ export class UserService {
     return this.userRepository.findMethodsByUserId(userId);
   }
 
-  public async removeMethod(
+  public async removeMethodUnlessLast(
     userId: string,
     type: CreateOauthMethodDataInterface['type'],
-  ): Promise<boolean> {
-    const isRemoved: boolean = await this.userRepository.removeMethod(userId, type);
+  ): Promise<UnlinkMethodResultEnum> {
+    const result: UnlinkMethodResultEnum = await this.userRepository.removeMethodUnlessLast(
+      userId,
+      type,
+    );
 
-    if (isRemoved) this.logger.log(`Unlinked ${type} method from user ${userId}`);
+    if (result === UnlinkMethodResultEnum.REMOVED) {
+      this.logger.log(`Unlinked ${type} method from user ${userId}`);
+    }
 
-    return isRemoved;
+    return result;
   }
 
   public async findEmailMethodByUserId(userId: string): Promise<AuthMethodInterface | null> {

@@ -82,7 +82,7 @@ export class StatisticTypedSqlRepository implements StatisticRepositoryInterface
 
     return rows.map(
       (row: revenueByDay.Result): StatisticsDayPointInterface =>
-        this.toDayPoint({ day: row.day, count: row.amountCents }),
+        this.toDayPoint({ day: row.day, count: this.toCents(row.amountCents) }),
     );
   }
 
@@ -91,7 +91,7 @@ export class StatisticTypedSqlRepository implements StatisticRepositoryInterface
       mrrCurrent(STATISTIC_REPORTING_CURRENCY),
     );
 
-    return Number(rows[0]?.mrrCents ?? 0n);
+    return this.toCents(rows[0]?.mrrCents ?? 0n);
   }
 
   public async findRevenueByPlan(days: number): Promise<StatisticsRevenueByPlanRowInterface[]> {
@@ -99,13 +99,38 @@ export class StatisticTypedSqlRepository implements StatisticRepositoryInterface
       revenueByPlan(days, STATISTIC_REPORTING_CURRENCY),
     );
 
+    // TypedSQL infers the plan columns from the plans table, where they are
+    // NOT NULL, and does not account for the LEFT JOIN — so the generated
+    // type claims `string` while the unattributed row really carries nulls.
+    // Coerce rather than trust it.
     return rows.map(
       (row: revenueByPlan.Result): StatisticsRevenueByPlanRowInterface => ({
-        planId: row.planId,
-        planName: row.planName,
-        amountCents: row.amountCents ?? 0,
+        planId: (row.planId as string | null) ?? null,
+        planName: (row.planName as string | null) ?? null,
+        amountCents: this.toCents(row.amountCents),
       }),
     );
+  }
+
+  // The revenue queries aggregate into bigint (see revenueByDay.sql) because
+  // int32 would make Postgres raise `integer out of range` past ~$21.5M per
+  // bucket. JSON has no bigint, so the wire contract stays `number` — exact up
+  // to Number.MAX_SAFE_INTEGER cents (~$90T), four million times the int32
+  // ceiling this replaced. Beyond that the value is clamped rather than
+  // silently rounded, so a wrong number never reaches an admin unnoticed.
+  //
+  // Scope: this bounds one bucket. Totals summed across buckets are bounded
+  // separately, in StatisticService.sumRevenueCents — thirty clamped buckets
+  // can still exceed the ceiling between them.
+  private toCents(value: bigint | null): number {
+    if (value === null) return 0;
+
+    const ceiling: bigint = BigInt(Number.MAX_SAFE_INTEGER);
+
+    if (value > ceiling) return Number.MAX_SAFE_INTEGER;
+    if (value < -ceiling) return -Number.MAX_SAFE_INTEGER;
+
+    return Number(value);
   }
   // </module:payment>
 

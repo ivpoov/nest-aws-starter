@@ -1,3 +1,6 @@
+import { UNIT_OF_WORK } from '@constants/unit-of-work.constants.js';
+import type { TransactionContextInterface } from '@interfaces/transaction-context.interface.js';
+import type { UnitOfWorkInterface } from '@interfaces/unit-of-work.interface.js';
 import {
   SUBSCRIPTION_ACTIVATED_EVENT,
   SUBSCRIPTION_CANCELED_EVENT,
@@ -12,7 +15,10 @@ import {
   PLAN_REPOSITORY,
   SUBSCRIPTION_REPOSITORY,
 } from '@modules/payment/constants/payment.constants.js';
-import { EXPIRY_GRACE_PERIOD_MS } from '@modules/payment/constants/subscription-lifecycle.constants.js';
+import {
+  EXPIRY_GRACE_PERIOD_MS,
+  EXPIRY_SWEEP_BATCH_LIMIT,
+} from '@modules/payment/constants/subscription-lifecycle.constants.js';
 import type { ActivateFromCheckoutDataInterface } from '@modules/payment/interfaces/activate-from-checkout-data.interface.js';
 import type { CreatePaymentTransactionResultInterface } from '@modules/payment/interfaces/create-payment-transaction-result.interface.js';
 import type { CreateSubscriptionResultInterface } from '@modules/payment/interfaces/create-subscription-result.interface.js';
@@ -40,6 +46,8 @@ export class SubscriptionLifecycleService implements SubscriptionLifecycleInterf
     private readonly transactionRepository: PaymentTransactionRepositoryInterface,
     @Inject(PLAN_REPOSITORY)
     private readonly planRepository: PlanRepositoryInterface,
+    @Inject(UNIT_OF_WORK)
+    private readonly unitOfWork: UnitOfWorkInterface,
     private readonly eventBus: EventBusService,
   ) {}
 
@@ -105,23 +113,37 @@ export class SubscriptionLifecycleService implements SubscriptionLifecycleInterf
 
     if (!subscription) return;
 
-    const txResult: CreatePaymentTransactionResultInterface =
-      await this.transactionRepository.createIdempotent({
-        userId: subscription.userId,
-        subscriptionId: subscription.id,
-        status: data.transactionData.status,
-        amountCents: data.transactionData.amountCents,
-        currency: data.transactionData.currency,
-        provider: data.provider,
-        providerRef: data.transactionData.providerRef,
-      });
+    // The money and the entitlement it buys move together (§7a): recording the
+    // payment while failing to extend the period leaves a paying customer
+    // eligible for the expiry sweep. The idempotency guards below stay — they
+    // cover redelivery, which a transaction does not — but they are no longer
+    // the only thing standing between a crash and a wrong period end.
+    const txResult: CreatePaymentTransactionResultInterface = await this.unitOfWork.run(
+      async (tx: TransactionContextInterface): Promise<CreatePaymentTransactionResultInterface> => {
+        const created: CreatePaymentTransactionResultInterface =
+          await this.transactionRepository.createIdempotent(
+            {
+              userId: subscription.userId,
+              subscriptionId: subscription.id,
+              status: data.transactionData.status,
+              amountCents: data.transactionData.amountCents,
+              currency: data.transactionData.currency,
+              provider: data.provider,
+              providerRef: data.transactionData.providerRef,
+            },
+            tx,
+          );
 
-    // Even on replay (isNew=false), the period extension must still run: it is
-    // monotonic-guarded in the repository, so a harmless no-op if already applied,
-    // and load-bearing if a prior attempt recorded the transaction but crashed
-    // before extending the period (see subscription-lifecycle.service.ts's
-    // binding idempotency contract).
-    await this.subscriptionRepository.updatePeriodEnd(subscription.id, data.periodEndsAt);
+        // Even on replay (isNew=false), the period extension must still run: it
+        // is monotonic-guarded in the repository, so a harmless no-op if already
+        // applied, and load-bearing if a prior attempt recorded the transaction
+        // but crashed before extending the period (see
+        // subscription-lifecycle.service.ts's binding idempotency contract).
+        await this.subscriptionRepository.updatePeriodEnd(subscription.id, data.periodEndsAt, tx);
+
+        return created;
+      },
+    );
 
     if (!txResult.isNew) {
       this.logger.debug(
@@ -190,12 +212,21 @@ export class SubscriptionLifecycleService implements SubscriptionLifecycleInterf
       return;
     }
 
-    await this.subscriptionRepository.updateStatus(
-      subscription.id,
-      SubscriptionStatusEnum.CANCELED,
-    );
-    await this.subscriptionRepository.setCanceledAt(subscription.id, new Date());
+    // One unit of work, not two writes (§7a). The guard above short-circuits on
+    // a terminal status, so a crash between the two statements would have left
+    // this row CANCELED with canceledAt = null FOREVER — no redelivery can
+    // repair it, because every replay returns at that guard. Rolling both back
+    // keeps the row ACTIVE and therefore still repairable by the next delivery.
+    await this.unitOfWork.run(async (tx: TransactionContextInterface): Promise<void> => {
+      await this.subscriptionRepository.updateStatus(
+        subscription.id,
+        SubscriptionStatusEnum.CANCELED,
+        tx,
+      );
+      await this.subscriptionRepository.setCanceledAt(subscription.id, new Date(), tx);
+    });
 
+    // Side effects stay outside the unit: a rollback cannot un-emit an event.
     this.logger.log(
       `Subscription canceled: ${subscription.id} (atPeriodEnd=${canceledAtPeriodEnd})`,
     );
@@ -223,7 +254,10 @@ export class SubscriptionLifecycleService implements SubscriptionLifecycleInterf
 
   public async expireOverdue(): Promise<void> {
     const cutoff: Date = new Date(Date.now() - EXPIRY_GRACE_PERIOD_MS);
-    const overdue: SubscriptionInterface[] = await this.subscriptionRepository.findOverdue(cutoff);
+    const overdue: SubscriptionInterface[] = await this.subscriptionRepository.findOverdue(
+      cutoff,
+      EXPIRY_SWEEP_BATCH_LIMIT,
+    );
 
     for (const subscription of overdue) await this.expireOne(subscription);
 

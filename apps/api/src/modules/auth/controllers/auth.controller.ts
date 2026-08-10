@@ -16,11 +16,18 @@ import { EmailFlowService } from '@modules/auth/services/email-flow.service.js';
 import type { SessionContextInterface } from '@modules/session/interfaces/session-context.interface.js';
 import type { TokenPairInterface } from '@modules/token/interfaces/token-pair.interface.js';
 import { Body, Controller, HttpCode, Post, Req } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { FastifyRequest } from 'fastify';
 import { StatusCodes } from 'http-status-codes';
 
+// @ApiBearerAuth() is applied per handler here rather than on the class, which
+// is the opposite of every other controller in this codebase. Most of this
+// controller is @Public() — register, login, refresh and the three token-in-body
+// email flows are reachable without an identity — so a class-level decorator
+// would tell the reader that endpoints requiring no credential require one. The
+// three handlers below that DO sit behind the global JwtAuthGuard carry it
+// individually.
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
@@ -64,6 +71,7 @@ export class AuthController {
     return this.authService.refresh(dto.refreshToken);
   }
 
+  @ApiBearerAuth()
   @ApiDefaultResponse({ status: StatusCodes.NO_CONTENT })
   @HttpCode(StatusCodes.NO_CONTENT)
   @Post('logout')
@@ -74,6 +82,7 @@ export class AuthController {
     return this.authService.logout(userId, sessionId);
   }
 
+  @ApiBearerAuth()
   @ApiDefaultResponse({ status: StatusCodes.NO_CONTENT })
   @HttpCode(StatusCodes.NO_CONTENT)
   @Post('email/verify-request')
@@ -111,6 +120,7 @@ export class AuthController {
     return this.emailFlowService.resetPassword(dto.userId, dto.token, dto.password);
   }
 
+  @ApiBearerAuth()
   @ApiDefaultResponse({ status: StatusCodes.NO_CONTENT })
   @HttpCode(StatusCodes.NO_CONTENT)
   @Post('password/change')

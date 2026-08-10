@@ -1,0 +1,311 @@
+import { createHash } from 'node:crypto';
+import type { RotationGracePairInterface } from '@modules/token/interfaces/rotation-grace-pair.interface.js';
+import { TokenRedisRepository } from '@modules/token/repositories/token-redis.repository.js';
+import type { RedisClientType } from '@providers/redis/types/redis-client.type.js';
+import { describe, expect, it } from 'vitest';
+
+// A JWT-shaped string: what actually goes into the allowlist, so a test that
+// asserts "the stored value is not this" is asserting the real thing.
+const ACCESS_TOKEN =
+  'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEiLCJzZXNzaW9uSWQiOiJzZXNzLTEifQ.aaaaaaaaaaaaaaaaaaaa';
+const REFRESH_TOKEN =
+  'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEiLCJzZXNzaW9uSWQiOiJzZXNzLTEifQ.bbbbbbbbbbbbbbbbbbbb';
+const ROTATED_REFRESH_TOKEN =
+  'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEiLCJzZXNzaW9uSWQiOiJzZXNzLTEifQ.cccccccccccccccccccc';
+
+const REFRESH_KEY = 'users:{user-1}:sessions:sess-1:refresh';
+const ACCESS_KEY = 'users:{user-1}:sessions:sess-1:access';
+const GRACE_KEY = 'users:{user-1}:sessions:sess-1:refresh:prev';
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+// Minimal Redis stand-in: the repository only needs GET/MGET/SET/DEL/EVAL
+// here, and the TTL argument is recorded rather than honoured so a test can
+// assert it.
+class FakeRedis {
+  public readonly values: Map<string, string> = new Map();
+  public readonly ttlSecByKey: Map<string, number> = new Map();
+  public readonly setModes: string[] = [];
+
+  public async set(key: string, value: string, mode?: string, ttlSec?: number): Promise<'OK'> {
+    this.values.set(key, value);
+    this.setModes.push(mode ?? '');
+
+    if (mode === 'EX' && ttlSec !== undefined) this.ttlSecByKey.set(key, ttlSec);
+
+    return 'OK';
+  }
+
+  public async get(key: string): Promise<string | null> {
+    return this.values.get(key) ?? null;
+  }
+
+  public async mget(...keys: string[]): Promise<(string | null)[]> {
+    return keys.map((key: string): string | null => this.values.get(key) ?? null);
+  }
+
+  // Transcribes ROTATE_SCRIPT rather than running Lua: enough to pin what the
+  // rotation *writes* (digests, grace shape, TTLs), which is what this spec is
+  // about. That the real script is indivisible — the property the transcription
+  // cannot show — is proven against a real Redis in token-rotation.e2e-spec.ts.
+  public async eval(_script: string, _keyCount: number, ...args: string[]): Promise<number> {
+    const [accessKey, refreshKey, graceKey]: string[] = args.slice(0, 3);
+    const [
+      expectedDigest,
+      grace,
+      refreshDigest,
+      refreshTtl,
+      graceTtl,
+      accessDigest,
+      accessTtl,
+    ]: string[] = args.slice(3);
+
+    if ((this.values.get(refreshKey ?? '') ?? null) !== expectedDigest) return 0;
+
+    await this.set(graceKey ?? '', grace ?? '', 'EX', Number(graceTtl));
+    await this.set(refreshKey ?? '', refreshDigest ?? '', 'EX', Number(refreshTtl));
+    await this.set(accessKey ?? '', accessDigest ?? '', 'EX', Number(accessTtl));
+
+    return 1;
+  }
+
+  public async del(...keys: string[]): Promise<number> {
+    let removed = 0;
+
+    for (const key of keys) if (this.values.delete(key)) removed += 1;
+
+    return removed;
+  }
+}
+
+// The rotation write, as the repository's own contract expresses it.
+async function rotate(
+  repository: TokenRedisRepository,
+  expectedRefreshToken: string,
+  issued: RotationGracePairInterface,
+  graceTtlSec: number = 30,
+): Promise<boolean> {
+  return repository.rotateTokens({
+    userId: 'user-1',
+    sessionId: 'sess-1',
+    expectedRefreshToken,
+    accessToken: issued.accessToken,
+    accessTtlSec: 900,
+    refreshToken: issued.refreshToken,
+    refreshTtlSec: 2_592_000,
+    graceTtlSec,
+  });
+}
+
+async function isCurrent(repository: TokenRedisRepository, token: string): Promise<boolean> {
+  return (await repository.readRotationState('user-1', 'sess-1', token)).isCurrent;
+}
+
+async function replayOf(
+  repository: TokenRedisRepository,
+  token: string,
+): Promise<RotationGracePairInterface | null> {
+  return (await repository.readRotationState('user-1', 'sess-1', token)).replay;
+}
+
+function createRepository(): { repository: TokenRedisRepository; redis: FakeRedis } {
+  const redis = new FakeRedis();
+
+  return {
+    repository: new TokenRedisRepository(redis as unknown as RedisClientType),
+    redis,
+  };
+}
+
+describe('TokenRedisRepository', () => {
+  // The bug this guards: a refresh token sat in Redis verbatim for the whole
+  // refresh TTL, so anything that could read Redis held directly replayable
+  // credentials. Asserting "not equal to the token" is the point — asserting
+  // only "equals the digest" would still pass if the digest were the token.
+  it('stores a digest of the refresh token, never the token', async () => {
+    const { repository, redis } = createRepository();
+
+    await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 2_592_000);
+
+    const stored: string = redis.values.get(REFRESH_KEY) ?? '';
+
+    expect(stored).not.toBe(REFRESH_TOKEN);
+    expect(stored).not.toContain(REFRESH_TOKEN);
+    expect(stored).toBe(sha256(REFRESH_TOKEN));
+    expect(redis.ttlSecByKey.get(REFRESH_KEY)).toBe(2_592_000);
+  });
+
+  it('stores a digest of the access token, never the token', async () => {
+    const { repository, redis } = createRepository();
+
+    await repository.setAccessToken('user-1', 'sess-1', ACCESS_TOKEN, 900);
+
+    expect(redis.values.get(ACCESS_KEY)).toBe(sha256(ACCESS_TOKEN));
+    expect(redis.values.get(ACCESS_KEY)).not.toBe(ACCESS_TOKEN);
+  });
+
+  it('matches the token it stored and rejects any other', async () => {
+    const { repository } = createRepository();
+
+    await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 60);
+
+    expect(await isCurrent(repository, REFRESH_TOKEN)).toBe(true);
+    expect(await isCurrent(repository, ROTATED_REFRESH_TOKEN)).toBe(false);
+  });
+
+  // Revocation is key deletion, and it has to keep working now that the value
+  // is a digest — this is the force-logout path.
+  it('stops matching once the session keys are deleted', async () => {
+    const { repository } = createRepository();
+
+    await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 60);
+    await repository.setAccessToken('user-1', 'sess-1', ACCESS_TOKEN, 60);
+    await repository.deleteAllForSession('user-1', 'sess-1');
+
+    expect(await isCurrent(repository, REFRESH_TOKEN)).toBe(false);
+    expect(await repository.matchesAccessToken('user-1', 'sess-1', ACCESS_TOKEN)).toBe(false);
+  });
+
+  it('deletes the rotation grace key along with the session', async () => {
+    const { repository, redis } = createRepository();
+
+    await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 60);
+    await rotate(repository, REFRESH_TOKEN, {
+      accessToken: ACCESS_TOKEN,
+      refreshToken: ROTATED_REFRESH_TOKEN,
+    });
+    await repository.deleteAllForSession('user-1', 'sess-1');
+
+    expect(redis.values.has(GRACE_KEY)).toBe(false);
+  });
+
+  // The grace window keys the replay by the digest of the replaced token, so
+  // the reuse tripwire still sees "presented a token that is neither current
+  // nor the one just replaced" for everything else.
+  it('replays the issued pair for the replaced token only', async () => {
+    const { repository } = createRepository();
+    const issued: RotationGracePairInterface = {
+      accessToken: ACCESS_TOKEN,
+      refreshToken: ROTATED_REFRESH_TOKEN,
+    };
+
+    await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 60);
+    await rotate(repository, REFRESH_TOKEN, issued);
+
+    expect(await replayOf(repository, REFRESH_TOKEN)).toEqual(issued);
+    expect(await replayOf(repository, ROTATED_REFRESH_TOKEN)).toBeNull();
+  });
+
+  it('does not store the replaced token in the grace key', async () => {
+    const { repository, redis } = createRepository();
+
+    await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 60);
+    await rotate(repository, REFRESH_TOKEN, {
+      accessToken: ACCESS_TOKEN,
+      refreshToken: ROTATED_REFRESH_TOKEN,
+    });
+
+    expect(redis.values.get(GRACE_KEY)).not.toContain(REFRESH_TOKEN);
+    expect(redis.ttlSecByKey.get(GRACE_KEY)).toBe(30);
+  });
+
+  // The grace entry is the single documented exception to "the allowlist holds
+  // digests, never tokens", so its contents are pinned exactly rather than
+  // spot-checked. Asserting only that the replaced token is absent would let
+  // any amount of extra raw material be added later without a test noticing —
+  // and every byte of raw material here is what makes a Redis dump taken
+  // inside the grace window a usable credential. See ADR 0003.
+  it('holds exactly the replacing pair and a digest of the token it replaced', async () => {
+    const { repository, redis } = createRepository();
+
+    await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 60);
+    await rotate(repository, REFRESH_TOKEN, {
+      accessToken: ACCESS_TOKEN,
+      refreshToken: ROTATED_REFRESH_TOKEN,
+    });
+
+    const entry: Record<string, unknown> = JSON.parse(redis.values.get(GRACE_KEY) ?? '{}');
+
+    // Exactly these three fields — a new one carrying token material fails here.
+    expect(Object.keys(entry).sort()).toEqual(['accessToken', 'refreshToken', 'replacedDigest']);
+    // The superseded token appears only as a digest, never verbatim.
+    expect(entry.replacedDigest).toBe(sha256(REFRESH_TOKEN));
+    expect(entry.replacedDigest).not.toBe(REFRESH_TOKEN);
+    // The replacing pair IS held verbatim: it has to be replayable, and a
+    // digest is one-way. Accepted, bounded by the grace TTL, documented.
+    expect(entry.accessToken).toBe(ACCESS_TOKEN);
+    expect(entry.refreshToken).toBe(ROTATED_REFRESH_TOKEN);
+  });
+
+  // The grace TTL is the bound on that exposure, so it is asserted to be the
+  // caller's window rather than any longer-lived TTL on the same session.
+  it('expires the grace entry with the window, not with the refresh token', async () => {
+    const { repository, redis } = createRepository();
+
+    await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 60);
+    await rotate(
+      repository,
+      REFRESH_TOKEN,
+      { accessToken: ACCESS_TOKEN, refreshToken: ROTATED_REFRESH_TOKEN },
+      10,
+    );
+
+    expect(redis.ttlSecByKey.get(GRACE_KEY)).toBe(10);
+    expect(redis.ttlSecByKey.get(REFRESH_KEY)).toBe(2_592_000);
+  });
+
+  it('reports no replay when no rotation grace key exists', async () => {
+    const { repository } = createRepository();
+
+    expect(await replayOf(repository, REFRESH_TOKEN)).toBeNull();
+  });
+
+  // Deploy compatibility: keys written by the previous release hold the token
+  // verbatim. They keep working once, and are rewritten as digests in place.
+  it('accepts a pre-digest key and upgrades it in place, keeping its ttl', async () => {
+    const { repository, redis } = createRepository();
+
+    redis.values.set(REFRESH_KEY, REFRESH_TOKEN);
+
+    expect(await isCurrent(repository, REFRESH_TOKEN)).toBe(true);
+    expect(redis.values.get(REFRESH_KEY)).toBe(sha256(REFRESH_TOKEN));
+    expect(redis.setModes).toContain('KEEPTTL');
+  });
+
+  // Without the "already digested" guard the fallback compares the stored
+  // digest to whatever was presented, so presenting the digest itself matches
+  // and rewrites the key to sha256(digest) — the genuine token is then dead
+  // for the life of that session. Unreachable through the API (the JWT
+  // signature is verified first) but bricking, so it is guarded and pinned.
+  it('never treats a stored digest as a pre-digest key', async () => {
+    const { repository, redis } = createRepository();
+
+    await repository.setRefreshToken('user-1', 'sess-1', REFRESH_TOKEN, 60);
+
+    const digest: string = redis.values.get(REFRESH_KEY) ?? '';
+
+    expect(await isCurrent(repository, digest)).toBe(false);
+    // The key is untouched, so the real token still works.
+    expect(redis.values.get(REFRESH_KEY)).toBe(digest);
+    expect(await isCurrent(repository, REFRESH_TOKEN)).toBe(true);
+  });
+
+  it('still rejects a wrong token against a pre-digest key', async () => {
+    const { repository, redis } = createRepository();
+
+    redis.values.set(REFRESH_KEY, REFRESH_TOKEN);
+
+    expect(await isCurrent(repository, ROTATED_REFRESH_TOKEN)).toBe(false);
+    expect(redis.values.get(REFRESH_KEY)).toBe(REFRESH_TOKEN);
+  });
+
+  it('treats a pre-format grace key as no replay rather than throwing', async () => {
+    const { repository, redis } = createRepository();
+
+    redis.values.set(GRACE_KEY, REFRESH_TOKEN);
+
+    expect(await replayOf(repository, REFRESH_TOKEN)).toBeNull();
+  });
+});

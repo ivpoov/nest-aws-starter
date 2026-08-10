@@ -1,5 +1,6 @@
 import { type AuthConfig, authConfig } from '@configs/auth.config.js';
 import { parseDevice } from '@helpers/parse-device.helper.js';
+import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
@@ -21,11 +22,15 @@ import type { SessionForUserInterface } from '@modules/session/interfaces/sessio
 import type { SessionRepositoryInterface } from '@modules/session/interfaces/session-repository.interface.js';
 import { TOKEN_REPOSITORY } from '@modules/token/constants/token.constants.js';
 import type { RefreshTokenClaimsInterface } from '@modules/token/interfaces/refresh-token-claims.interface.js';
+import type { RotationGracePairInterface } from '@modules/token/interfaces/rotation-grace-pair.interface.js';
+import type { RotationStateInterface } from '@modules/token/interfaces/rotation-state.interface.js';
 import type { TokenPairInterface } from '@modules/token/interfaces/token-pair.interface.js';
 import type { TokenRepositoryInterface } from '@modules/token/interfaces/token-repository.interface.js';
 import { TokenService } from '@modules/token/services/token.service.js';
+import { USER_BLOCKED } from '@modules/user/constants/user-errors.constants.js';
 import type { UserInterface } from '@modules/user/interfaces/user.interface.js';
 import { UserService } from '@modules/user/services/user.service.js';
+import { UserStatusEnum } from '@nest-aws-starter/shared';
 import { Inject, Injectable } from '@nestjs/common';
 
 @Injectable()
@@ -73,20 +78,19 @@ export class SessionService {
   public async refresh(oldRefreshToken: string): Promise<TokenPairInterface> {
     const claims: RefreshTokenClaimsInterface =
       await this.tokenService.verifyRefreshToken(oldRefreshToken);
-    const current: string | null = await this.tokenRepository.getRefreshToken(
+    // ONE snapshot for the whole decision. Asking "is there a grace replay?"
+    // and "is this the current token?" as two reads let a rotation commit
+    // between them, and the honest second tab then answered no to both and got
+    // treated as a token thief — revoking every session the user had.
+    const state: RotationStateInterface = await this.tokenRepository.readRotationState(
       claims.userId,
       claims.sessionId,
-    );
-    const previous: string | null = await this.tokenRepository.getPreviousRefreshToken(
-      claims.userId,
-      claims.sessionId,
+      oldRefreshToken,
     );
 
-    if (oldRefreshToken === previous && current !== null) {
-      return this.replayCurrentPair(claims, current);
-    }
+    if (state.replay) return this.replayGracePair(claims, state.replay);
 
-    if (oldRefreshToken !== current) {
+    if (!state.isCurrent) {
       await this.handleInvalidRefresh(claims);
     }
 
@@ -116,8 +120,15 @@ export class SessionService {
 
     if (!session || session.userId !== userId) throw new NotFoundError(SESSION_NOT_FOUND);
 
-    await this.sessionRepository.setActiveUntil(sessionId, new Date());
+    // Fail-safe ordering (§7a). The ALLOWLIST is what authorizes: verifyAccessToken
+    // checks Redis membership and never reads activeUntil, so this delete is the
+    // write that actually revokes and the row write below is bookkeeping. Delete
+    // first, and a crash between them leaves the token already dead with the row
+    // still saying active — restrictive, and repaired by the next revoke. The
+    // opposite order left both UIs saying "revoked" while the access token kept
+    // working for its full TTL. Do not reorder these two lines.
     await this.tokenRepository.deleteAllForSession(userId, sessionId);
+    await this.sessionRepository.setActiveUntil(sessionId, new Date());
     this.logger.log(`Session revoked: ${sessionId}`);
   }
 
@@ -135,32 +146,80 @@ export class SessionService {
   }
 
   public async revokeAllForUser(userId: string): Promise<number> {
+    // Fail-safe ordering (§7a), same reasoning as revokeSession: the allowlist
+    // sweep is the write that removes access, so it goes first. The row write
+    // stays second and still supplies the reported count — it counts the rows
+    // that were active when it ran, which is the number the caller reports.
+    await this.tokenRepository.deleteAllForUser(userId);
+
     const count: number = await this.sessionRepository.endAllByUserId(userId, new Date());
 
-    await this.tokenRepository.deleteAllForUser(userId);
     this.logger.log(`All sessions revoked for user ${userId}: ${count}`);
 
     return count;
   }
 
-  private async replayCurrentPair(
+  // Concurrent refresh inside the grace window: idempotent replay of the pair
+  // the winner recorded, never a second rotation. The grace entry carries that
+  // pair whole, so replaying it needs no further reads and the access token can
+  // never belong to a different generation than the refresh token beside it.
+  //
+  // ACCEPTED RISK, stated plainly, in two parts.
+  //
+  // First: for as long as the grace entry lives, whoever presents the
+  // superseded token is handed the recorded pair and the tripwire stays silent
+  // — an attacker holding a captured superseded token can trade it for the live
+  // one. This is inherent to a grace window, not an oversight: inside it an
+  // honest second tab and a replay are byte-for-byte indistinguishable, since
+  // the only signal that separates them (client identity) is not carried on
+  // this endpoint.
+  //
+  // Second: to be replayable at all, that pair is stored in Redis VERBATIM —
+  // the live access and refresh token, not digests, because a digest is
+  // one-way and cannot be turned back into a token. It is the single exception
+  // to the allowlist's digests-only rule, so a Redis dump taken inside the
+  // window yields one usable pair per session that rotated in it. The token
+  // being replaced is stored only as a digest, and the entry's exact contents
+  // are pinned in TokenRedisRepository's spec so nothing raw creeps in later.
+  //
+  // Both parts are bounded by the same number: AUTH_REFRESH_GRACE_SEC (10s by
+  // default), after which the entry is gone, the token matches neither key, and
+  // handleInvalidRefresh() revokes the whole session. Narrowing is a knob, not
+  // a code change: lower the config value. Closing part one needs client
+  // binding (ip/device on the refresh call), which trades it for spurious
+  // logouts on network changes — a product decision, not one to smuggle into a
+  // correctness fix. See ADR 0003 for why encrypting the entry was rejected.
+  private async replayGracePair(
     claims: RefreshTokenClaimsInterface,
-    currentRefreshToken: string,
+    replay: RotationGracePairInterface,
   ): Promise<TokenPairInterface> {
-    const accessToken: string | null = await this.tokenRepository.getAccessToken(
-      claims.userId,
-      claims.sessionId,
-    );
+    // The same account gate rotate() applies. Without it the grace entry is a
+    // way for a blocked account to keep collecting fresh access tokens for the
+    // whole window — this path returns before rotate() is ever reached.
+    await this.assertAccountActive(claims.userId);
 
-    if (accessToken === null) throw new UnauthorizedError(AUTH_REFRESH_INVALID);
-
-    // Concurrent refresh inside the grace window: idempotent replay, never a
-    // second rotation.
     return {
-      accessToken,
-      refreshToken: currentRefreshToken,
+      accessToken: replay.accessToken,
+      refreshToken: replay.refreshToken,
       expiresInSec: this.config.accessTtlSec,
     };
+  }
+
+  // Status, not just role, is re-read from the row on every refresh. The admin
+  // block path revokes the allowlist before flipping the status, so reaching
+  // here with a non-active account means that revoke never ran (partially
+  // applied block, direct database edit, a status added later). Finish the job
+  // through that very same revoke rather than a bespoke one.
+  private async assertAccountActive(userId: string): Promise<UserInterface> {
+    const user: UserInterface = await this.userService.findByIdOrThrow(userId);
+
+    if (user.status !== UserStatusEnum.ACTIVE) {
+      await this.revokeAllForUser(userId);
+
+      throw new ForbiddenError(USER_BLOCKED);
+    }
+
+    return user;
   }
 
   private async handleInvalidRefresh(claims: RefreshTokenClaimsInterface): Promise<never> {
@@ -172,8 +231,14 @@ export class SessionService {
     if (isAlive) {
       // Stolen-token tripwire: a signed refresh token that matches neither the
       // current nor the grace key while the session lives means reuse.
-      await this.sessionRepository.setActiveUntil(claims.sessionId, new Date());
+      //
+      // Fail-safe ordering (§7a), same reasoning as revokeSession: the allowlist
+      // delete is the write that actually revokes, so it goes first. This is the
+      // path where it matters most — the thief already holds a live access token,
+      // and the old order let a crash here leave that token usable for its whole
+      // TTL while the row and both UIs claimed the session was revoked.
       await this.tokenRepository.deleteAllForSession(claims.userId, claims.sessionId);
+      await this.sessionRepository.setActiveUntil(claims.sessionId, new Date());
       this.logger.warn(
         `AUTH_REFRESH_REUSED: refresh reuse detected for session ${claims.sessionId} — session revoked`,
       );
@@ -189,7 +254,7 @@ export class SessionService {
     oldRefreshToken: string,
   ): Promise<TokenPairInterface> {
     const [user, session]: [UserInterface, SessionInterface | null] = await Promise.all([
-      this.userService.findByIdOrThrow(claims.userId),
+      this.assertAccountActive(claims.userId),
       this.sessionRepository.findById(claims.sessionId),
     ]);
 
@@ -210,20 +275,24 @@ export class SessionService {
     // claim alive.
     const signedAsAdminId: string | null = session.signedAsAdminId;
     const window: RotatedWindowInterface = this.rotatedWindow(session);
-    const pair: TokenPairInterface = await this.tokenService.issuePair({
-      userId: claims.userId,
-      role: user.role,
-      sessionId: claims.sessionId,
-      actAsBy: signedAsAdminId,
-      refreshTtlSec: window.ttlSec,
-    });
-
-    await this.tokenRepository.setPreviousRefreshToken(
-      claims.userId,
-      claims.sessionId,
+    // Atomic: the replacing pair is recorded in the grace entry and installed
+    // as the current one in a single indivisible Redis step, gated on the
+    // presented token still being current. No observer ever sees a half-rotated
+    // session, so no honest tab is left holding a token that matches neither —
+    // the only thing that used to trip the tripwire falsely.
+    const pair: TokenPairInterface | null = await this.tokenService.rotatePair(
+      {
+        userId: claims.userId,
+        role: user.role,
+        sessionId: claims.sessionId,
+        actAsBy: signedAsAdminId,
+        refreshTtlSec: window.ttlSec,
+      },
       oldRefreshToken,
-      this.config.refreshGraceSec,
     );
+
+    if (pair === null) return this.resolveLostRotation(claims, oldRefreshToken);
+
     await this.sessionRepository.setActiveUntil(claims.sessionId, window.activeUntil);
     void this.sessionRepository
       .touchLastActive(claims.sessionId, new Date())
@@ -232,6 +301,26 @@ export class SessionService {
       );
 
     return pair;
+  }
+
+  // The compare-and-swap was lost, so another refresher rotated this session
+  // between our read and our write. Its rotation is atomic, so by now the
+  // presented token either has a grace entry (an honest concurrent tab — replay
+  // the winner's pair) or has none (a replay of a token already superseded
+  // twice — still a thief, still trips the tripwire).
+  private async resolveLostRotation(
+    claims: RefreshTokenClaimsInterface,
+    oldRefreshToken: string,
+  ): Promise<TokenPairInterface> {
+    const state: RotationStateInterface = await this.tokenRepository.readRotationState(
+      claims.userId,
+      claims.sessionId,
+      oldRefreshToken,
+    );
+
+    if (state.replay) return this.replayGracePair(claims, state.replay);
+
+    return this.handleInvalidRefresh(claims);
   }
 
   private async createSessionRecord(

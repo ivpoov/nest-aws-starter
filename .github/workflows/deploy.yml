@@ -7,19 +7,50 @@ name: deploy
 #
 #   gh workflow run deploy.yml -f sha=<earlier-commit-sha>
 #
-# That is the entire procedure. It works because every image is tagged with the
-# commit SHA that produced it, so an earlier SHA names exactly one artefact.
+# That is the entire procedure. Every image is tagged with the commit SHA that
+# produced it — the runtime image as `<sha>`, the migration image as
+# `migrations-<sha>` — so an earlier SHA names one unambiguous SOURCE revision.
 # `latest` would name whichever build happened to finish last, and "roll back to
 # latest" is not a sentence.
+#
+# BE PRECISE ABOUT WHAT THAT GUARANTEES. This workflow REBUILDS from source; it
+# does not re-tag a stored artefact. So `:<sha>` is a stable NAME whose CONTENT
+# is replaced by each rollback to that SHA, and two builds of one commit are
+# only bit-identical if every input was — base image digest, registry state,
+# apt/npm mirrors, build timestamps. They are not, in general. What a SHA
+# guarantees is the source revision, not the bytes. If you need the bytes, pull
+# and keep the digest (`docker buildx imagetools inspect <repo>:<sha>`) before
+# the rollback, because the tag will move off it.
+#
+# Nor is it forever. Both images live under the api repository's lifecycle
+# policy (infra/terraform/modules/compute/ecr.tf), whose second rule expires
+# everything beyond the most recent N pushes regardless of tag — `<sha>` and
+# `migrations-<sha>` included. Rollback range is that retention window, not the
+# whole history.
+#
+# Start the dispatch from the default branch: the commit to deploy is the `sha`
+# input, not the ref the run is started from — and it must already be an
+# ancestor of the default branch (enforced below).
 # ---------------------------------------------------------------------------
 #
 # NO AWS ACCESS KEY. There is one AWS-related secret in this repository and it
 # is a role ARN, not a credential: AWS_DEPLOY_ROLE_ARN. GitHub mints a
 # short-lived OIDC token for each run and STS exchanges it for a session that
-# expires with the job. The trust policy admits exactly one repository on one
-# ref — see infra/terraform/modules/cicd/README.md. `AWS_ACCESS_KEY_ID` must
-# never be added here: it does not expire, it works from anywhere, and this is a
-# public repository.
+# expires with the job. The trust policy admits exactly one repository, and only
+# a job running in the `production` environment declared below — see
+# infra/terraform/modules/cicd/README.md, which also covers the deployment
+# branch rule that has to be attached to that environment by hand.
+# `AWS_ACCESS_KEY_ID` must never be added here: it does not expire, it works
+# from anywhere, and this is a public repository.
+#
+# WHAT WILL NOT TRIGGER THIS. GitHub suppresses workflow triggers for events
+# created with the default `github.token`, so a push to main made by
+# release.yml running on that fallback token starts no deployment. release.yml
+# uses `secrets.RELEASE_PAT || github.token` for exactly this class of reason;
+# without RELEASE_PAT configured, a release lands on main and nothing deploys
+# until someone dispatches this workflow. That is a safe failure — it deploys
+# nothing rather than something unreviewed — but it is silent, so it is written
+# down here.
 #
 # NOTHING IS HAND-COPIED. Every cluster name, family, bucket, distribution id
 # and URL below comes out of one SSM parameter that Terraform writes from the
@@ -69,10 +100,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
-    # Where to attach required reviewers, a wait timer, or a branch restriction.
-    # An environment with no protection rules is a no-op, which is the right
-    # starting point for a starter — the hook is here so adding the gate later
-    # is a settings change rather than a workflow change.
+    # LOAD-BEARING, in two directions.
+    #
+    # Declaring an environment changes the OIDC token this job is issued: the
+    # `sub` claim becomes `repo:<owner>/<name>:environment:production` and the
+    # ref form disappears from it entirely. The deploy role's trust policy
+    # matches that exact string (modules/cicd/oidc.tf), so this name and
+    # var.github_deploy_environment must stay equal — Terraform checks it, and
+    # a mismatch is an AccessDenied on the first AWS call.
+    #
+    # It is also where the actual gate lives. Required reviewers, a wait timer
+    # and — the one that matters here — the deployment branch rule attach to
+    # this environment, and GitHub enforces them BEFORE it mints the token.
+    # An environment with no rules enforces nothing, and GitHub creates exactly
+    # that on first reference, so configuring it is a documented manual step:
+    # `terraform output github_actions_setup`.
     environment: production
 
     permissions:
@@ -89,19 +131,70 @@ jobs:
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
 
     steps:
+      # Fails loudly when the environment's deployment branch rule is missing.
+      #
+      # This is NOT a security boundary and must not be read as one: a
+      # workflow_dispatch from another branch runs that branch's copy of this
+      # file, with this step edited out if the person wanted it gone. The
+      # boundary is the deployment branch rule on the `production` environment,
+      # which GitHub evaluates before the job starts. This step exists so that
+      # a repository where that rule was never configured fails here — visibly,
+      # having deployed nothing — instead of quietly deploying whatever branch
+      # the dispatch was started from.
+      #
+      # `-f sha=` is how you deploy an older commit. The ref is not.
+      - name: refuse to deploy from anything but the default branch
+        env:
+          REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [ "$REF" != "refs/heads/${DEFAULT_BRANCH}" ]; then
+            echo "::error::this run was started from ${REF}, not refs/heads/${DEFAULT_BRANCH}. Nothing has been deployed. If you meant to deploy an older commit, dispatch from ${DEFAULT_BRANCH} with -f sha=<commit>. If a dispatch from another branch reached this step at all, the production environment has no deployment branch rule — see infra/terraform/modules/cicd/README.md."
+            exit 1
+          fi
+          echo "started from ${REF}"
+
+      # fetch-depth: 0 because the next step has to prove the checked-out commit
+      # is an ancestor of the default branch, and a shallow clone cannot answer
+      # that. It is the whole history of a starter, so it costs seconds.
       - name: check out the commit being deployed
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.inputs.sha || github.sha }}
+          fetch-depth: 0
 
       # `git rev-parse HEAD` rather than github.sha, so a rollback dispatch and
       # a push produce the tag the same way and a short SHA typed into the
       # dispatch form still yields the full one.
-      - name: resolve the commit being deployed
+      #
+      # THE ANCESTRY CHECK IS THE POINT OF THIS STEP. `-f sha=` accepts any
+      # commit OBJECT the repository can reach, and that set is much larger than
+      # "commits on the default branch": every fork's pull request is fetchable
+      # as refs/pull/N/head from this repository, so without this check anyone
+      # who can dispatch could deploy an unreviewed fork's code from an approved
+      # branch, and the branch guard above would see nothing wrong because the
+      # RUN really did start from the default branch. `merge-base --is-ancestor`
+      # is the whole fix: a rollback target is by definition already on the
+      # default branch, and a fork's PR head is by definition not.
+      - name: resolve and verify the commit being deployed
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           sha="$(git rev-parse HEAD)"
-          echo "deploying ${sha}"
+
+          # Explicit, because `checkout` with `ref:` set to a raw SHA leaves no
+          # remote-tracking ref for the default branch to compare against.
+          git fetch --no-tags --quiet origin \
+            "+refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
+
+          if ! git merge-base --is-ancestor "$sha" "refs/remotes/origin/${DEFAULT_BRANCH}"; then
+            echo "::error::${sha} is not an ancestor of origin/${DEFAULT_BRANCH}. Nothing has been deployed. Only commits that have been merged into ${DEFAULT_BRANCH} can be deployed or rolled back to — a fork's pull-request head is reachable in this repository but has not been reviewed into ${DEFAULT_BRANCH}."
+            exit 1
+          fi
+
+          echo "deploying ${sha} (ancestor of origin/${DEFAULT_BRANCH})"
           echo "IMAGE_TAG=${sha}" >> "$GITHUB_ENV"
 
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
@@ -111,6 +204,7 @@ jobs:
           cache: pnpm
 
       - name: assume the deploy role
+        id: assume_role
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
@@ -118,6 +212,62 @@ jobs:
           # Shows up in CloudTrail against every call this job makes, so an
           # audit trail leads back to a specific workflow run.
           role-session-name: deploy-${{ github.run_id }}
+
+      # WHY THIS EXISTS. The step above fails with a bare AccessDenied that says
+      # nothing about which claim was rejected, and the single most likely cause
+      # is that the trust policy names the wrong SPELLING of this repository's
+      # subject. GitHub has two default subject formats — the name-based
+      # `repo:<owner>/<name>:...` and, for repositories created after
+      # 2026-07-15 or renamed since, the immutable
+      # `repo:<owner>@<owner-id>/<name>@<repo-id>:...` — and there is no
+      # documented API field that reliably says which one you get. So on failure
+      # this prints the subject the run was ACTUALLY issued. Paste it into
+      # github_deploy_subject_override, or read the ids out of it and set
+      # github_subject_format = "immutable".
+      #
+      # It prints the `sub` claim and nothing else. `sub` is not a secret — it
+      # is owner, repository and environment, all of them public — but the token
+      # it came out of is a live credential, so it is never echoed, never
+      # written to a file, and never passed to anything but jq. The claim is
+      # decoded locally; no request is made to AWS.
+      - name: report the oidc subject this run was actually issued
+        if: ${{ failure() && steps.assume_role.conclusion == 'failure' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "::warning::no OIDC token endpoint in this job — cannot report the subject"
+            exit 0
+          fi
+
+          token="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
+            | jq -r '.value')"
+
+          # Base64url -> base64, padded, decoded, and only `.sub` is ever read
+          # out of the result.
+          payload="$(printf '%s' "$token" | cut -d. -f2 | tr '_-' '/+')"
+          case $(( ${#payload} % 4 )) in
+            2) payload="${payload}==" ;;
+            3) payload="${payload}=" ;;
+          esac
+          subject="$(printf '%s' "$payload" | base64 -d 2>/dev/null | jq -r '.sub')"
+
+          echo "::error::assume-role failed. The subject this run was issued is: ${subject}"
+          {
+            echo "### Assume-role failed"
+            echo
+            echo "GitHub issued this run the OIDC subject:"
+            echo
+            echo "\`\`\`"
+            echo "${subject}"
+            echo "\`\`\`"
+            echo
+            echo "The deploy role's trust policy must contain that exact string."
+            echo "See \`terraform output github_actions_trusted_subjects\` and"
+            echo "\`infra/terraform/modules/cicd/README.md\`."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # One read, and everything the rest of the job needs. The manifest is
       # non-secret metadata written by Terraform; its shape is the object type
@@ -215,13 +365,32 @@ jobs:
       # Every layer is already in the daemon's cache from the step above, so it
       # costs seconds.
       #
-      # The tag is the moving `:migrations` one the migration task definition
-      # points at (Terraform owns that definition; a deployment does not
-      # re-register it). Rolling back re-runs this build from the older commit,
-      # which repoints the tag in step with the runtime image.
+      # TWO TAGS, one image. `ecs run-task` resolves the migration task
+      # definition Terraform owns, and that definition names the moving
+      # `:migrations` tag — a deployment does not re-register it — so that tag
+      # has to be repointed here or the wrong migrations run.
+      #
+      # A moving tag is not an artefact, though. `:migrations` alone answers
+      # "which schema is live?" with "whichever build pushed last", and after a
+      # rollback it answers wrongly. The second tag, `:migrations-<sha>`, is the
+      # same manifest under a name that identifies a commit: it makes the image
+      # that produced a given schema addressable, exactly as `:<sha>` does for
+      # the runtime image, and it costs nothing — one manifest, two tags, so ECR
+      # stores one image and the retention policy counts one.
+      #
+      # "Addressable", not "immutable" and not "forever". Redeploying the same
+      # SHA rebuilds and re-points this tag at fresh bytes (the repository is
+      # MUTABLE by design — see modules/compute/ecr.tf), and the lifecycle
+      # policy's `imageCountMoreThan` rule expires it along with everything else
+      # once enough pushes follow. It bounds ambiguity; it is not an archive.
+      #
+      # Rolling back re-runs this build from the older commit, which repoints
+      # `:migrations` in step with the runtime image and re-tags the same
+      # historical SHA.
       - name: build and push the migration image
         env:
           MIGRATIONS_IMAGE: ${{ env.ECR_REPOSITORY_URL }}:${{ env.MIGRATIONS_IMAGE_TAG }}
+          MIGRATIONS_IMAGE_SHA: ${{ env.ECR_REPOSITORY_URL }}:${{ env.MIGRATIONS_IMAGE_TAG }}-${{ env.IMAGE_TAG }}
           DOCKER_BUILDKIT: "1"
         run: |
           set -euo pipefail
@@ -231,7 +400,12 @@ jobs:
             --network host \
             --secret id=database_url,env=DATABASE_URL \
             --tag "$MIGRATIONS_IMAGE" \
+            --tag "$MIGRATIONS_IMAGE_SHA" \
             .
+          # The SHA tag first: if the second push fails, the immutable name
+          # exists and the task definition is still pointing at the previous
+          # migration image rather than at nothing.
+          docker push "$MIGRATIONS_IMAGE_SHA"
           docker push "$MIGRATIONS_IMAGE"
 
       # -------------------------------------------------------------------
@@ -487,6 +661,7 @@ jobs:
             echo "| --- | --- |"
             echo "| commit | \`${IMAGE_TAG}\` |"
             echo "| image | \`${ECR_REPOSITORY_URL}:${IMAGE_TAG}\` |"
+            echo "| migration image | \`${ECR_REPOSITORY_URL}:${MIGRATIONS_IMAGE_TAG}-${IMAGE_TAG}\` |"
             echo "| task definition | \`${REVISION:-not registered}\` |"
             echo "| api | ${HEALTH_CHECK_URL} |"
             echo "| cors origins | \`${API_CORS_ORIGINS}\` |"

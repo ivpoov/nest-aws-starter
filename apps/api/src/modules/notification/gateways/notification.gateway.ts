@@ -23,7 +23,7 @@ import type { Server } from 'socket.io';
 // Default namespace/path (`/socket.io`). Handshake carries the access token
 // in `auth.token` (no cookies — same contract as the HTTP bearer header),
 // validated exactly like HTTP via TokenService.verifyAccessToken (signature
-// + Redis allowlist). Room-naming contract PR 3's dispatcher depends on
+// + Redis allowlist). Room-naming contract PR 3's event subscriber depends on
 // lives in constants/notification-rooms.constants.ts.
 //
 // Deliberately no `cors` here: decorator options evaluate at module-import

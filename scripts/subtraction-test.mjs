@@ -74,12 +74,18 @@ const SKIP_DIR_NAMES = new Set(['node_modules', 'dist', 'generated', '.git']);
 // relabelling a real break as a footnote.
 //
 // `manualPaths` are folders a removal must delete that the script deliberately
-// does NOT, because doing so breaks a build step it cannot then repair. The
-// `packages/shared/src/<module>` folders are all in this bucket:
-// `packages/shared/src/index.ts` re-exports them and those export lines are
-// not fenced, so deleting the folder alone makes `build shared` fail on a
-// barrel pointing at nothing. They are still listed in the recipe — the reader
-// deletes them together with the matching `index.ts` lines from `manualSteps`.
+// does NOT, because doing so would break a build step it cannot then repair.
+// They are still listed in the recipe, for the reader to delete by hand.
+//
+// **No module uses this bucket today, and that is the point.** It existed for
+// the `packages/shared/src/<module>` folders back when `packages/shared/src/
+// index.ts` re-exported them through unfenced `export *` lines — deleting a
+// folder on its own left the barrel pointing at nothing and `build shared`
+// failed. Those export lines are now fenced line by line, so the stripper
+// removes the folder and its barrel entries in one pass and nothing is left
+// for a human. assertFrontendFencedClaims() below refuses to let an entry
+// claim `frontendFenced` while still listing a `manualPaths` value, which is
+// what keeps the bucket empty rather than merely observing that it is.
 //
 // `frontendFenced: true` asserts a module has nothing left in `manualPaths`
 // and no `manualSteps` under apps/web, apps/admin or packages/shared, which is
@@ -163,7 +169,7 @@ export const MODULES = [
     cosmeticSteps: [
       [
         'packages/shared/src/notifications/enums/notification-type.enum.ts',
-        "the CONTACT_MESSAGE member stays on purpose, for the same reason as payment's types: apps/api's notification dispatcher keeps its contact-message builder and handler, which compile against the core event bus and simply never fire once nothing emits contact.message.created. Keeping the member keeps apps/web's NOTIFICATION_TYPE_LABELS (a total Record over the enum) valid. Dropping it means dropping the member, the label line, USER_NOTIFICATION_TYPES and the dispatcher handler together",
+        "the CONTACT_MESSAGE member stays on purpose, for the same reason as payment's types: apps/api's notification event subscriber keeps its contact-message builder and handler, which compile against the core event bus and simply never fire once nothing emits contact.message.created. Keeping the member keeps apps/web's NOTIFICATION_TYPE_LABELS (a total Record over the enum) valid. Dropping it means dropping the member, the label line, USER_NOTIFICATION_TYPES and the event subscriber handler together",
       ],
     ],
   },
@@ -419,7 +425,7 @@ export const MODULES = [
     cosmeticSteps: [
       [
         'packages/shared/src/notifications/enums/notification-type.enum.ts',
-        "the four payment notification types stay on purpose. apps/api's notification dispatcher keeps its payment builders and @OnDomainEvent handlers — they compile against the core event bus and simply never fire once nothing emits subscription.* — so the wire enum stays total, and apps/web's NOTIFICATION_TYPE_LABELS (a total Record over it) stays valid. The visible leftover is four rows in the preferences grid that can never be triggered; dropping them means dropping the enum members, the label lines, USER_NOTIFICATION_TYPES in apps/api and the dispatcher handlers together",
+        "the four payment notification types stay on purpose. apps/api's notification event subscriber keeps its payment builders and @OnDomainEvent handlers — they compile against the core event bus and simply never fire once nothing emits subscription.* — so the wire enum stays total, and apps/web's NOTIFICATION_TYPE_LABELS (a total Record over it) stays valid. The visible leftover is four rows in the preferences grid that can never be triggered; dropping them means dropping the enum members, the label lines, USER_NOTIFICATION_TYPES in apps/api and the event subscriber handlers together",
       ],
       [
         'apps/admin/src/components/Statistics/KpiTiles.tsx',
@@ -433,17 +439,17 @@ export const MODULES = [
     // included here in the same commit series (see task-1-report.md's note
     // for PR 2-5 implementers: v0.4's payment entry missed this once and
     // briefly broke the subtracted tree). Tasks 3-5 extend `paths` further
-    // as the dispatcher/history API/email digest land in the same folder.
+    // as the event subscriber/history API/email digest land in the same folder.
     id: 'notification',
     summary:
-      'Notification/receipt/preference schema, WS gateway, the persist-first dispatcher (IN_APP + ' +
+      'Notification/receipt/preference schema, WS gateway, the persist-first event subscriber (IN_APP + ' +
       'the per-type/per-channel EMAIL gate, PR 5), the history API ' +
       '(list/unread-count/mark-read/read-all), and the preferences API (GET/PUT matrix).',
     paths: [
       'apps/api/src/modules/notification',
       'apps/api/src/configs/websocket.config.ts',
       'apps/api/test/websocket.e2e-spec.ts',
-      'apps/api/test/notification-dispatcher.e2e-spec.ts',
+      'apps/api/test/notification-event-subscriber.e2e-spec.ts',
       'apps/api/test/notification-api.e2e-spec.ts',
       'apps/api/test/notification-preferences.e2e-spec.ts',
       'apps/web/src/apis/notifications',
@@ -524,7 +530,7 @@ export const MODULES = [
 // found not (currently) cleanly removable. Not exercised by the script.
 const NON_REMOVABLE = [
   {
-    id: 'suspicious-activity',
+    id: 'account-security',
     reason:
       'Fenceable in principle — multi-line/block fences exist elsewhere in this PR — ' +
       'but disproportionately invasive here: it is a synchronous security gate inside ' +
@@ -559,9 +565,9 @@ const NON_REMOVABLE = [
   {
     id: 's3 / sqs / sns / mail / lambda (providers)',
     reason:
-      'v0.1 providers predate the fence-marker convention introduced in this PR. ' +
-      'Retrofitting them is deliberately out of scope for this round — see the ' +
-      'per-provider coupling notes in docs/removal/README.md — and belongs to a dedicated pass.',
+      'These providers predate the fence-marker convention and were never retrofitted. ' +
+      'The per-provider coupling notes below say what each one is actually tied to; ' +
+      'making them removable is a dedicated pass, not a side effect of another change.',
   },
 ];
 
@@ -600,7 +606,7 @@ const DEFERRED_PROVIDERS = [
     id: 'mail',
     note:
       'Coupled into core auth: `EmailFlowService` (verify/reset emails, `auth` module) calls ' +
-      '`MAIL_TRANSPORT` unconditionally; `NewDeviceService` (`suspicious-activity`) also ' +
+      '`MAIL_TRANSPORT` unconditionally; `NewDeviceService` (`account-security`) also ' +
       "injects it directly, gated only by its own `newDeviceEmailEnabled` flag, not by mail's " +
       "own `isEnabled`. `NotificationEmailService` (`notification`, PR 5) checks mail's own " +
       '`isEnabled` before every send, so it degrades cleanly — but it is still a removable ' +
@@ -1144,11 +1150,9 @@ ${renderFenceSection(fenceResults)}
 ### Not yet fence-marked (edit by hand)
 
 These references are **not** fenced, so \`scripts/subtraction-test.mjs\` neither strips
-them nor proves they were handled. Any \`packages/shared/src/*\` folder marked "delete by
-hand" in section 1 belongs here too: the script leaves it in place because
-\`packages/shared/src/index.ts\` re-exports it through unfenced \`export *\` lines, so
-deleting the folder on its own would break \`build shared\`. Delete the folder and those
-export lines together. Work through the list by hand:
+them nor proves they were handled. Every one of them is a hole in the proof: the
+subtracted tree was type-checked and unit-tested *without* these edits applied, so it is
+on you to make them and to re-run the suites afterwards. Work through the list by hand:
 
 ${renderManualStepsSection(module.manualSteps)}
 
@@ -1199,14 +1203,23 @@ function renderReadme() {
 
   return `# Removal recipes
 
-This directory is generated by \`node scripts/subtraction-test.mjs --emit-docs\` from
-\`// <module:x>\` fence markers left in the codebase by optional modules' cross-references.
-Regenerate it instead of hand-editing after any fence changes.
+This directory is generated by \`node scripts/subtraction-test.mjs --emit-docs\`.
+Regenerate it instead of hand-editing after any fence change.
 
-The same fence markers back \`scripts/subtraction-test.mjs\`, which nightly (and on pushes to
-\`staging\`/\`main\`) deletes each module below in an isolated git worktree and proves the rest
-of the app still type-checks and passes its unit tests — see
-\`.github/workflows/subtraction.yml\`.
+A **fence marker** is a \`// <module:x>\` comment marking code that belongs to
+optional module \`x\` but lives in a file that stays: trailing on a line it means
+*delete this line*, and an own-line \`// <module:x>\` … \`// </module:x>\` pair means
+*delete this block* (inside JSX, \`{/* <module:x> */}\`). Because every
+cross-module reference is marked this way, removal is mechanical rather than a
+search — see
+[ADR 0008](../decisions/0008-modular-by-subtraction.md).
+
+The same markers back \`scripts/subtraction-test.mjs\`, which deletes each module
+below in an isolated git worktree and proves the rest of the app still
+type-checks and passes its unit tests. That full proof runs nightly and on pushes
+to \`staging\`/\`main\`; the cheap half — regenerating this directory and failing on
+any diff — runs on every pull request, so these recipes cannot fall out of step
+with the markers. See \`.github/workflows/subtraction.yml\`.
 
 ## Removable modules
 
@@ -1250,7 +1263,7 @@ Two couplings were not mechanical and are worth knowing before adding a module:
 - \`apps/web\`'s \`NOTIFICATION_TYPE_LABELS\` is a total \`Record\` over
   \`NotificationTypeEnum\`, so a payment- or contact-us-shaped enum member cannot be
   fenced out on its own. Those members stay by design: \`apps/api\`'s notification
-  dispatcher keeps the matching builders and handlers, which compile against the core
+  event subscriber keeps the matching builders and handlers, which compile against the core
   event bus and simply never fire. What is fenced instead is the *link target* — a
   notification pointing at \`/settings/billing\` after that route is gone would be a real
   dead end.

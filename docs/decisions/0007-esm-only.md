@@ -15,8 +15,12 @@ choosing to be slightly off the beaten path.
 
 ## Decision
 
-Every publishable package declares `"type": "module"`: `apps/api`, `apps/web`, `apps/admin`,
-`packages/shared`, `lambdas/example`. No package compiles to CommonJS.
+Every workspace package declares `"type": "module"` — `apps/api`, `apps/web`, `apps/admin`,
+`apps/docs`, `packages/shared`, `lambdas/example`. No package compiles to CommonJS.
+
+```bash
+grep -l '"type": "module"' apps/*/package.json packages/*/package.json lambdas/*/package.json
+```
 
 - `apps/api` and `packages/shared` use `"module": "nodenext"` with
   `"moduleResolution": "nodenext"` — real Node ESM resolution, which means **every local
@@ -45,10 +49,22 @@ That is what allows ten path aliases to work under real Node ESM with **no loade
 
 **Good**
 
-- No interop layer at all. There is not a single `createRequire`, `require(`, `module.exports`,
-  `export =`, `__dirname` or `__filename` anywhere in `apps/`, `packages/`, `scripts/` or
-  `lambdas/`, and no `--experimental-*` or `--loader` flag in the Dockerfile or compose file.
-  For a Nest application on ESM that is an unusually clean result.
+- No interop layer in the application code. Nothing under `apps/`, `packages/` or `lambdas/`
+  reaches for a CommonJS escape hatch, and there is no `--experimental-*` or `--loader` flag
+  in the Dockerfile or the compose file. Check it:
+
+  ```bash
+  grep -rnE 'createRequire|require\(|module\.exports|export =|__dirname|__filename' \
+    apps packages lambdas \
+    --include='*.ts' --include='*.tsx' --include='*.mjs' --include='*.js' \
+    --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=generated
+  ```
+
+  The one exception is deliberate and outside the application: `scripts/benchmark.mjs` builds
+  a `createRequire` to read `autocannon/package.json` for the version it stamps into a report.
+  A JSON import would need `with { type: 'json' }` and a matching Node version floor for a
+  line of reporting metadata, so the escape hatch is the cheaper trade. Drop `scripts` from
+  the paths above and the command prints nothing.
 - ESM-only dependencies can be adopted without ceremony.
 - `resolveFully` means the deployed artifact has no runtime dependency on the alias table.
 
@@ -68,9 +84,15 @@ That is what allows ten path aliases to work under real Node ESM with **no loade
   `swc.vite({ module: { type: 'nodenext' } })` because Vite's default esbuild transform does
   not emit the `design:type` decorator metadata that Nest's DI requires. The frontends need
   neither.
-- **`reflect-metadata` is imported in exactly one place** (`main.ts`) and neither Vitest config
-  declares a `setupFiles` that imports it — specs rely on it arriving transitively through
-  `@nestjs/*`. That works today and is an unstated dependency, not a decision.
+- **`reflect-metadata` has to be imported before anything decorated is loaded**, and under ESM
+  that ordering is not something the module graph gives you for free. The runtime gets it from
+  the first line of `main.ts`; the test runs get it from
+  `apps/api/test/reflect-metadata.setup.ts`, which both Vitest configs load through
+  `setupFiles`. Three explicit imports for one polyfill is the ESM tax:
+
+  ```bash
+  grep -rn "reflect-metadata" apps/api/src apps/api/test apps/api/vitest.config.ts
+  ```
 - **JSON cannot be imported statically without extra configuration.** One spec reads its
   fixtures off disk with `fileURLToPath(new URL(..., import.meta.url))` and `JSON.parse`
   precisely to avoid depending on `resolveJsonModule`. That is the ESM tax showing up in test
@@ -82,7 +104,14 @@ That is what allows ten path aliases to work under real Node ESM with **no loade
   root-level script `.mjs` (`scripts/bootstrap.mjs`, `scripts/subtraction-test.mjs`,
   `commitlint.config.mjs`). `lambdas/example` wears both belt and braces — `.mjs` *and*
   `"type": "module"`.
-- **"Path aliases only; relative imports are lint-blocked" is not true.** `main.ts` imports
-  `./app.module.js` relatively, and — more importantly — **there is no such lint rule**.
-  `biome.json` contains no `noRestrictedImports` and no import-path rule of any kind. The
-  claim in the README is aspirational.
+- **"Path aliases only" is enforced, but only in `apps/api/src`.** `biome.json` carries a
+  `style/noRestrictedImports` rule at `error` that blocks the `./**` and `../**` patterns
+  there, so a relative import fails `pnpm exec biome ci .` rather than review. Two gaps are
+  deliberate and worth knowing: the rule's `includes` covers `apps/api/src/**` and **not**
+  `apps/api/test/**`, so an e2e spec may still import relatively; and the frontends are
+  exempt on purpose, because they declare no aliases at all and import relatively by
+  convention. So the sentence is true where it is checked and a convention everywhere else.
+
+  ```bash
+  grep -n -A12 noRestrictedImports biome.json
+  ```

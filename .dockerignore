@@ -29,9 +29,17 @@ coverage
 
 # Secrets never belong in a build context: anything here would land in an
 # image layer, readable by anyone who can pull the image.
-.env
-.env.*
-!.env.example
+#
+# The `**/` prefix is load-bearing. A bare `.env` matches the context root and
+# nothing else, so `apps/api/.env` — the file every developer actually has,
+# holding DATABASE_URL, AWS and Stripe credentials and AUTH_JWT_SECRET —
+# sailed straight into the `build` stage through `COPY apps/api apps/api`, and
+# that stage is what the deploy workflow pushes to ECR as the migration image.
+# The Dockerfile carries a matching guard so a regression here fails the build
+# instead of shipping quietly.
+**/.env
+**/.env.*
+!**/.env.example
 
 # Local infrastructure and documentation — not inputs to the runtime image.
 docker

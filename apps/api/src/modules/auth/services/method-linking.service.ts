@@ -16,6 +16,7 @@ import {
   AUTH_EMAIL_LINKED_TO_OTHER_ACCOUNT,
   AUTH_METHOD_ALREADY_LINKED,
 } from '@modules/oauth/constants/oauth-errors.constants.js';
+import { UnlinkMethodResultEnum } from '@modules/user/enums/unlink-method-result.enum.js';
 import type { AuthMethodInterface } from '@modules/user/interfaces/auth-method.interface.js';
 import type { UserWithMethodTypesInterface } from '@modules/user/interfaces/user-with-method-types.interface.js';
 import { UserService } from '@modules/user/services/user.service.js';
@@ -58,18 +59,24 @@ export class MethodLinkingService {
     });
   }
 
+  // The account must always keep at least one way in. That rule is enforced
+  // inside the transaction that performs the delete — a read here followed by
+  // a delete there is exactly what let two concurrent unlinks of different
+  // types both pass and leave the account permanently unreachable.
   public async unlinkMethod(userId: string, type: AuthMethodTypeEnum): Promise<void> {
-    const methods: AuthMethodInterface[] = await this.userService.findMethodsByUserId(userId);
-    const target: AuthMethodInterface | undefined = methods.find(
-      (method: AuthMethodInterface): boolean => method.type === type,
+    const result: UnlinkMethodResultEnum = await this.userService.removeMethodUnlessLast(
+      userId,
+      type,
     );
 
-    if (!target) throw new NotFoundError(AUTH_METHOD_NOT_FOUND);
+    if (result === UnlinkMethodResultEnum.NOT_FOUND) {
+      throw new NotFoundError(AUTH_METHOD_NOT_FOUND);
+    }
 
-    // The account must always keep at least one way in.
-    if (methods.length <= 1) throw new ConflictError(AUTH_LAST_METHOD);
+    if (result === UnlinkMethodResultEnum.LAST_METHOD) {
+      throw new ConflictError(AUTH_LAST_METHOD);
+    }
 
-    await this.userService.removeMethod(userId, type);
     this.eventBus.emit(AUTH_METHOD_UNLINKED_EVENT, { userId, type });
   }
 

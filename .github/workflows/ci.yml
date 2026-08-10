@@ -24,6 +24,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Declared rather than inherited. A repository's default workflow permissions
+# are a settings toggle, and the permissive setting ("read and write") is still
+# the default on older organisations — which would hand every job here a token
+# that can push to the repository, for jobs that only ever read it. Stating the
+# scope in the file makes it a property of the workflow instead of a property of
+# whoever last touched Settings -> Actions.
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -100,9 +109,37 @@ jobs:
           WEBSOCKET_ENABLED: "true"
           WEBSOCKET_HEARTBEAT_INTERVAL_MS: "200"
 
+  # The README's headline "make it yours" command, on a pristine clone —
+  # exactly what a newcomer runs first. It went unnoticed that a tracked
+  # symlink added with the docs workspace crashed it (EISDIR) before it wrote
+  # anything, because nothing in CI had ever executed this script. --dry-run
+  # writes nothing, so this is safe to run on every pull request; the working
+  # tree is checked afterwards to prove it.
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/bootstrap.mjs --name smoke-app --scope @smoke-app --author "CI Smoke" --repo smoke/smoke-app --dry-run
+      - name: assert --dry-run wrote nothing
+        run: git diff --exit-code
+
   audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
       - run: pnpm audit --prod --audit-level high
+      # A licence is not an advisory: no scanner was ever going to report
+      # that a dependency relicensed to AGPL-3.0 under us, and the cost of
+      # missing one lands on everybody who deploys a fork. `pnpm licenses`
+      # reads package.json off disk, so this needs a real install — hence
+      # the setup-node + install above, which `pnpm audit` alone did not.
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run license-check

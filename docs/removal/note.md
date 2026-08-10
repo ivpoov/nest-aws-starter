@@ -29,35 +29,33 @@ same markers appear as `{/* <module:note> */}`. Delete the marked lines/blocks
 and the markers themselves.
 
 - `apps/api/src/app.module.ts`
-  - line 13: `import { NoteModule } from '@modules/note/note.module.js'; // <module:note>`
+  - line 14: `import { NoteModule } from '@modules/note/note.module.js'; // <module:note>`
   - line 76: `NoteModule, // <module:note>`
 - `apps/api/src/modules/event/constants/event-names.constants.ts`
   - line 1: `export const NOTE_CREATED_EVENT = 'note.created'; // <module:note>`
 - `apps/api/prisma/schema.prisma`
   - line 41: `notes                   Note[] // <module:note>`
-  - lines 99-121 (block)
+  - lines 110-132 (block)
 - `apps/web/src/App.tsx`
   - line 14: `import { NotesPage } from './pages/NotesPage'; // <module:note>`
   - lines 46-48 (block)
 - `apps/web/src/constants/app-nav-items.constants.ts`
   - line 9: `{ to: '/notes', label: 'Notes' }, // <module:note>`
 - `packages/shared/src/index.ts`
-  - line 46: `export * from './notes/constants/note-error-codes.constants.js'; // <module:note>`
-  - line 47: `export * from './notes/enums/note-status.enum.js'; // <module:note>`
-  - line 48: `export * from './notes/interfaces/create-note-request.interface.js'; // <module:note>`
-  - line 49: `export * from './notes/interfaces/note-list-response.interface.js'; // <module:note>`
-  - line 50: `export * from './notes/interfaces/note-response.interface.js'; // <module:note>`
-  - line 51: `export * from './notes/interfaces/update-note-request.interface.js'; // <module:note>`
-  - line 52: `export * from './notes/types/note-error-code.type.js'; // <module:note>`
+  - line 52: `export * from './notes/constants/note-error-codes.constants.js'; // <module:note>`
+  - line 53: `export * from './notes/enums/note-status.enum.js'; // <module:note>`
+  - line 54: `export * from './notes/interfaces/create-note-request.interface.js'; // <module:note>`
+  - line 55: `export * from './notes/interfaces/note-list-response.interface.js'; // <module:note>`
+  - line 56: `export * from './notes/interfaces/note-response.interface.js'; // <module:note>`
+  - line 57: `export * from './notes/interfaces/update-note-request.interface.js'; // <module:note>`
+  - line 58: `export * from './notes/types/note-error-code.type.js'; // <module:note>`
 
 ### Not yet fence-marked (edit by hand)
 
 These references are **not** fenced, so `scripts/subtraction-test.mjs` neither strips
-them nor proves they were handled. Any `packages/shared/src/*` folder marked "delete by
-hand" in section 1 belongs here too: the script leaves it in place because
-`packages/shared/src/index.ts` re-exports it through unfenced `export *` lines, so
-deleting the folder on its own would break `build shared`. Delete the folder and those
-export lines together. Work through the list by hand:
+them nor proves they were handled. Every one of them is a hole in the proof: the
+subtracted tree was type-checked and unit-tested *without* these edits applied, so it is
+on you to make them and to re-run the suites afterwards. Work through the list by hand:
 
 _None — every cross-module reference for this module is fence-marked._
 

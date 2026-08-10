@@ -23,11 +23,27 @@ Optional modules are delimited by fence markers.
   syntax error where a frontend cross-reference actually lives — inside a component's
   children.
 
-Eleven modules are optional and fenced: `payment` (93 markers), `notification` (43), `file`
-(26), `contact-us` (26), `cloudfront` (19), `note` (15), `statistic` (12), `api-key` (11), and
-the three OAuth providers (4 each). Everything else — `user`, `auth`, `session`, `token`,
-`casl`, `event`, `common`, `activity`, `suspicious-activity`, `oauth` core — is core and has
+Eleven modules are optional and fenced. Everything else — `user`, `auth`, `session`, `token`,
+`casl`, `event`, `common`, `activity`, `account-security`, `oauth` core — is core and has
 no markers.
+
+Every count in this document is quoted as the command that produces it rather than as a
+number, because a number in a document has no way to notice that the code moved. Run this one
+to see how many fence sites each module has:
+
+```bash
+# One line per module, counting opening markers — a trailing marker and a
+# block each count once. `<module:x>` is the placeholder used in comments that
+# explain the convention; it is not a real module.
+grep -rEho '<module:[a-z0-9-]+>' \
+  apps/api/src apps/api/test apps/api/prisma/schema.prisma apps/api/prisma/seed.ts \
+  apps/web/src apps/admin/src packages/shared/src \
+  --include='*.ts' --include='*.tsx' --include='*.prisma' --exclude-dir=generated \
+  | sort | uniq -c | sort -rn
+```
+
+At the time of writing that put `payment` an order of magnitude above the OAuth providers,
+which is the shape that matters: the cost of the convention is concentrated in one module.
 
 `scripts/subtraction-test.mjs` is the proof. For each module it deletes the module's own
 files in a throwaway git worktree, strips that module's fences everywhere else, then
@@ -39,14 +55,35 @@ type-checks `apps/api` (including the e2e suite via `tsconfig.e2e.json`), `apps/
 
 This is the part that matters when you add code, and it is stricter than "keep it tidy":
 
-1. **A core module may not import an optional module.** Verified: there are zero fence markers
-   inside `modules/user`, `modules/auth`, `modules/session`, `modules/casl`,
-   `modules/activity` and `modules/oauth`. The only fences outside optional-module folders are
-   in composition files — `app.module.ts` (25 markers), `configs/index.ts` (15), `main.ts`,
-   and one block in `common/constants/development-defaults.constants.ts`.
+1. **A core module may not import an optional module.** The core API modules carry no fence
+   markers at all — this prints nothing:
+
+   ```bash
+   grep -rE '<module:' apps/api/src/modules/{user,auth,session,casl,activity,oauth}
+   ```
+
+   Fences outside an optional module's own folder are not confined to composition files,
+   though. They are concentrated there — `app.module.ts` and `configs/index.ts` carry the most
+   by a wide margin, and `main.ts` and one block in
+   `common/constants/development-defaults.constants.ts` account for the rest inside
+   `apps/api/src` — but the same markers also reach the Prisma schema and seed, the e2e suite,
+   both frontends' route tables and the shared barrel. This lists every such file, largest
+   first:
+
+   ```bash
+   grep -rcE '<module:' \
+     apps/api/src apps/api/test apps/api/prisma/schema.prisma apps/api/prisma/seed.ts \
+     apps/web/src apps/admin/src packages/shared/src \
+     --include='*.ts' --include='*.tsx' --include='*.prisma' --exclude-dir=generated \
+     | grep -vE '/modules/(payment|notification|file|contact-us|note|statistic|api-key|oauth-[a-z]+)/' \
+     | grep -v ':0$' | sort -t: -k2 -rn
+   ```
 2. **The sanctioned way for core to react to an optional feature is a domain event, not an
-   import.** `event-names.constants.ts` fences exactly one of its 24 constants
-   (`NOTE_CREATED_EVENT`). `CONTACT_RECEIVED_EVENT`, `FILE_UPLOADED_EVENT`, the `API_KEY_*`
+   import.** `event-names.constants.ts` fences exactly one of its constants
+   (`NOTE_CREATED_EVENT`) — compare
+   `grep -c '^export const' apps/api/src/modules/event/constants/event-names.constants.ts`
+   with the single `<module:note>` in the same file.
+   `CONTACT_RECEIVED_EVENT`, `FILE_UPLOADED_EVENT`, the `API_KEY_*`
    pair, all five `SUBSCRIPTION_*` events and `WEBHOOK_FAILED_EVENT` belong to optional
    modules but sit unfenced in the core event bus — because the core `activity` module
    subscribes to them, and an unfired listener for a deleted module is inert rather than
@@ -54,8 +91,15 @@ This is the part that matters when you add code, and it is stricter than "keep i
 3. **Optional → optional references are allowed, fenced inline, including in constructors.**
    `FileService` fences two constructor-injected parameters and the branch that uses them for
    the optional `cloudfront` module.
-4. **The shared wire-contract barrel is fenced line by line** — 82 of the 108 `export *` lines
-   in `packages/shared/src/index.ts` carry a marker. The exceptions are surgical: the
+4. **The shared wire-contract barrel is fenced line by line** — well over half the `export *`
+   lines in `packages/shared/src/index.ts` carry a marker:
+
+   ```bash
+   grep -c '^export \*' packages/shared/src/index.ts                        # total
+   grep '^export \*' packages/shared/src/index.ts | grep -c '<module:'      # fenced
+   ```
+
+   The unfenced remainder is core contract, plus a few surgical exceptions: the
    `FileIntentEnum` export is deliberately unfenced because core `activity` payloads use it.
 5. **The Prisma schema is fenced too**, down to individual relation fields on the core `User`
    model (`notes Note[] // <module:note>`).
@@ -73,13 +117,25 @@ This is the part that matters when you add code, and it is stricter than "keep i
 
 **Bad — pay these knowingly**
 
-- **Markers are noise in the source.** 257 of them. Reading `app.module.ts` means reading
-  25 trailing comments; reading `packages/shared/src/index.ts` means reading 82.
-- **The convention is not enforced on pull requests.** `.github/workflows/subtraction.yml`
-  runs nightly and on pushes to `staging`/`main`, and its own header says it is too slow to
-  run per PR. The doc-drift check (`--emit-docs` then `git diff --exit-code`) runs on the same
-  schedule. **A PR that adds an unfenced cross-reference merges green** and breaks the nightly
-  job hours later.
+- **Markers are noise in the source.** Reading `app.module.ts` or
+  `packages/shared/src/index.ts` means reading dozens of comments that say nothing about what
+  the code does. The repository-wide total:
+
+  ```bash
+  grep -rEho '<module:[a-z0-9-]+>' \
+    apps/api/src apps/api/test apps/api/prisma/schema.prisma apps/api/prisma/seed.ts \
+    apps/web/src apps/admin/src packages/shared/src \
+    --include='*.ts' --include='*.tsx' --include='*.prisma' --exclude-dir=generated \
+    | grep -v '<module:x>' | wc -l
+  ```
+- **The proof itself is not enforced on pull requests.** `.github/workflows/subtraction.yml`
+  splits into two jobs. The doc-drift check (`--emit-docs` then `git diff --exit-code`) is
+  cheap — no install, no database, no worktrees — and runs on **every** pull request, so a
+  recipe can no longer fall out of step with the markers. The removal proof itself is one
+  `pnpm install` + type-check + unit-test pass *per module*, which is far too slow for that,
+  so it stays nightly and on pushes to `staging`/`main`. **A PR that adds an unfenced
+  cross-reference still merges green** — the markers it forgot to write are markers the drift
+  check has nothing to compare against — and breaks the nightly job hours later.
 - **A malformed marker fails silently, in the worst possible way.** `stripFencesInFile` never
   checks that fences balance: an opening marker with no closing marker leaves the stripper in
   block mode to end of file and **silently deletes the rest of the file**. A misspelled module
@@ -100,10 +156,10 @@ This is the part that matters when you add code, and it is stricter than "keep i
   file inside a fence-scan root, i.e. it could have been fenced and was not. The
   `assertFrontendFencedClaims()` guard only inspects `apps/web/`, `apps/admin/` and
   `packages/shared/`, so an `apps/api` hand-edit never blocks the `frontendFenced` flag.
-- The script's header comment describing `manualPaths` — and therefore the corresponding
-  paragraph in every generated recipe — is stale: it tells the reader that
-  `packages/shared/src/index.ts` re-exports through unfenced `export *` lines, which has not
-  been true since those lines were fenced.
+- `manualPaths` — the bucket for folders a removal must delete that the script deliberately
+  does not — is empty for every module, and has been since the `packages/shared/src/index.ts`
+  export lines were fenced. It is kept because `assertFrontendFencedClaims()` uses it as a
+  tripwire: an entry cannot claim `frontendFenced` while listing one.
 - The v0.1 infrastructure providers (`s3`, `sqs`, `sns`, `mail`, `lambda`) predate the
   convention and are explicitly out of scope. `mail` is the honest worst case: `EmailFlowService`
   calls `MAIL_TRANSPORT` unconditionally, so removing mail outright breaks core auth flows.

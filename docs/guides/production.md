@@ -113,7 +113,7 @@ yours:
    no domain there is no regional ACM certificate on the ALB and the API is
    served over **plain HTTP** on its `*.elb.amazonaws.com` hostname —
    `check "api_served_over_plain_http"` says so on every plan.
-4. **The WAF.** See §5.
+4. **The WAF.** Neither profile builds one, and neither claims to. See §5.
 
 Run `terraform output cost_profile_settings` after a plan to see the resolved map
 rather than trusting this page.
@@ -317,43 +317,57 @@ Cheaper levers, in the order worth trying:
 
 ---
 
-## 5. WAF on CloudFront — the gap, and the recommendation
+## 5. WAF — this stack does not create one
 
 ### The fact
 
-`waf_enabled = true` on the production profile **creates nothing**. There is no
-`aws_wafv2_*` resource anywhere in `infra/terraform/`. `local.edge_web_acl_arn`
-in `edge.tf` is hardcoded to `null`, and it is what the edge module's
-`web_acl_arn` receives. The stack is honest about it in three places: a `check
-"edge_supporting_resources"` that warns on every plan, a "What this stack does
-not create" section in the Terraform README, and a "Bad — pay these knowingly"
-bullet in ADR 10.
+**There is no `aws_wafv2_*` resource anywhere in `infra/terraform/`.** Nothing in
+this stack creates a web ACL, and nothing you can set in `terraform.tfvars` will
+make it. If your threat model needs a WAF, you are building it — section
+"[If you want one](#if-you-want-one)" below is the design.
 
-### The recommendation: set `waf_enabled = false` until a module exists
+```bash
+# Prints nothing. (Plain `aws_wafv2` does match — in this section's own
+# prose and in the check block's error message, both of which are about
+# the resource that is missing.)
+grep -rn 'resource "aws_wafv2' infra/terraform/
+```
 
-A profile key that reads as enabled everywhere it is displayed — in
-`terraform output cost_profile_settings`, in the `CostProfile` tag conversation,
-in a code review — and silently does nothing is worse than a key that says
-`false`. It is the kind of thing that gets read as "WAF: yes" in a security
-questionnaire.
+There is nothing to turn off. `waf_enabled` is **not an input variable** — it is
+a key inside `local.profile` in `infra/terraform/locals.tf`, hardcoded `false` on
+*both* cost profiles, and `local.edge_web_acl_arn` in `edge.tf` is hardcoded
+`null`. The two agree by construction as shipped.
 
-There is a second, sharper reason, and it is specific to this stack's topology:
+What the stack does have is a tripwire for the person who edits that key anyway:
+a `check "edge_supporting_resources"` block in `edge.tf` that warns on every plan
+if `waf_enabled` is ever made true while no web ACL exists. It warns rather than
+fails, because a stack with no WAF is still a working stack. The same gap is
+stated in the "What this stack does not create" section of
+[`infra/terraform/README.md`](../../infra/terraform/README.md) and in a
+"Bad — pay these knowingly" bullet in
+[ADR 0010](../decisions/0010-two-cost-profiles-and-the-no-nat-trade-off.md).
 
-**Even a correctly built CloudFront web ACL would not protect the API.**
-`local.edge_api_distribution_enabled` is `false`, so the only distributions the
-edge module creates are the two static SPA sites — private S3 buckets of
-content-hashed Vite output served through Origin Access Control. There is no
-origin logic there to exploit, no request body to inspect, and no rate limit
-worth writing. The thing a WAF would actually earn its keep in front of is the
-**API**, and the API is served by an internet-facing ALB. Protecting that needs a
-**REGIONAL** web ACL associated with the load balancer — a different scope, a
-different resource, in a different region from the `CLOUDFRONT` one the key's
-name (`local.names.waf_web_acl`) and the check's error message describe.
+### Read this before you price one
 
-So the key as written points at the wrong tier. Turn it off, and treat "add a
-WAF" as the design task it is.
+The key's name points at the wrong tier, and that is the part worth carrying into
+a design review.
 
-### If you want one anyway
+`local.edge_web_acl_arn` is **CLOUDFRONT**-scoped, so the only thing it could ever
+attach to is the two static SPA distributions — private S3 buckets of
+content-hashed Vite output served through Origin Access Control
+(`local.edge_api_distribution_enabled` is `false`, so CloudFront never fronts the
+API). There is no origin logic there to exploit, no request body to inspect, and
+no rate limit worth writing.
+
+The tier that would earn a WAF is the **API**, and the API is served by an
+internet-facing ALB. Protecting it needs a **REGIONAL** web ACL associated with
+the load balancer: a different resource, at a different scope, in a different
+region from the `CLOUDFRONT`/`us-east-1` shape the edge module's input takes.
+
+So "add a WAF" is not a flag flip in this repository. It is two resources, and
+you probably only want one of them.
+
+### If you want one
 
 Two separate jobs. Do the second one first if you only do one.
 
@@ -370,15 +384,23 @@ rate-based rule. Two cautions specific to this application:
   balancer at `/socket.io`. A rate-based rule tuned for REST will throttle
   websocket clients, which reconnect, which trips it harder.
 
-**In front of CloudFront (the one the key names).** A `CLOUDFRONT`-scoped
-`aws_wafv2_web_acl` created **in `us-east-1`** — the `aws.us_east_1` provider
-alias already exists in `edge.tf` for the ACM certificate. Name it
-`local.names.waf_web_acl`, then set `local.edge_web_acl_arn` to its ARN; the
-module already threads `web_acl_arn` into every distribution's `web_acl_id`. Once
-that ARN is non-null the `check` goes quiet, which is exactly the signal it was
-built to give.
+**In front of CloudFront (the one the wiring is already shaped for).** A
+`CLOUDFRONT`-scoped `aws_wafv2_web_acl` created **in `us-east-1`** — the
+`aws.us_east_1` provider alias already exists in `edge.tf` for the ACM
+certificate. Give it a name in the `local.names` map, then point
+`local.edge_web_acl_arn` at its ARN; the edge module already threads
+`web_acl_arn` into every distribution's `web_acl_id`, so nothing else has to
+change. Once that ARN is non-null the `check` goes quiet, which is exactly the
+signal it was built to give.
 
-Only then is `waf_enabled = true` a true statement. Budget for it: a web ACL is
+Note that `local.names` deliberately carries **no** `waf_web_acl` entry today —
+the map's rule is that a name for a resource nothing creates sends the next
+reader hunting for it in the console. A WAF module brings its own name back, and
+for the API tier that name is REGIONAL-scoped and lives in this stack's region
+rather than in `us-east-1`.
+
+Only once one of these exists is `waf_enabled = true` a true statement, and only
+then is it worth flipping in `locals.tf`. Budget for it either way: a web ACL is
 billed monthly, per rule, and per million requests.
 
 ---
@@ -963,7 +985,8 @@ A checklist, each item traceable to something above.
 - [ ] `monthly_budget_amount_usd` raised from the `20` default to something that
       reflects this profile, but not so high it never fires.
 - [ ] `database_max_allocated_storage_gb` set to a real ceiling (§8).
-- [ ] `waf_enabled` set to `false`, or a web ACL actually built and wired (§5).
+- [ ] Decided whether this application needs a WAF, knowing the stack builds
+      none and `waf_enabled` is already `false` on both profiles (§5).
 - [ ] Every `REPLACE_ME` placeholder filled in
       (`terraform output secrets_action_required`).
 - [ ] SES production access requested, and the DKIM records published (§9).

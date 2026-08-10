@@ -2,6 +2,7 @@ import type { Prisma } from '@generated/prisma/client.js';
 import { NotificationAudience } from '@generated/prisma/enums.js';
 import type { NotificationGetPayload, NotificationModel } from '@generated/prisma/models.js';
 import type { CursorPaginationInterface } from '@interfaces/cursor-pagination.interface.js';
+import { NOTIFICATION_RECEIPT_BACKFILL_BATCH_SIZE } from '@modules/notification/constants/notification.constants.js';
 import type { CreateNotificationDataInterface } from '@modules/notification/interfaces/create-notification-data.interface.js';
 import type { NotificationInterface } from '@modules/notification/interfaces/notification.interface.js';
 import type { NotificationListFiltersInterface } from '@modules/notification/interfaces/notification-list-filters.interface.js';
@@ -69,7 +70,7 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
       where: {
         ...this.buildScopeWhere(filters, filters.audience),
         ...(filters.type && { type: filters.type }),
-        ...(filters.unreadOnly && this.buildUnreadWhere(filters.userId)),
+        ...(filters.unreadOnly && this.unreadFilter(filters.userId)),
         // Strictly older than the previous page's last id — UUIDv7 ids are
         // time-ordered, so `lt` under `id: 'desc'` is "the next page".
         ...(pagination.cursor && { id: { lt: pagination.cursor } }),
@@ -90,7 +91,7 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
     return this.prisma.notification.count({
       where: {
         ...this.buildScopeWhere(filters),
-        ...this.buildUnreadWhere(filters.userId),
+        ...this.unreadFilter(filters.userId),
       },
     });
   }
@@ -131,26 +132,39 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
   // Bounded to the admin's visible scope (rows newer than their account, the
   // same id cursor buildScopeWhere uses) — rows outside the feed need no
   // receipt, so this stops materializing every ADMIN row ever written.
+  //
+  // Batched, because "rows newer than the admin's account" is still every
+  // ADMIN notification ever written for a long-lived account, and an admin
+  // who has never pressed read-all would have loaded all of them into memory
+  // in one findMany. Each batch writes receipts for the rows it read, which
+  // takes them out of the `receipts: { none: ... }` set, so the loop strictly
+  // shrinks the remainder and terminates without a cursor.
   private async createMissingAdminReceipts(adminId: string): Promise<void> {
-    const unseen: { id: string }[] = await this.prisma.notification.findMany({
-      where: {
-        audience: NotificationAudience.ADMIN,
-        id: { gt: adminId },
-        receipts: { none: { userId: adminId } },
-      },
-      select: { id: true },
-    });
+    let batch: { id: string }[] = [];
 
-    if (unseen.length === 0) return;
+    do {
+      batch = await this.prisma.notification.findMany({
+        where: {
+          audience: NotificationAudience.ADMIN,
+          id: { gt: adminId },
+          receipts: { none: { userId: adminId } },
+        },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+        take: NOTIFICATION_RECEIPT_BACKFILL_BATCH_SIZE,
+      });
 
-    await this.prisma.notificationReceipt.createMany({
-      data: unseen.map((notification: { id: string }) => ({
-        notificationId: notification.id,
-        userId: adminId,
-        readAt: new Date(),
-      })),
-      skipDuplicates: true,
-    });
+      if (batch.length === 0) return;
+
+      await this.prisma.notificationReceipt.createMany({
+        data: batch.map((notification: { id: string }) => ({
+          notificationId: notification.id,
+          userId: adminId,
+          readAt: new Date(),
+        })),
+        skipDuplicates: true,
+      });
+    } while (batch.length === NOTIFICATION_RECEIPT_BACKFILL_BATCH_SIZE);
   }
 
   // Own USER-audience rows, plus ADMIN-audience rows when the caller is an
@@ -182,7 +196,7 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
   // Unread = the reader has no read receipt for the row yet, OR has one
   // whose readAt is still null. Works uniformly for USER rows (always have
   // an eager receipt) and ADMIN rows (may have none at all).
-  private buildUnreadWhere(readerId: string): Prisma.NotificationWhereInput {
+  private unreadFilter(readerId: string): Prisma.NotificationWhereInput {
     return {
       receipts: { none: { userId: readerId, readAt: { not: null } } },
     };

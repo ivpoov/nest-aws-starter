@@ -13,6 +13,6 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationTypeEnum, string> = {
   [NotificationTypeEnum.SUBSCRIPTION_ENDED]: 'Subscription ended',
   [NotificationTypeEnum.USER_BLOCKED]: 'User blocked',
   [NotificationTypeEnum.SUSPICIOUS_LOGIN]: 'Suspicious login activity',
-  [NotificationTypeEnum.CONTACT_MESSAGE]: 'New contact message',
+  [NotificationTypeEnum.CONTACT_MESSAGE]: 'Contact form submission',
   [NotificationTypeEnum.WEBHOOK_FAILED]: 'Webhook processing failed',
 };

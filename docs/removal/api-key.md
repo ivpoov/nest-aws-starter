@@ -23,28 +23,26 @@ same markers appear as `{/* <module:api-key> */}`. Delete the marked lines/block
 and the markers themselves.
 
 - `apps/api/src/app.module.ts`
-  - line 5: `import { ApiKeyModule } from '@modules/api-key/api-key.module.js'; // <module:api-key>`
+  - line 6: `import { ApiKeyModule } from '@modules/api-key/api-key.module.js'; // <module:api-key>`
   - line 83: `ApiKeyModule, // <module:api-key>`
 - `apps/api/prisma/schema.prisma`
   - line 43: `apiKeys                 ApiKey[] // <module:api-key>`
-  - lines 228-252 (block)
+  - lines 244-268 (block)
 - `packages/shared/src/index.ts`
-  - line 6: `export * from './api-keys/constants/api-key-error-codes.constants.js'; // <module:api-key>`
-  - line 7: `export * from './api-keys/interfaces/api-demo-whoami-response.interface.js'; // <module:api-key>`
-  - line 8: `export * from './api-keys/interfaces/api-key-list-response.interface.js'; // <module:api-key>`
-  - line 9: `export * from './api-keys/interfaces/api-key-response.interface.js'; // <module:api-key>`
-  - line 10: `export * from './api-keys/interfaces/create-api-key-request.interface.js'; // <module:api-key>`
-  - line 11: `export * from './api-keys/interfaces/create-api-key-response.interface.js'; // <module:api-key>`
-  - line 12: `export * from './api-keys/types/api-key-error-code.type.js'; // <module:api-key>`
+  - line 12: `export * from './api-keys/constants/api-key-error-codes.constants.js'; // <module:api-key>`
+  - line 13: `export * from './api-keys/interfaces/api-demo-whoami-response.interface.js'; // <module:api-key>`
+  - line 14: `export * from './api-keys/interfaces/api-key-list-response.interface.js'; // <module:api-key>`
+  - line 15: `export * from './api-keys/interfaces/api-key-response.interface.js'; // <module:api-key>`
+  - line 16: `export * from './api-keys/interfaces/create-api-key-request.interface.js'; // <module:api-key>`
+  - line 17: `export * from './api-keys/interfaces/create-api-key-response.interface.js'; // <module:api-key>`
+  - line 18: `export * from './api-keys/types/api-key-error-code.type.js'; // <module:api-key>`
 
 ### Not yet fence-marked (edit by hand)
 
 These references are **not** fenced, so `scripts/subtraction-test.mjs` neither strips
-them nor proves they were handled. Any `packages/shared/src/*` folder marked "delete by
-hand" in section 1 belongs here too: the script leaves it in place because
-`packages/shared/src/index.ts` re-exports it through unfenced `export *` lines, so
-deleting the folder on its own would break `build shared`. Delete the folder and those
-export lines together. Work through the list by hand:
+them nor proves they were handled. Every one of them is a hole in the proof: the
+subtracted tree was type-checked and unit-tested *without* these edits applied, so it is
+on you to make them and to re-run the suites afterwards. Work through the list by hand:
 
 _None — every cross-module reference for this module is fence-marked._
 

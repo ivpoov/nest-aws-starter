@@ -18,20 +18,50 @@ alternative store was not a new dependency.
 Every short-lived credential is a Redis key with a native TTL. Nothing token-shaped is
 written to PostgreSQL.
 
-| Credential | Key | Store |
-|---|---|---|
-| Access token | `users:{userId}:sessions:{sessionId}:access` | Redis |
-| Refresh token | `users:{userId}:sessions:{sessionId}:refresh` | Redis |
-| Previous refresh token (rotation grace) | `users:{userId}:sessions:{sessionId}:refresh:prev` | Redis |
+| Credential | Key | Store | Value |
+|---|---|---|---|
+| Access token | `users:{userId}:sessions:{sessionId}:access` | Redis | SHA-256 digest |
+| Refresh token | `users:{userId}:sessions:{sessionId}:refresh` | Redis | SHA-256 digest |
+| Rotation grace (replaced token + its replacement) | `users:{userId}:sessions:{sessionId}:refresh:prev` | Redis | digest of the replaced token + the replacing pair **verbatim** |
 | Email verification / password reset | `users:{userId}:{kind}` | Redis |
 | OAuth `state` | `oauth:state:{state}` | Redis |
 | OAuth one-time exchange code | `oauth:exchange:{code}` | Redis |
 | Login-failure counters and lockouts | `suspicious:fail…`, `suspicious:lockout…` | Redis |
 
+The braces in `users:{userId}:…` are literal, not placeholder punctuation: they are a Redis
+**hash tag**, which pins every key belonging to one user to a single cluster slot. Rotation
+compares and rewrites three of those keys in one Lua script, and that is only possible while
+they share a slot — without the tag it is a `CROSSSLOT` error the moment `REDIS_IS_CLUSTER`
+is on.
+
 Redis is not a cache in front of the truth — it **is** the truth. The comment in
 `apps/api/src/modules/token/repositories/token-redis.repository.ts` states the invariant:
 "a token exists iff its key exists; revocation is key deletion and applies to access tokens
 instantly." A JWT with a valid signature is rejected if its allowlist key is gone.
+
+The session allowlist stores a **SHA-256 digest of the token, never the token**. "Nothing
+token-shaped in Postgres" was only half a promise while the refresh token itself sat in
+Redis for its full 26-day TTL — a Redis dump, replica or RDB snapshot in a backup bucket was
+a pile of directly replayable credentials. A digest answers "is this the token I issued?"
+exactly as well, and there is nothing to brute force in a 256-bit random JWT, so the digest
+is unsalted and compared in constant time.
+
+The one exception is the rotation grace entry, and it is a real one, stated plainly: it holds
+the **live access and refresh token verbatim**, not digests. It has to — its whole job is to
+hand the pair that won a refresh race back to the request that lost it, and a digest is
+one-way, so there is no way to reconstruct a token from one. The token it *replaced* is stored
+only as a digest, and `TokenRedisRepository`'s spec pins exactly which fields the entry may
+contain so that this stays a deliberate exception rather than a drift.
+
+So the promise above is precise rather than absolute: a Redis dump is not a pile of replayable
+credentials **except** for a rolling window of live pairs, one per session that rotated within
+the last `AUTH_REFRESH_GRACE_SEC` (10s by default — sized to a single HTTP round trip, which is
+the only overlap it has to cover; see `auth.config.ts` for the derivation). A dump taken inside
+that window yields a usable pair, and the refresh token in it stays usable until the session
+next rotates. Storing the pair encrypted was considered and rejected: it would only help an
+attacker who has the dump but not the app secret, and it puts a new key-management surface and
+a new decrypt-failure path on the auth hot path in exchange for narrowing an exposure that is
+already bounded, tested and accepted. Revisit it if the grace window ever needs to be long.
 
 One-time tokens are consumed with `GETDEL` (`OneTimeTokenRedisRepository`,
 `OauthStoreRedisRepository`), so consumption is atomic and a token cannot be replayed.
@@ -70,6 +100,32 @@ the sense of [ADR 1](./0001-contracts-over-implementations.md).
 - **Prefix scans are O(keys).** `deleteAllForUser` uses `SCAN … MATCH users:{id}:sessions:*`
   and, in cluster mode, runs it per master node and deletes keys one at a time (multi-key
   `DEL` is `CROSSSLOT`). It is fine at this cardinality and would not be at a much larger one.
+
+**Upgrade step — already spent, delete on sight**
+
+The release that introduced digests shipped a compatibility shim,
+`TokenRedisRepository.matchesPreDigestKey`, which accepts an allowlist key still holding a
+verbatim token, rewrites it as a digest with `SET … KEEPTTL`, and lets that request through.
+Its purpose was to avoid signing every logged-in user out on the digest deploy.
+
+**It no longer serves that purpose, and it is dead now rather than on a schedule.** The same
+release cycle also added the `{userId}` hash tag, which *renames* every session key. A raw,
+pre-digest value can only ever sit under the old untagged name, and no lookup builds that name
+any more — so the shim guards a state the current key layout cannot produce, and every
+pre-existing session ends at deploy regardless of whether the shim is present. The two
+compatibility mechanisms are mutually exclusive and the hash tag wins.
+
+That cost nothing to accept: this repository had never been deployed by anyone when the rename
+landed, so there were no live sessions to preserve. It is recorded here, and in the comment on
+`TokenRedisRepository.accessKey`, so a later reader knows the continuity was given up for free
+rather than weighed against real users.
+
+**Delete `matchesPreDigestKey`, its `isDigest` guard and their tests whenever convenient — no
+waiting window applies.** Delete the second SCAN pattern in `deleteAllForUser` at the same
+time: it exists only to sweep those same untagged keys so they are not left to idle out, and
+the two have exactly the same lifetime. Nothing breaks if they are left in place; they are dead
+weight that invites the question "when is a non-digest accepted?" every time someone reads the
+file.
 
 **Where it is bent — and why the bend is intentional**
 
