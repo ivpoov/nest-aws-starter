@@ -68,16 +68,20 @@ Controller  →  Service  →  RepositoryInterface  ←implements←  PrismaRepo
 ## 2. TypeScript: interfaces first
 
 **Objects are interfaces.** Anything with a shape — domain models, method inputs,
-config shapes, event payloads, provider contracts — is an `interface`. `type` is
-reserved for what an interface cannot express: unions, intersections, mapped/utility
-compositions, primitive aliases.
+config shapes, event payloads, provider contracts — is an `interface`, and it lives in
+the owning module's `interfaces/` folder as `<name>.interface.ts`.
 
-| Construct | Keyword | Folder | Suffix |
-|---|---|---|---|
-| Any object shape / contract | `interface` | `interfaces/` | `.interface.ts` |
-| Unions, intersections, utility compositions | `type` | `types/` | `.type.ts` |
-| API response classes | `class` | `entities/` or `dtos/responses/` | `.entity.ts` / `.dto.ts` |
-| Request validation classes | `class` | `dtos/` | `.dto.ts` |
+`type` is reserved for what an interface cannot express — unions, intersections,
+mapped and utility compositions, primitive aliases — and those go in `types/` as
+`<name>.type.ts`. If you reach for `type` and an `interface` would have worked, the
+answer is `interface`.
+
+Classes survive in exactly two places, both at the transport edge, because both need
+decorators a plain shape cannot carry. A request class holds the validation decorators
+and lives in `dtos/` as `<name>.dto.ts`. A response class holds the serialisation
+decorators and lives in `dtos/responses/` — or in `entities/` as `<name>.entity.ts`
+where the shape is the module's own record rather than one endpoint's view of it.
+Nothing else is a class merely to describe a shape.
 
 ### One declaration = one file (no exceptions for providers)
 
