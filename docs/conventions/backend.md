@@ -68,16 +68,20 @@ Controller  →  Service  →  RepositoryInterface  ←implements←  PrismaRepo
 ## 2. TypeScript: interfaces first
 
 **Objects are interfaces.** Anything with a shape — domain models, method inputs,
-config shapes, event payloads, provider contracts — is an `interface`. `type` is
-reserved for what an interface cannot express: unions, intersections, mapped/utility
-compositions, primitive aliases.
+config shapes, event payloads, provider contracts — is an `interface`, and it lives in
+the owning module's `interfaces/` folder as `<name>.interface.ts`.
 
-| Construct | Keyword | Folder | Suffix |
-|---|---|---|---|
-| Any object shape / contract | `interface` | `interfaces/` | `.interface.ts` |
-| Unions, intersections, utility compositions | `type` | `types/` | `.type.ts` |
-| API response classes | `class` | `entities/` or `dtos/responses/` | `.entity.ts` / `.dto.ts` |
-| Request validation classes | `class` | `dtos/` | `.dto.ts` |
+`type` is reserved for what an interface cannot express — unions, intersections,
+mapped and utility compositions, primitive aliases — and those go in `types/` as
+`<name>.type.ts`. If you reach for `type` and an `interface` would have worked, the
+answer is `interface`.
+
+Classes survive in exactly two places, both at the transport edge, because both need
+decorators a plain shape cannot carry. A request class holds the validation decorators
+and lives in `dtos/` as `<name>.dto.ts`. A response class holds the serialisation
+decorators and lives in `dtos/responses/` — or in `entities/` as `<name>.entity.ts`
+where the shape is the module's own record rather than one endpoint's view of it.
+Nothing else is a class merely to describe a shape.
 
 ### One declaration = one file (no exceptions for providers)
 
@@ -1497,47 +1501,59 @@ No module merges untested; tests land in the same commit series.
 
 ## 14. Code style
 
-- Single quotes, trailing commas, 2-space indent (Biome-enforced).
-- `const` by default; early returns — no `else` after `return`.
-- Empty line between adjacent variable declarations; empty line before
-  `return`/`continue`/`break` inside blocks.
-- Minimal comments — only *why*, never *what*.
-- Path aliases only (`@modules/...`, `@interfaces/...`, `@src/...`); relative imports in
-  `apps/api/src` are blocked by Biome (`style/noRestrictedImports`, configured in the
-  root `biome.json` override for `apps/api/src/**`), so `pnpm exec biome ci .` fails on
-  one. Two deliberate exclusions: `apps/api/test`, whose specs import their own harness
-  siblings (`./app.factory.js`) and which declares no alias of its own, and the two
-  frontends, which import relatively by design (see [`frontend.md`](./frontend.md)).
-- **Every intra-project import ends in `.js`**, aliases included
-  (`@modules/note/services/note.service.js`). `apps/api` is native ESM under
-  `module: nodenext`, so the runtime specifier is what ships; TypeScript resolves the
-  `.ts` behind it. Package imports (`@nestjs/common`, `@nest-aws-starter/shared`) take
-  no extension.
-- Imports are sorted by Biome's organizer (`biome check --write`); do not hand-order
-  them.
-- Always `await` — no floating promises.
+Formatting is not a matter of taste here, and it is not documented here either.
+Biome owns quotes, commas, indentation, line width, import order and `const` over
+`let`; `pnpm exec biome ci .` fails on any deviation and `biome check --write` fixes
+it. Everything below is what Biome cannot decide for you.
 
-## 15. Anti-patterns (forbidden)
+**Imports carry the most weight.** Inside `apps/api/src` every import goes through an
+alias — `@modules/…`, `@interfaces/…`, `@src/…` — and a relative one fails the build
+(`style/noRestrictedImports`, in the root `biome.json` override for `apps/api/src/**`).
+Two places sit outside that rule on purpose: `apps/api/test`, whose specs import their
+own harness siblings such as `./app.factory.js` and which declares no alias of its own,
+and the two frontends, which import relatively by design — see
+[`frontend.md`](./frontend.md).
 
-| Anti-pattern | Instead |
-|---|---|
-| Loose `*.controller.ts`/`*.service.ts` at module root | Dedicated folder per artifact kind, even for a single file (`controllers/`, `services/`, `repositories/`, `constants/`) |
-| Service depending on a concrete repository class | Contract interface via injection token |
-| Module exporting a repository | Export the service; others ask the service |
-| `@generated/prisma/*` outside `*-prisma.repository.ts` or the `prisma` module | New named contract method |
-| Repository returning an ORM model or response DTO | `toDomain()` → domain interface |
-| Business logic in a controller (pre-checks, casts) | Service method (`deleteById` owns the 404) |
-| `type` for an object shape | `interface` in `interfaces/` |
-| Interface/type/enum declared inside a provider/service/controller file | Dedicated file in the owning folder's `interfaces/`, `types/`, `enums/` |
-| Two or more interfaces/types in one file | One declaration per file |
-| Function > 25 lines / file > 300 lines | Extract named private methods / split |
-| `console.log`, silent `catch` | Leveled logger; every catch logs |
-| Endpoint missing auth/throttle/Swagger/Serialize | Full endpoint checklist, every time |
-| Inline error strings | Coded constants |
-| Service throwing `HttpException`/`NotFoundException` | Domain `AppError` (`NotFoundError`, …); transports map at the edge |
-| Feature module adding codes to a shared errors file | Module-owned `<module>-errors.constants.ts` |
-| Feature module importing a feature module | Event bus or core dependency |
-| Two dependent writes issued back to back, no unit of work | `unitOfWork.run` with the `tx` threaded into both (§7a) |
-| Service holding a `Prisma.TransactionClient` (or `$transaction` outside a repository) | Opaque `TransactionContextInterface` + `UNIT_OF_WORK` (§7a) |
-| Event, mail, or cache write inside `unitOfWork.run` | After it resolves — a rollback cannot un-send them (§7a) |
-| DB write granting access before the Redis write revoking it | Revoke first: fail safe, not fail open (§7a) |
+Every intra-project specifier ends in `.js`, aliases included
+(`@modules/note/services/note.service.js`). `apps/api` is native ESM under
+`module: nodenext`, so what you write is what the runtime resolves and TypeScript finds
+the `.ts` behind it. Package imports — `@nestjs/common`, `@nest-aws-starter/shared` —
+take no extension.
+
+**Every promise is either awaited or deliberately discarded.** A promise left dangling
+in a statement is an error nobody will catch and a race nobody will reproduce, so a
+reviewer rejects it on sight rather than asking whether it matters here.
+
+The rest is layout and intent. Prefer an early return to an `else` after a `return`.
+Leave a blank line between adjacent variable declarations, and before a `return`,
+`continue` or `break` inside a block. Write the comment that explains *why*; never the
+one that restates *what* the next line already says.
+
+## 15. Review rejections
+
+Each row is something a reviewer sends back without discussion. The middle column
+carries the reason, because several of these are perfectly normal NestJS elsewhere and
+fail here only because of a constraint this codebase has taken on.
+
+| Symptom | Why it fails | Do this |
+|---|---|---|
+| Loose `*.controller.ts` / `*.service.ts` at a module root | The module stops being deletable as a unit, and the next file has nowhere obvious to go | A folder per artifact kind, even for one file (`controllers/`, `services/`, `repositories/`, `constants/`) |
+| Service depending on a concrete repository class | The service now knows the persistence technology; swapping or faking it means editing the service | Contract interface behind an injection token |
+| Module exporting a repository | Invites callers to reach past the service and skip its rules | Export the service; others ask the service |
+| `@generated/prisma/*` outside a `*-prisma.repository.ts` or the `prisma` module | ORM types leak into layers that must survive changing the ORM | A new named contract method |
+| Repository returning an ORM model or a response DTO | Couples the caller to either the schema or the wire shape, and usually both | `toDomain()` → domain interface |
+| Business logic in a controller — pre-checks, casts | Unreachable from any other transport and untestable without HTTP | A service method (`deleteById` owns its own 404) |
+| `type` used for an object shape | Loses declaration merging and the folder convention that makes shapes findable (§2) | `interface` in `interfaces/` |
+| Interface, type or enum declared inside a provider, service or controller file | The declaration cannot be deleted with its feature; removal becomes an edit to a shared file | A dedicated file in the owning folder's `interfaces/`, `types/`, `enums/` |
+| Two or more interfaces or types in one file | Same reason, one level down: imports stop showing who depends on what | One declaration per file |
+| A function over 25 lines, or a file over 300 | Past that, review stops catching anything and the seams are already wrong | Extract named private methods, or split the file |
+| `console.log`, or a silent `catch` | Unfilterable in production, and a swallowed error is a bug with no evidence | The levelled logger; every `catch` logs |
+| An endpoint missing auth, throttle, Swagger or serialisation | One omission is a public endpoint, an unbounded query, or a leaked field | The full endpoint checklist, every time |
+| Inline error strings | Two call sites drift, and no client can branch on them | Coded constants |
+| A service throwing `HttpException` / `NotFoundException` | Binds the domain to HTTP; the same service cannot serve a queue consumer or a socket | Domain `AppError` (`NotFoundError`, …); transports map at the edge |
+| A feature module adding codes to a shared errors file | Removing the feature then edits a file other modules own | Module-owned `<module>-errors.constants.ts` |
+| A feature module importing another feature module | Neither is removable any more, and the subtraction test proves it | The event bus, or a core dependency |
+| Two dependent writes issued back to back with no unit of work | A crash between them leaves a state no retry repairs (§7a) | `unitOfWork.run` with the `tx` threaded through both |
+| A service holding a `Prisma.TransactionClient`, or `$transaction` outside a repository | Puts the ORM back in the service layer that §4 exists to keep clean | Opaque `TransactionContextInterface` + `UNIT_OF_WORK` (§7a) |
+| An event, mail or cache write inside `unitOfWork.run` | A rollback cannot un-send them; the side effect outlives the transaction that caused it | Move it after the unit resolves (§7a) |
+| A database write granting access before the Redis write revoking it | A failure between the two leaves access live while the record says revoked — fail open (§7a) | Revoke first: fail safe |

@@ -424,32 +424,42 @@ for anything a human does.
 
 ## 10. Code style
 
-- Single quotes, trailing commas, 2-space indent, 100-column lines — all Biome, all
-  checked by `pnpm exec biome ci .`.
-- `function` declarations for components, hooks and module helpers. Arrow functions
-  for inline callbacks.
-- Early returns; no `else` after `return`. Blank line before `return`.
-- Comments explain *why*. The dense comment blocks in `useNotificationSocket.ts` and
-  `notification-events.constants.ts` are the intended density for anything subtle:
-  they record decisions a reader would otherwise "fix".
-- `logger` from `utils/logger.ts`, never bare `console` — `debug`/`warn` are stripped
-  in production builds, `error` always fires.
-- Never float a promise silently: `void refresh()` where the result is genuinely
-  ignored, `await` everywhere else.
+Biome settles formatting — quotes, commas, indentation, the 100-column limit — and
+`pnpm exec biome ci .` is the arbiter. None of what follows is about how the code
+looks.
 
-## 11. Anti-patterns
+**A dangling promise must look deliberate.** Where the result genuinely does not
+matter, write `void refresh()` so the next reader sees a decision; a bare `refresh()`
+is indistinguishable from someone forgetting the `await`, and everywhere else the
+`await` belongs there.
 
-| Anti-pattern | Instead |
-|---|---|
-| `fetch` outside `utils/apiClient.ts` | An `apis/` function on the client |
-| A component importing from `apis/` | Props from a page, or a hook |
-| A page owning list/cursor/refetch state | A `hooks/<feature>/use…` hook |
-| A hook with an inline return type | `interfaces/use-<name>-result.interface.ts` |
-| Two interfaces in one file | One declaration per file (§3) |
-| `const x = …` with no annotation | Explicit type on every local |
-| `bg-slate-800`, `#1e293b`, any raw colour | A semantic token in `global.css` |
-| A second `io()` call | `useNotificationSocketContext()` |
-| Server data in a Zustand store | State in the hook that fetched it |
-| `console.log` | `logger` |
-| `getByTestId` where a role exists | `getByRole` |
-| `expect(mock).toHaveBeenCalled()` as the only assertion | Assert the rendered output or `result.current` |
+Components, hooks and module-level helpers are `function` declarations, which keeps
+them hoisted and named in stack traces; arrow functions are for callbacks passed
+inline. Prefer an early return to an `else` after a `return`, and leave a blank line
+before the `return`.
+
+Logging goes through `logger` in `utils/logger.ts`, never a bare `console` — `debug`
+and `warn` are stripped from production builds while `error` always fires. Comments
+answer *why*: the dense blocks in `useNotificationSocket.ts` and
+`notification-events.constants.ts` are the intended density for anything subtle,
+because they record decisions a reader would otherwise "fix".
+
+## 11. Review rejections
+
+The middle column is the point: most of these are ordinary React elsewhere, and fail
+here because of a constraint this codebase has chosen.
+
+| Symptom | Why it fails | Do this |
+|---|---|---|
+| `fetch` outside `utils/apiClient.ts` | Bypasses the token refresh single-flight, so a stale token gets no retry and the user is logged out | An `apis/` function on the client |
+| A component importing from `apis/` | Ties rendering to a transport; the component can no longer be tested or reused without a server | Props from a page, or a hook |
+| A page owning list, cursor or refetch state | That state is the feature's, not the route's, and the next page to need it copies it | A `hooks/<feature>/use…` hook |
+| A hook with an inline return type | The shape is unnameable at the call site and drifts from its consumers | `interfaces/use-<name>-result.interface.ts` |
+| Two interfaces in one file | Neither is droppable when a feature is removed; the file becomes a shared edit (§3) | One declaration per file |
+| `const x = …` with no annotation | Inference silently widens or narrows as the source changes, and nothing flags it | Explicit type on every local |
+| `bg-slate-800`, `#1e293b`, any raw colour | Fixed to one theme; the other theme is wrong the moment it ships | A semantic token in `global.css` |
+| A second `io()` call | Two sockets per tab, doubled events, and a reconnect storm that neither owner controls | `useNotificationSocketContext()` |
+| Server data in a Zustand store | Two sources of truth that diverge the moment either refetches | State in the hook that fetched it |
+| `console.log` | Ships to production and cannot be stripped by level | `logger` |
+| `getByTestId` where a role exists | Passes even when the element is unreachable to a screen reader | `getByRole` — the query doubles as an accessibility assertion |
+| `expect(mock).toHaveBeenCalled()` as the only assertion | Proves the test called the mock, not that the app does anything | Assert the rendered output or `result.current` |
