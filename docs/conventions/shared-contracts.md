@@ -55,7 +55,26 @@ file import it?** If only one side would, it belongs to that side. A shared pack
 that accumulates one-sided types stops being a contract and becomes a dumping ground,
 and every fork of this starter inherits the pile.
 
-## 3. Layout and naming
+## 3. Review rejections
+
+These are the shapes that get a contract change sent back. The middle column is the
+reason, because the same symptom is fine in an app and wrong in a shared package.
+
+| Symptom | Why it fails | Do this |
+|---|---|---|
+| `readonly createdAt: Date` in a contract | `Date` does not survive JSON; the client receives a string and the types lie | `readonly createdAt: string` (ISO-8601) |
+| `readonly amount: number` holding 19.99 | Binary floats cannot represent money; the error compounds on every sum | `readonly amountCents: number` holding 1999 |
+| A response DTO without `implements XResponseInterface` | Nothing then couples the DTO to the contract — they drift silently and the compiler never notices | Add it; that clause is the whole drift check |
+| An app-local interface mirroring a shared one | Two definitions of one wire shape, and only one gets updated | Import the shared one |
+| A domain interface — Prisma fields, `Date`s — exported from `shared` | Ships persistence detail to a browser and makes the schema a public contract | Keep it module-private in the API |
+| A `Use…ResultInterface` or store shape in `shared` | It is one app's internal state, not a wire contract; the other consumer inherits noise | The app's own `src/interfaces/` |
+| A formatter or validator in `shared` | The package stops being inert, and every consumer inherits a runtime dependency | Put it in the consumer that needs it |
+| A deep import (`@nest-aws-starter/shared/dist/...`) | Reaches past the barrel into build output that is free to move | The `index.ts` barrel |
+| A relative import inside `shared` without `.js` | `nodenext` resolves the specifier literally; the build fails at the consumer, not here | `from './x.interface.js'` |
+| A new export missing from `index.ts` | Invisible to consumers, and the module fence has nothing to remove | Add the line, with its `// <module:x>` marker |
+| Shipping a contract change without its consumers | Leaves `main` in a state where the API and the frontends disagree | One PR across all three workspaces |
+
+## 4. Layout and naming
 
 Feature folder, then artifact kind, one declaration per file — the same rule as
 [`backend.md` §2](./backend.md):
@@ -100,7 +119,7 @@ packages/shared/src/
   WS push — a row is brand new at the moment it is emitted"). That is knowledge a
   consumer cannot recover from the types.
 
-## 4. Dates are ISO-8601 strings
+## 5. Dates are ISO-8601 strings
 
 **No `Date` appears anywhere in `packages/shared`.** Every timestamp is
 `readonly createdAt: string`, and every nullable one is `string | null`.
@@ -133,7 +152,7 @@ Parse to a `Date` at the point of display and nowhere else. `date`-typed values 
 are not instants — `StatisticsSeriesPointInterface.date` is a `YYYY-MM-DD` day
 bucket — say so in a comment on the field.
 
-## 5. Money is an integer count of cents
+## 6. Money is an integer count of cents
 
 Every monetary amount on the wire is a **whole number of minor currency units**,
 named with a `Cents` suffix, and paired with a `currency` string where the currency
@@ -179,7 +198,7 @@ Multi-currency arithmetic is out of scope for the starter: the statistics module
 filters to one reporting currency (`STATISTIC_REPORTING_CURRENCY`) rather than
 pretending amounts in different currencies can be added.
 
-## 6. `implements` — the drift protection
+## 7. `implements` — the drift protection
 
 A shared interface is only worth having if something breaks when a side stops
 matching it. Both sides are wired so something does.
@@ -223,7 +242,7 @@ query contract verbatim rather than an app-local echo of it.
 forever after the original changes, which is precisely the failure the package
 exists to prevent.
 
-## 7. Change discipline
+## 8. Change discipline
 
 **A contract change is a breaking change for two consumers at once.** There is no
 deployment order that makes it not one — a field the API stopped sending is a field
@@ -259,19 +278,3 @@ both browser apps still read.
 - **Swagger is generated from the DTO, so it follows for free** — as long as the DTO
   is what changed. A field added to the interface but not to the DTO is invisible in
   the docs *and* absent from the response.
-
-## 8. Anti-patterns
-
-| Anti-pattern | Instead |
-|---|---|
-| `readonly createdAt: Date` in a contract | `readonly createdAt: string` (ISO-8601) |
-| `readonly amount: number` holding 19.99 | `readonly amountCents: number` holding 1999 |
-| A response DTO without `implements XResponseInterface` | Add it — that is the whole drift check |
-| An app-local interface mirroring a shared one | Import the shared one |
-| A domain interface (Prisma fields, `Date`s) exported from `shared` | Keep it module-private in the API |
-| A `Use…ResultInterface` or store shape in `shared` | The app's own `src/interfaces/` |
-| A formatter or validator in `shared` | The consumer that needs it; the package stays inert |
-| A deep import (`@nest-aws-starter/shared/dist/...`) | The `index.ts` barrel |
-| A relative import inside `shared` without `.js` | `from './x.interface.js'` — `nodenext` requires it |
-| A new export missing from `index.ts` | Add the line, with its `// <module:x>` marker |
-| Shipping a contract change without its consumers | One PR across all three workspaces |

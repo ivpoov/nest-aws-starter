@@ -1529,27 +1529,31 @@ Leave a blank line between adjacent variable declarations, and before a `return`
 `continue` or `break` inside a block. Write the comment that explains *why*; never the
 one that restates *what* the next line already says.
 
-## 15. Anti-patterns (forbidden)
+## 15. Review rejections
 
-| Anti-pattern | Instead |
-|---|---|
-| Loose `*.controller.ts`/`*.service.ts` at module root | Dedicated folder per artifact kind, even for a single file (`controllers/`, `services/`, `repositories/`, `constants/`) |
-| Service depending on a concrete repository class | Contract interface via injection token |
-| Module exporting a repository | Export the service; others ask the service |
-| `@generated/prisma/*` outside `*-prisma.repository.ts` or the `prisma` module | New named contract method |
-| Repository returning an ORM model or response DTO | `toDomain()` → domain interface |
-| Business logic in a controller (pre-checks, casts) | Service method (`deleteById` owns the 404) |
-| `type` for an object shape | `interface` in `interfaces/` |
-| Interface/type/enum declared inside a provider/service/controller file | Dedicated file in the owning folder's `interfaces/`, `types/`, `enums/` |
-| Two or more interfaces/types in one file | One declaration per file |
-| Function > 25 lines / file > 300 lines | Extract named private methods / split |
-| `console.log`, silent `catch` | Leveled logger; every catch logs |
-| Endpoint missing auth/throttle/Swagger/Serialize | Full endpoint checklist, every time |
-| Inline error strings | Coded constants |
-| Service throwing `HttpException`/`NotFoundException` | Domain `AppError` (`NotFoundError`, …); transports map at the edge |
-| Feature module adding codes to a shared errors file | Module-owned `<module>-errors.constants.ts` |
-| Feature module importing a feature module | Event bus or core dependency |
-| Two dependent writes issued back to back, no unit of work | `unitOfWork.run` with the `tx` threaded into both (§7a) |
-| Service holding a `Prisma.TransactionClient` (or `$transaction` outside a repository) | Opaque `TransactionContextInterface` + `UNIT_OF_WORK` (§7a) |
-| Event, mail, or cache write inside `unitOfWork.run` | After it resolves — a rollback cannot un-send them (§7a) |
-| DB write granting access before the Redis write revoking it | Revoke first: fail safe, not fail open (§7a) |
+Each row is something a reviewer sends back without discussion. The middle column
+carries the reason, because several of these are perfectly normal NestJS elsewhere and
+fail here only because of a constraint this codebase has taken on.
+
+| Symptom | Why it fails | Do this |
+|---|---|---|
+| Loose `*.controller.ts` / `*.service.ts` at a module root | The module stops being deletable as a unit, and the next file has nowhere obvious to go | A folder per artifact kind, even for one file (`controllers/`, `services/`, `repositories/`, `constants/`) |
+| Service depending on a concrete repository class | The service now knows the persistence technology; swapping or faking it means editing the service | Contract interface behind an injection token |
+| Module exporting a repository | Invites callers to reach past the service and skip its rules | Export the service; others ask the service |
+| `@generated/prisma/*` outside a `*-prisma.repository.ts` or the `prisma` module | ORM types leak into layers that must survive changing the ORM | A new named contract method |
+| Repository returning an ORM model or a response DTO | Couples the caller to either the schema or the wire shape, and usually both | `toDomain()` → domain interface |
+| Business logic in a controller — pre-checks, casts | Unreachable from any other transport and untestable without HTTP | A service method (`deleteById` owns its own 404) |
+| `type` used for an object shape | Loses declaration merging and the folder convention that makes shapes findable (§2) | `interface` in `interfaces/` |
+| Interface, type or enum declared inside a provider, service or controller file | The declaration cannot be deleted with its feature; removal becomes an edit to a shared file | A dedicated file in the owning folder's `interfaces/`, `types/`, `enums/` |
+| Two or more interfaces or types in one file | Same reason, one level down: imports stop showing who depends on what | One declaration per file |
+| A function over 25 lines, or a file over 300 | Past that, review stops catching anything and the seams are already wrong | Extract named private methods, or split the file |
+| `console.log`, or a silent `catch` | Unfilterable in production, and a swallowed error is a bug with no evidence | The levelled logger; every `catch` logs |
+| An endpoint missing auth, throttle, Swagger or serialisation | One omission is a public endpoint, an unbounded query, or a leaked field | The full endpoint checklist, every time |
+| Inline error strings | Two call sites drift, and no client can branch on them | Coded constants |
+| A service throwing `HttpException` / `NotFoundException` | Binds the domain to HTTP; the same service cannot serve a queue consumer or a socket | Domain `AppError` (`NotFoundError`, …); transports map at the edge |
+| A feature module adding codes to a shared errors file | Removing the feature then edits a file other modules own | Module-owned `<module>-errors.constants.ts` |
+| A feature module importing another feature module | Neither is removable any more, and the subtraction test proves it | The event bus, or a core dependency |
+| Two dependent writes issued back to back with no unit of work | A crash between them leaves a state no retry repairs (§7a) | `unitOfWork.run` with the `tx` threaded through both |
+| A service holding a `Prisma.TransactionClient`, or `$transaction` outside a repository | Puts the ORM back in the service layer that §4 exists to keep clean | Opaque `TransactionContextInterface` + `UNIT_OF_WORK` (§7a) |
+| An event, mail or cache write inside `unitOfWork.run` | A rollback cannot un-send them; the side effect outlives the transaction that caused it | Move it after the unit resolves (§7a) |
+| A database write granting access before the Redis write revoking it | A failure between the two leaves access live while the record says revoked — fail open (§7a) | Revoke first: fail safe |
