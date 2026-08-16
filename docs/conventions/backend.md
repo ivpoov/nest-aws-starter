@@ -1501,25 +1501,33 @@ No module merges untested; tests land in the same commit series.
 
 ## 14. Code style
 
-- Single quotes, trailing commas, 2-space indent (Biome-enforced).
-- `const` by default; early returns — no `else` after `return`.
-- Empty line between adjacent variable declarations; empty line before
-  `return`/`continue`/`break` inside blocks.
-- Minimal comments — only *why*, never *what*.
-- Path aliases only (`@modules/...`, `@interfaces/...`, `@src/...`); relative imports in
-  `apps/api/src` are blocked by Biome (`style/noRestrictedImports`, configured in the
-  root `biome.json` override for `apps/api/src/**`), so `pnpm exec biome ci .` fails on
-  one. Two deliberate exclusions: `apps/api/test`, whose specs import their own harness
-  siblings (`./app.factory.js`) and which declares no alias of its own, and the two
-  frontends, which import relatively by design (see [`frontend.md`](./frontend.md)).
-- **Every intra-project import ends in `.js`**, aliases included
-  (`@modules/note/services/note.service.js`). `apps/api` is native ESM under
-  `module: nodenext`, so the runtime specifier is what ships; TypeScript resolves the
-  `.ts` behind it. Package imports (`@nestjs/common`, `@nest-aws-starter/shared`) take
-  no extension.
-- Imports are sorted by Biome's organizer (`biome check --write`); do not hand-order
-  them.
-- Always `await` — no floating promises.
+Formatting is not a matter of taste here, and it is not documented here either.
+Biome owns quotes, commas, indentation, line width, import order and `const` over
+`let`; `pnpm exec biome ci .` fails on any deviation and `biome check --write` fixes
+it. Everything below is what Biome cannot decide for you.
+
+**Imports carry the most weight.** Inside `apps/api/src` every import goes through an
+alias — `@modules/…`, `@interfaces/…`, `@src/…` — and a relative one fails the build
+(`style/noRestrictedImports`, in the root `biome.json` override for `apps/api/src/**`).
+Two places sit outside that rule on purpose: `apps/api/test`, whose specs import their
+own harness siblings such as `./app.factory.js` and which declares no alias of its own,
+and the two frontends, which import relatively by design — see
+[`frontend.md`](./frontend.md).
+
+Every intra-project specifier ends in `.js`, aliases included
+(`@modules/note/services/note.service.js`). `apps/api` is native ESM under
+`module: nodenext`, so what you write is what the runtime resolves and TypeScript finds
+the `.ts` behind it. Package imports — `@nestjs/common`, `@nest-aws-starter/shared` —
+take no extension.
+
+**Every promise is either awaited or deliberately discarded.** A promise left dangling
+in a statement is an error nobody will catch and a race nobody will reproduce, so a
+reviewer rejects it on sight rather than asking whether it matters here.
+
+The rest is layout and intent. Prefer an early return to an `else` after a `return`.
+Leave a blank line between adjacent variable declarations, and before a `return`,
+`continue` or `break` inside a block. Write the comment that explains *why*; never the
+one that restates *what* the next line already says.
 
 ## 15. Anti-patterns (forbidden)
 

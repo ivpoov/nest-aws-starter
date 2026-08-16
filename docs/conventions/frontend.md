@@ -424,18 +424,25 @@ for anything a human does.
 
 ## 10. Code style
 
-- Single quotes, trailing commas, 2-space indent, 100-column lines — all Biome, all
-  checked by `pnpm exec biome ci .`.
-- `function` declarations for components, hooks and module helpers. Arrow functions
-  for inline callbacks.
-- Early returns; no `else` after `return`. Blank line before `return`.
-- Comments explain *why*. The dense comment blocks in `useNotificationSocket.ts` and
-  `notification-events.constants.ts` are the intended density for anything subtle:
-  they record decisions a reader would otherwise "fix".
-- `logger` from `utils/logger.ts`, never bare `console` — `debug`/`warn` are stripped
-  in production builds, `error` always fires.
-- Never float a promise silently: `void refresh()` where the result is genuinely
-  ignored, `await` everywhere else.
+Biome settles formatting — quotes, commas, indentation, the 100-column limit — and
+`pnpm exec biome ci .` is the arbiter. None of what follows is about how the code
+looks.
+
+**A dangling promise must look deliberate.** Where the result genuinely does not
+matter, write `void refresh()` so the next reader sees a decision; a bare `refresh()`
+is indistinguishable from someone forgetting the `await`, and everywhere else the
+`await` belongs there.
+
+Components, hooks and module-level helpers are `function` declarations, which keeps
+them hoisted and named in stack traces; arrow functions are for callbacks passed
+inline. Prefer an early return to an `else` after a `return`, and leave a blank line
+before the `return`.
+
+Logging goes through `logger` in `utils/logger.ts`, never a bare `console` — `debug`
+and `warn` are stripped from production builds while `error` always fires. Comments
+answer *why*: the dense blocks in `useNotificationSocket.ts` and
+`notification-events.constants.ts` are the intended density for anything subtle,
+because they record decisions a reader would otherwise "fix".
 
 ## 11. Anti-patterns
 
