@@ -75,7 +75,7 @@ export function UsersPage(): ReactElement {
   if (error && users.length === 0) return <ErrorMessage error={error} />;
 
   return (
-    <div className="flex max-w-4xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
       <form
         className="flex items-end gap-3"
         onSubmit={(event): void => {
