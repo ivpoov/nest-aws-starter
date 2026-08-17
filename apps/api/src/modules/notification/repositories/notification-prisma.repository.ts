@@ -20,7 +20,7 @@ export class NotificationPrismaRepository implements NotificationRepositoryInter
   constructor(private readonly prisma: PrismaService) {}
 
   // USER audience creates its single reader receipt in the same nested
-  // write (eager, per the schema note); ADMIN audience creates only
+  // write (eager); ADMIN audience creates only
   // the row — no per-admin fan-out, receipts are created lazily by
   // markRead/markAllRead below.
   public async create(data: CreateNotificationDataInterface): Promise<NotificationInterface> {

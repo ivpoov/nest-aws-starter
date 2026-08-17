@@ -20,7 +20,7 @@ const config: AuthConfig = {
   jwtSecret: 'unit-test-secret-with-at-least-32-characters',
   accessTtlSec: 900,
   refreshTtlSec: 2_592_000,
-  refreshGraceSec: 30,
+  refreshGraceSec: 7,
 };
 
 const user: UserInterface = {
