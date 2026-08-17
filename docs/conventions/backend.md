@@ -98,7 +98,7 @@ Nothing else is a class merely to describe a shape.
 - The single sanctioned exception: a config file exports its Zod schema-inferred
   `XConfig` type next to `registerAs` — the type is generated from the schema and
   inseparable from it.
-- All properties in interfaces, DTOs, and entities are `readonly`.
+- Every field on a DTO, entity, or domain interface is `readonly`.
 - `any` is forbidden — `unknown` + narrowing.
 - Explicit `public`/`private` on every method and property; explicit return type on
   every public method; explicit type annotation on every local variable.
