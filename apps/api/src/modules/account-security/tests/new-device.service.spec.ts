@@ -25,6 +25,8 @@ const knownSession: SessionForUserInterface = {
   lastActiveAt: new Date(),
   activeUntil: new Date(Date.now() + 60_000),
   isCurrent: false,
+  isImpersonated: false,
+  signedAsAdminId: null,
 };
 
 interface TestSetupInterface {

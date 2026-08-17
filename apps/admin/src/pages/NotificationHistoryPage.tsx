@@ -34,7 +34,7 @@ export function NotificationHistoryPage(): ReactElement {
   }
 
   return (
-    <div className="flex max-w-5xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Notifications</h1>
         {hasUnread ? (

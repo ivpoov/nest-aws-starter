@@ -10,6 +10,7 @@ overrides:
   js-yaml: '>=4.3.1'
   helmet: 8.2.0
   nanoid: 3.3.18
+  deepmerge-ts: 8.0.1
   shell-quote: 1.9.0
   '@prisma/dev': 0.24.17
   hyperid: 4.0.0
@@ -3462,8 +3463,8 @@ packages:
     resolution: {integrity: sha512-oj7KWToJuuxlPr7VV0vabvxEIiqNMo+q0NueIiL3XhtwC6FVOX7Hr1c0C4eD0bmf7Zr+S/dSf2xvkH3Ad6sU3Q==}
     engines: {node: '>=20'}
 
-  deepmerge-ts@7.1.5:
-    resolution: {integrity: sha512-HOJkrhaYsweh+W+e74Yn7YStZOilkoPb6fycpwNLKzSPtruFs48nYis0zy5yJz1+ktUhHxoRDJ27RQAWLIJVJw==}
+  deepmerge-ts@8.0.1:
+    resolution: {integrity: sha512-szCXE7YLCvLKR9bFPJcvsezOShdalctSvrgN/LM/QGUEPZQajwjmsMObZ6/DuANT5lxzM/wtO8Feubwdkz8myA==}
     engines: {node: '>=16.0.0'}
 
   defu@6.1.7:
@@ -7689,7 +7690,7 @@ snapshots:
   '@prisma/config@7.8.0(magicast@0.5.4)':
     dependencies:
       c12: 3.3.4(magicast@0.5.4)
-      deepmerge-ts: 7.1.5
+      deepmerge-ts: 8.0.1
       effect: 3.20.0
       empathic: 2.0.0
     transitivePeerDependencies:
@@ -9474,7 +9475,7 @@ snapshots:
     dependencies:
       mimic-response: 4.0.0
 
-  deepmerge-ts@7.1.5: {}
+  deepmerge-ts@8.0.1: {}
 
   defu@6.1.7: {}
 

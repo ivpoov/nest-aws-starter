@@ -19,5 +19,5 @@ export class DisabledIoAdapter extends IoAdapter {
   // would throw inside socket.io before ever calling back, leaving
   // app.close() hanging on an unresolved promise and SIGTERM never draining.
   // Nothing was opened here, so closing is genuinely a no-op.
-  public override async close(): Promise<void> {}
+  public override async close(_server: Server): Promise<void> {}
 }
