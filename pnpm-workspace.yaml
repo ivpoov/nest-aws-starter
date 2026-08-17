@@ -25,6 +25,16 @@ overrides:
   # postcss asks for ^3.3.11; 3.3.18 is the fix on that line. The advisory was
   # later widened to cover 3.3.17, which this pin previously held.
   nanoid: "3.3.18"
+  # GHSA-ggr8-5vv4-36mx. Stack exhaustion when merging a self-referencing
+  # object graph — availability only, no confidentiality or integrity impact.
+  # It arrives through @prisma/config, which merges this repository's own
+  # prisma config at CLI time, so nothing attacker-controlled ever reaches the
+  # merge and the practical exposure here is nil. Pinned anyway because the
+  # scanner gates on it: @prisma/config asks for exactly 7.1.5 through 7.9.1,
+  # and the fix is only on the 8 line, so an override is the sole lever. The
+  # full suite is what stands behind the major bump — build, unit and e2e all
+  # load Prisma config through this package.
+  "deepmerge-ts": "8.0.1"
   # GHSA-395f-4hp3-45gv (CVSS 8.7). shell-quote reaches the tree through
   # concurrently, which the local `dev` script uses. concurrently 10 pins
   # exactly 1.9.0, so this is the combination upstream itself ships.
