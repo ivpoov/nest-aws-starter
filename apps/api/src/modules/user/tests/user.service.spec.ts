@@ -25,7 +25,11 @@ function createService(overrides: Partial<UserRepositoryInterface> = {}): {
   service: UserService;
   emit: ReturnType<typeof vi.fn>;
 } {
-  const repository: UserRepositoryInterface = {
+  // Only the methods this suite exercises are stubbed. `satisfies` still checks
+  // every name and signature that IS here, so a renamed or re-typed repository
+  // method breaks the build; the cast covers absence alone, and a service
+  // reaching for an unstubbed method fails loudly as "not a function".
+  const stubs = {
     createWithEmailMethod: vi.fn().mockResolvedValue(user),
     createWithOauthMethod: vi.fn().mockResolvedValue(user),
     findById: vi.fn().mockResolvedValue(user),
@@ -33,7 +37,8 @@ function createService(overrides: Partial<UserRepositoryInterface> = {}): {
     updateProfile: vi.fn().mockResolvedValue(user),
     updateStatus: vi.fn().mockResolvedValue(user),
     ...overrides,
-  };
+  } satisfies Partial<UserRepositoryInterface>;
+  const repository: UserRepositoryInterface = stubs as UserRepositoryInterface;
   const emit = vi.fn();
   const eventBus = { emit } as unknown as EventBusService;
 

@@ -93,8 +93,10 @@ describe('FacebookOauthProvider', () => {
 
     await provider.exchangeCode('fb-code');
 
+    // `vi.fn()` records its arguments as `any[]`, so the first one is narrowed
+    // here rather than declared as a tuple the recorded type cannot satisfy.
     const urls: string = request.mock.calls
-      .map((call: [{ url: string }]): string => call[0].url)
+      .map((call: unknown[]): string => (call[0] as { url: string }).url)
       .join('\n');
 
     expect(urls).not.toContain('fb-secret');

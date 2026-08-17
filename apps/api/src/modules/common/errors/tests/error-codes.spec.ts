@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
+// Vitest resolves `import.meta.glob` through Vite at load time, but `vite` is
+// not a direct dependency of this workspace, so `vite/client` — where the type
+// lives — does not resolve from here. Only the single eager form this suite
+// uses is declared; anything else should fail to compile rather than be
+// silently typed as `any`.
+declare global {
+  interface ImportMeta {
+    glob(
+      pattern: string,
+      options: { readonly eager: true },
+    ): Record<string, Record<string, unknown>>;
+  }
+}
+
 interface ErrorArgsLikeInterface {
   readonly code: string;
   readonly details: string;
