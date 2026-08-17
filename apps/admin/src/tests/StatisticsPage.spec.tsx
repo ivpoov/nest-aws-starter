@@ -65,6 +65,20 @@ describe('StatisticsPage', () => {
     expect(screen.getAllByText('—')).toHaveLength(2);
   });
 
+  // The container caps its width, so without `mx-auto` every page sits hard
+  // against the left edge and the gutters grow lopsided as the viewport does.
+  it('centres its container rather than letting it settle against the left edge', async () => {
+    vi.mocked(statisticsApi.fetchStatisticsOverview).mockResolvedValue(OVERVIEW as never);
+
+    const { container } = render(<StatisticsPage />);
+    const wrapper: Element | null = container.firstElementChild;
+
+    expect(await screen.findByText('42')).toBeInTheDocument();
+    expect(wrapper).not.toBeNull();
+    expect(wrapper?.className).toContain('mx-auto');
+    expect(wrapper?.className).toContain('max-w-5xl');
+  });
+
   it('shows the error state when the overview request fails', async () => {
     vi.mocked(statisticsApi.fetchStatisticsOverview).mockRejectedValue({
       statusCode: 500,

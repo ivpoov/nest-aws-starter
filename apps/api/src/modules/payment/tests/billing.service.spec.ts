@@ -82,10 +82,15 @@ function createService(
     canceledSubscription?: SubscriptionInterface | null;
   } = {},
 ): TestSetupInterface {
-  const planRepository: PlanRepositoryInterface = {
+  // Billing only ever reads the two active-plan lookups. `satisfies` keeps both
+  // names and signatures checked against the real interface; the cast covers
+  // the methods deliberately left off, which fail loudly if anything reaches
+  // for them.
+  const planStubs = {
     findActiveById: vi.fn().mockResolvedValue(options.plan === undefined ? plan : options.plan),
     findManyActive: vi.fn().mockResolvedValue([plan]),
-  };
+  } satisfies Partial<PlanRepositoryInterface>;
+  const planRepository: PlanRepositoryInterface = planStubs as unknown as PlanRepositoryInterface;
   const subscriptionRepository: SubscriptionRepositoryInterface = {
     findCurrentByUserId: vi
       .fn()

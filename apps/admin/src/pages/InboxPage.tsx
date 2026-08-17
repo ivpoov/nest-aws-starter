@@ -76,7 +76,7 @@ export function InboxPage(): ReactElement {
   if (error && messages.length === 0) return <ErrorMessage error={error} onRetry={reload} />;
 
   return (
-    <div className="flex max-w-4xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
       <ContactStatusFilter status={status} onChange={setStatus} />
       {isDeepLinkUnresolved ? (
         <div

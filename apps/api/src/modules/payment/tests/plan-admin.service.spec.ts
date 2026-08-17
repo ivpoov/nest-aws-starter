@@ -24,9 +24,12 @@ const plan: PlanInterface = {
   updatedAt: new Date('2026-08-01T00:00:00Z'),
 };
 
+// Ref validation is an optional provider capability the service narrows to with
+// an `in` check, so the return type has to admit it as optional — a plain
+// PaymentProviderInterface cannot express the provider these tests build.
 function fakeProvider(
   overrides: Partial<PaymentProviderInterface & PaymentProviderRefValidatorInterface> = {},
-): PaymentProviderInterface {
+): PaymentProviderInterface & Partial<PaymentProviderRefValidatorInterface> {
   return {
     name: 'STRIPE',
     createCheckoutSession: vi.fn(),

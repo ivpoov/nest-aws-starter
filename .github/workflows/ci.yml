@@ -79,11 +79,20 @@ jobs:
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
       # `pnpm run build` type-checks src only (tsconfig.build.json excludes
-      # test/), and vitest never type-checks — so without this an e2e spec
-      # could import a symbol that no longer exists and only fail at runtime.
-      # It is also the gate scripts/subtraction-test.mjs runs per subtracted
-      # module, kept on every PR so a break shows up here first.
-      - run: pnpm --dir apps/api exec tsc --noEmit -p tsconfig.e2e.json
+      # test/), and vitest never type-checks — so without this a spec could
+      # import a symbol that no longer exists and only fail at runtime.
+      #
+      # The default tsconfig.json, NOT tsconfig.e2e.json: the e2e config
+      # excludes `**/*.spec.ts`, which left every unit spec unchecked by
+      # anything, anywhere. That exclusion had accumulated 12 type errors —
+      # mocks missing interface methods, fixtures missing fields — none of
+      # which any suite could report, because a green vitest run says nothing
+      # about types. tsconfig.json includes src and test with no exclusions,
+      # so it subsumes the e2e pass rather than sitting beside it.
+      #
+      # tsconfig.e2e.json still exists for scripts/subtraction-test.mjs, which
+      # type-checks each subtracted tree without the unit specs.
+      - run: pnpm --dir apps/api run typecheck
       - run: pnpm run test:e2e
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
