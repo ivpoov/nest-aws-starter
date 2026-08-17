@@ -18,7 +18,7 @@ export function StatisticsPage(): ReactElement {
   const revenue = useStatisticsSeries(StatisticsMetricEnum.REVENUE, revenueDays); // <module:payment>
 
   return (
-    <div className="flex max-w-5xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <KpiTiles
         totals={overview.overview?.totals ?? null}
         isLoading={overview.isLoading}

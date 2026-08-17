@@ -18,7 +18,7 @@ export function TransactionsPage(): ReactElement {
   const { transactions, hasMore, isLoading, error, loadMore } = useAdminTransactions(filters);
 
   return (
-    <div className="flex max-w-5xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
       <h1 className="text-lg font-semibold">Transactions</h1>
       <TransactionFilterBar
         filters={filters}
