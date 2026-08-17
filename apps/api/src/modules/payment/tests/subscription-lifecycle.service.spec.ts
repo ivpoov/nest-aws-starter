@@ -91,7 +91,12 @@ describe('SubscriptionLifecycleService', () => {
       findManyByUserAfter: vi.fn(),
       findManyForAdmin: vi.fn(),
     };
-    planRepository = { findActiveById: vi.fn(), findManyActive: vi.fn() };
+    // Only the two active-plan lookups are reachable from this service; the
+    // cast covers the rest of the interface, which nothing here touches.
+    planRepository = {
+      findActiveById: vi.fn(),
+      findManyActive: vi.fn(),
+    } satisfies Partial<PlanRepositoryInterface> as unknown as PlanRepositoryInterface;
     eventBus = { emit: vi.fn() } as unknown as EventBusService;
     contexts = [];
     service = new SubscriptionLifecycleService(

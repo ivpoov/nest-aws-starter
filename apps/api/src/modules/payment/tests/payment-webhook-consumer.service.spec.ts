@@ -74,14 +74,19 @@ function createService(
   const event: WebhookEventInterface | null =
     options.event === undefined ? baseEvent() : options.event;
 
-  const webhookEventRepository: WebhookEventRepositoryInterface = {
+  // The retry-sweep methods belong to the scheduled reconciler, not the
+  // consumer under test. `satisfies` keeps what is stubbed honest against the
+  // interface; the cast covers the three left off.
+  const webhookEventStubs = {
     upsertReceived: vi.fn(),
     findById: vi.fn().mockResolvedValue(event),
     markProcessed: vi.fn().mockResolvedValue(undefined),
     markSkipped: vi.fn().mockResolvedValue(undefined),
     markFailed: vi.fn().mockResolvedValue(undefined),
     recordFailure: vi.fn().mockResolvedValue(1),
-  };
+  } satisfies Partial<WebhookEventRepositoryInterface>;
+  const webhookEventRepository: WebhookEventRepositoryInterface =
+    webhookEventStubs as unknown as WebhookEventRepositoryInterface;
   const sqsProvider: SqsProviderInterface = {
     sendMessage: vi.fn(),
     receiveMessages: vi.fn(),
@@ -276,7 +281,7 @@ describe('PaymentWebhookConsumerService.processMessages (loop containment)', () 
         markSkipped: vi.fn(),
         markFailed: vi.fn(),
         recordFailure: vi.fn(),
-      };
+      } satisfies Partial<WebhookEventRepositoryInterface> as unknown as WebhookEventRepositoryInterface;
       const sqsProvider: SqsProviderInterface = {
         sendMessage: vi.fn(),
         receiveMessages: vi.fn(),

@@ -58,7 +58,9 @@ function createService(
     upsertResult?: UpsertWebhookEventResultInterface;
   } = {},
 ): TestSetupInterface {
-  const webhookEventRepository: WebhookEventRepositoryInterface = {
+  // Ingest never runs the retry sweep, so those three methods are left off and
+  // the cast covers their absence; everything stubbed stays signature-checked.
+  const webhookEventStubs = {
     upsertReceived: vi
       .fn()
       .mockResolvedValue(options.upsertResult ?? { event: webhookEvent, isNew: true }),
@@ -67,7 +69,9 @@ function createService(
     markSkipped: vi.fn(),
     markFailed: vi.fn(),
     recordFailure: vi.fn(),
-  };
+  } satisfies Partial<WebhookEventRepositoryInterface>;
+  const webhookEventRepository: WebhookEventRepositoryInterface =
+    webhookEventStubs as unknown as WebhookEventRepositoryInterface;
   const sqsProvider: SqsProviderInterface = {
     sendMessage: vi.fn().mockResolvedValue('message-id'),
     receiveMessages: vi.fn(),
