@@ -85,10 +85,15 @@ function throwingClassesByConstant(): Map<string, Set<string>> {
 // to a 500 whose body is deliberately generic, and the bootstrap guards abort
 // the process before it serves anything. Adding a code here is a claim that no
 // client will ever need it — make it deliberately.
+//
+// Entries belonging to a REMOVABLE module carry that module's fence marker.
+// Without it the entry outlives the constants file it excuses, and the
+// staleness check below fails on every subtracted tree — which is exactly what
+// it is for, so the marker is the fix rather than a weaker assertion.
 const NEVER_ON_THE_WIRE: ReadonlySet<string> = new Set<string>([
   'INTERNAL_SERVER_ERROR',
   'ACCOUNT_SECURITY_LOCKOUT_COUNTER_UNAVAILABLE',
-  'CLOUDFRONT_SIGNER_DISABLED',
+  'CLOUDFRONT_SIGNER_DISABLED', // <module:cloudfront>
   'HTTP_REQUEST_FAILED',
   'LAMBDA_INVOCATION_FAILED',
   'LAMBDA_PROVIDER_DISABLED',
@@ -97,7 +102,7 @@ const NEVER_ON_THE_WIRE: ReadonlySet<string> = new Set<string>([
   'S3_PROVIDER_DISABLED',
   'SNS_PROVIDER_DISABLED',
   'SQS_PROVIDER_DISABLED',
-  'STRIPE_CHECKOUT_URL_MISSING',
+  'STRIPE_CHECKOUT_URL_MISSING', // <module:payment>
   // Bootstrap refusals: main.ts exits, so there is no response to carry them.
   'PRODUCTION_DEVELOPMENT_DEFAULT',
   'PRODUCTION_UNAUTHENTICATED_SWAGGER',

@@ -93,6 +93,7 @@ export * from './payments/interfaces/update-plan-request.interface.js'; // <modu
 export * from './payments/types/payment-error-code.type.js'; // <module:payment>
 export * from './sessions/interfaces/revoked-sessions-response.interface.js';
 export * from './sessions/interfaces/session-response.interface.js';
+export * from './statistics/constants/statistic-error-codes.constants.js'; // <module:statistic>
 export * from './statistics/enums/statistics-metric.enum.js'; // <module:statistic>
 export * from './statistics/interfaces/statistics-count-breakdown.interface.js'; // <module:statistic>
 export * from './statistics/interfaces/statistics-overview-response.interface.js'; // <module:statistic>
@@ -100,6 +101,7 @@ export * from './statistics/interfaces/statistics-revenue-by-plan.interface.js';
 export * from './statistics/interfaces/statistics-series-point.interface.js'; // <module:statistic>
 export * from './statistics/interfaces/statistics-series-response.interface.js'; // <module:statistic>
 export * from './statistics/interfaces/statistics-totals.interface.js'; // <module:statistic>
+export * from './statistics/types/statistic-error-code.type.js'; // <module:statistic>
 export * from './users/constants/user-error-codes.constants.js';
 export * from './users/enums/auth-method-type.enum.js';
 export * from './users/enums/user-role.enum.js';
