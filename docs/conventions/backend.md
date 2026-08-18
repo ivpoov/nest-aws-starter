@@ -888,6 +888,35 @@ export class NoteModule {}
 `exports: [NoteService]` — services only, always. Swapping the database is this
 one `useClass` line per module.
 
+**What the module graph does and does not enforce.** Nineteen modules are
+`@Global()` — the infrastructure providers, and a handful of feature modules
+whose services register themselves from a factory (`payment`, `oauth`, `file`,
+`notification`, `token`, `casl`). A `@Global()` export is injectable anywhere,
+whether or not the consuming module lists it in `imports`. So the module graph
+is **not** what keeps modules apart here, and reading an `imports` array will not
+tell you what a module actually depends on.
+
+That is a deliberate trade, and the thing bought is removability. A removable
+module that every consumer had to name in its own `imports` could not be deleted
+without editing all of them, and each of those edits would need its own fence
+marker — the subtraction test would be maintaining the module graph rather than
+proving anything about it. Registration through `@Global()` keeps deletion to
+one folder plus the fenced references.
+
+The boundary is therefore enforced by the two rules below, not by Nest:
+
+- **Depend on contracts, never on implementations** (§1). A service injected by
+  its token from a feature module you did not import is the same violation
+  whether or not the container would have stopped you.
+- **The subtraction test.** `node scripts/subtraction-test.mjs` deletes each
+  optional module and type-checks the remainder. A dependency the graph would
+  have allowed but the design forbids fails there, which is the only place it
+  can fail.
+
+If you want the container to enforce it too, drop `@Global()` from the feature
+modules and add explicit `imports` — but expect to fence every one of those
+import lines, and read the subtraction recipes before you start.
+
 ## 10. Logging
 
 `CustomLoggerService` (structured JSON in production), context = class name, one
