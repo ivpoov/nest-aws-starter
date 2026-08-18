@@ -4,12 +4,17 @@
 console already built, tested and wired to AWS — clone it, rename it, and ship
 your idea instead of your login form.**
 
+### 📖 [Read the docs →](https://ivpoov.github.io/nest-aws-starter/)
+
+Everything below, plus the architecture map, all 11 ADRs, the conventions and
+the per-module removal recipes — rendered, cross-linked and searchable.
+
 Starters usually hand you a login form and leave. This one hands you the parts
 that come after it: OAuth account linking, revocable sessions, Stripe
 subscriptions whose webhooks drain through SQS, real-time notifications with a
 per-user preference matrix, a role-gated admin console, and Terraform for the
-whole AWS footprint. Every module ships unit *and* e2e tests — 46 e2e spec files
-against real Postgres, Redis and LocalStack, plus 156 unit spec files across the
+whole AWS footprint. Every module ships unit *and* e2e tests — 49 e2e spec files
+against real Postgres, Redis and LocalStack, plus 167 unit spec files across the
 API and both frontends — and every optional module has a generated removal
 recipe that CI proves the tree still builds without.
 
@@ -343,10 +348,13 @@ gh workflow run deploy.yml -f sha=<earlier-commit-sha>
 
 ## Documentation
 
+Everything below is also published as a searchable site:
+**<https://ivpoov.github.io/nest-aws-starter/>**
+
 | | |
 |---|---|
 | [`docs/architecture.md`](docs/architecture.md) | Request lifecycle, event map, caching tiers, the AWS surface. **Start here.** |
-| [`docs/decisions/`](docs/decisions/) | 10 ADRs — why each choice was made, and what it cost. |
+| [`docs/decisions/`](docs/decisions/) | 11 ADRs — why each choice was made, and what it cost. |
 | [`docs/conventions/`](docs/conventions/) | The law of this repository: [backend](docs/conventions/backend.md), [frontend](docs/conventions/frontend.md), [shared contracts](docs/conventions/shared-contracts.md). |
 | [`docs/guides/adding-a-module.md`](docs/guides/adding-a-module.md) | One feature module built file by file — schema, migration, contract, repository, service, DTOs, permissions, controller, tests, fences. |
 | [`docs/guides/container.md`](docs/guides/container.md) | The API image, its layer cache, and running it against the compose stack. |
