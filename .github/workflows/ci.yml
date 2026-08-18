@@ -78,6 +78,14 @@ jobs:
       - run: pnpm run test
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+      # Coverage is measured, not just produced: vitest.config.ts carries
+      # thresholds set from the real figures, so a change that deletes tests or
+      # adds untested branches fails here instead of passing quietly behind a
+      # green suite. Runs after the plain suite so a genuine test failure is
+      # reported as a test failure rather than as a coverage shortfall.
+      - run: pnpm --dir apps/api run test:cov
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
       # `pnpm run build` type-checks src only (tsconfig.build.json excludes
       # test/), and vitest never type-checks — so without this a spec could
       # import a symbol that no longer exists and only fail at runtime.
