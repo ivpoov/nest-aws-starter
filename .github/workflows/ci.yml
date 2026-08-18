@@ -16,8 +16,14 @@ name: ci
 # comment, because review stops reading the SHA.
 
 on:
+  # Every branch on the promotion path — feature → dev → staging → main — not
+  # main alone. A pull request check tests a SIMULATED merge of head into base;
+  # the merge commit that actually lands is a different commit and, until this
+  # covered dev and staging, was never built anywhere. Only main got that
+  # confirmation, so a promotion could put something on staging that no run had
+  # ever seen.
   push:
-    branches: [main]
+    branches: [dev, staging, main]
   pull_request:
 
 concurrency:
