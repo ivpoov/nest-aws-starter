@@ -86,6 +86,8 @@ and the markers themselves.
   - line 39: `stripeConfig, // <module:payment>`
 - `apps/api/src/modules/common/constants/development-defaults.constants.ts`
   - lines 70-81 (block)
+- `apps/api/src/modules/common/errors/tests/error-code-contract.spec.ts`
+  - line 105: `'STRIPE_CHECKOUT_URL_MISSING', // <module:payment>`
 - `apps/api/src/modules/statistic/interfaces/statistic-repository.interface.ts`
   - lines 3-5 (block)
   - lines 13-17 (block)
@@ -173,24 +175,24 @@ and the markers themselves.
   - lines 29-41 (block)
   - lines 120-162 (block)
 - `packages/shared/src/index.ts`
-  - line 70: `export * from './payments/constants/payment-error-codes.constants.js'; // <module:payment>`
-  - line 71: `export * from './payments/enums/subscription-status.enum.js'; // <module:payment>`
-  - line 72: `export * from './payments/enums/transaction-status.enum.js'; // <module:payment>`
-  - line 73: `export * from './payments/interfaces/admin-plan-list-response.interface.js'; // <module:payment>`
-  - line 74: `export * from './payments/interfaces/admin-plan-response.interface.js'; // <module:payment>`
-  - line 75: `export * from './payments/interfaces/admin-transaction-list-response.interface.js'; // <module:payment>`
-  - line 76: `export * from './payments/interfaces/admin-transaction-response.interface.js'; // <module:payment>`
-  - line 77: `export * from './payments/interfaces/checkout-response.interface.js'; // <module:payment>`
-  - line 78: `export * from './payments/interfaces/create-checkout-request.interface.js'; // <module:payment>`
-  - line 79: `export * from './payments/interfaces/create-plan-request.interface.js'; // <module:payment>`
-  - line 80: `export * from './payments/interfaces/public-plan-response.interface.js'; // <module:payment>`
-  - line 81: `export * from './payments/interfaces/public-plans-response.interface.js'; // <module:payment>`
-  - line 82: `export * from './payments/interfaces/subscription-response.interface.js'; // <module:payment>`
-  - line 83: `export * from './payments/interfaces/transaction-list-response.interface.js'; // <module:payment>`
-  - line 84: `export * from './payments/interfaces/transaction-response.interface.js'; // <module:payment>`
-  - line 85: `export * from './payments/interfaces/update-plan-activation-request.interface.js'; // <module:payment>`
-  - line 86: `export * from './payments/interfaces/update-plan-request.interface.js'; // <module:payment>`
-  - line 87: `export * from './payments/types/payment-error-code.type.js'; // <module:payment>`
+  - line 76: `export * from './payments/constants/payment-error-codes.constants.js'; // <module:payment>`
+  - line 77: `export * from './payments/enums/subscription-status.enum.js'; // <module:payment>`
+  - line 78: `export * from './payments/enums/transaction-status.enum.js'; // <module:payment>`
+  - line 79: `export * from './payments/interfaces/admin-plan-list-response.interface.js'; // <module:payment>`
+  - line 80: `export * from './payments/interfaces/admin-plan-response.interface.js'; // <module:payment>`
+  - line 81: `export * from './payments/interfaces/admin-transaction-list-response.interface.js'; // <module:payment>`
+  - line 82: `export * from './payments/interfaces/admin-transaction-response.interface.js'; // <module:payment>`
+  - line 83: `export * from './payments/interfaces/checkout-response.interface.js'; // <module:payment>`
+  - line 84: `export * from './payments/interfaces/create-checkout-request.interface.js'; // <module:payment>`
+  - line 85: `export * from './payments/interfaces/create-plan-request.interface.js'; // <module:payment>`
+  - line 86: `export * from './payments/interfaces/public-plan-response.interface.js'; // <module:payment>`
+  - line 87: `export * from './payments/interfaces/public-plans-response.interface.js'; // <module:payment>`
+  - line 88: `export * from './payments/interfaces/subscription-response.interface.js'; // <module:payment>`
+  - line 89: `export * from './payments/interfaces/transaction-list-response.interface.js'; // <module:payment>`
+  - line 90: `export * from './payments/interfaces/transaction-response.interface.js'; // <module:payment>`
+  - line 91: `export * from './payments/interfaces/update-plan-activation-request.interface.js'; // <module:payment>`
+  - line 92: `export * from './payments/interfaces/update-plan-request.interface.js'; // <module:payment>`
+  - line 93: `export * from './payments/types/payment-error-code.type.js'; // <module:payment>`
 
 ### Not yet fence-marked (edit by hand)
 

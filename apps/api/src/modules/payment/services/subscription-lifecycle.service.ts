@@ -249,6 +249,20 @@ export class SubscriptionLifecycleService implements SubscriptionLifecycleInterf
 
     if (!subscription) return;
 
+    // Same terminal guard as cancel(), and for a sharper reason: providers
+    // deliver out of order, so a SUBSCRIPTION_UPDATED emitted before a
+    // cancellation can arrive after it. Without this, that late event pushes
+    // currentPeriodEndsAt forward on an already CANCELED or EXPIRED row and
+    // hands back paid access nobody is paying for — and nothing downstream
+    // corrects it, because the expiry sweep only looks at rows still ACTIVE.
+    if (this.isTerminal(subscription.status)) {
+      this.logger.debug(
+        `syncPeriodFromProvider no-op — status is ${subscription.status}: ${subscription.id}`,
+      );
+
+      return;
+    }
+
     await this.subscriptionRepository.updatePeriodEnd(subscription.id, periodEndsAt);
   }
 

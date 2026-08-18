@@ -126,17 +126,19 @@ and the markers themselves.
 - `apps/admin/src/constants/admin-nav-items.constants.ts`
   - line 15: `{ to: '/notifications', label: 'Notifications' }, // <module:notification>`
 - `packages/shared/src/index.ts`
-  - line 59: `export * from './notifications/enums/notification-audience.enum.js'; // <module:notification>`
-  - line 60: `export * from './notifications/enums/notification-channel.enum.js'; // <module:notification>`
-  - line 61: `export * from './notifications/enums/notification-type.enum.js'; // <module:notification>`
-  - line 62: `export * from './notifications/interfaces/notification-list-response.interface.js'; // <module:notification>`
-  - line 63: `export * from './notifications/interfaces/notification-preference-response.interface.js'; // <module:notification>`
-  - line 64: `export * from './notifications/interfaces/notification-preferences-response.interface.js'; // <module:notification>`
-  - line 65: `export * from './notifications/interfaces/notification-response.interface.js'; // <module:notification>`
-  - line 66: `export * from './notifications/interfaces/notifications-query-request.interface.js'; // <module:notification>`
-  - line 67: `export * from './notifications/interfaces/unread-count-response.interface.js'; // <module:notification>`
-  - line 68: `export * from './notifications/interfaces/update-notification-preference-request.interface.js'; // <module:notification>`
-  - line 69: `export * from './notifications/interfaces/update-notification-preferences-request.interface.js'; // <module:notification>`
+  - line 63: `export * from './notifications/constants/notification-error-codes.constants.js'; // <module:notification>`
+  - line 64: `export * from './notifications/enums/notification-audience.enum.js'; // <module:notification>`
+  - line 65: `export * from './notifications/enums/notification-channel.enum.js'; // <module:notification>`
+  - line 66: `export * from './notifications/enums/notification-type.enum.js'; // <module:notification>`
+  - line 67: `export * from './notifications/interfaces/notification-list-response.interface.js'; // <module:notification>`
+  - line 68: `export * from './notifications/interfaces/notification-preference-response.interface.js'; // <module:notification>`
+  - line 69: `export * from './notifications/interfaces/notification-preferences-response.interface.js'; // <module:notification>`
+  - line 70: `export * from './notifications/interfaces/notification-response.interface.js'; // <module:notification>`
+  - line 71: `export * from './notifications/interfaces/notifications-query-request.interface.js'; // <module:notification>`
+  - line 72: `export * from './notifications/interfaces/unread-count-response.interface.js'; // <module:notification>`
+  - line 73: `export * from './notifications/interfaces/update-notification-preference-request.interface.js'; // <module:notification>`
+  - line 74: `export * from './notifications/interfaces/update-notification-preferences-request.interface.js'; // <module:notification>`
+  - line 75: `export * from './notifications/types/notification-error-code.type.js'; // <module:notification>`
 
 ### Not yet fence-marked (edit by hand)
 

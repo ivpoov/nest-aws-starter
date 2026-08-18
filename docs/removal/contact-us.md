@@ -69,11 +69,13 @@ and the markers themselves.
   - lines 17-19 (block)
   - lines 37-41 (block)
 - `packages/shared/src/index.ts`
-  - line 39: `export * from './contact/enums/contact-message-status.enum.js'; // <module:contact-us>`
-  - line 40: `export * from './contact/interfaces/contact-message-list-response.interface.js'; // <module:contact-us>`
-  - line 41: `export * from './contact/interfaces/contact-message-response.interface.js'; // <module:contact-us>`
-  - line 42: `export * from './contact/interfaces/create-contact-request.interface.js'; // <module:contact-us>`
-  - line 43: `export * from './contact/interfaces/update-contact-message-status-request.interface.js'; // <module:contact-us>`
+  - line 41: `export * from './contact/constants/contact-error-codes.constants.js'; // <module:contact-us>`
+  - line 42: `export * from './contact/enums/contact-message-status.enum.js'; // <module:contact-us>`
+  - line 43: `export * from './contact/interfaces/contact-message-list-response.interface.js'; // <module:contact-us>`
+  - line 44: `export * from './contact/interfaces/contact-message-response.interface.js'; // <module:contact-us>`
+  - line 45: `export * from './contact/interfaces/create-contact-request.interface.js'; // <module:contact-us>`
+  - line 46: `export * from './contact/interfaces/update-contact-message-status-request.interface.js'; // <module:contact-us>`
+  - line 47: `export * from './contact/types/contact-error-code.type.js'; // <module:contact-us>`
 
 ### Not yet fence-marked (edit by hand)
 

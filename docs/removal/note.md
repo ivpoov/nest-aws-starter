@@ -42,13 +42,13 @@ and the markers themselves.
 - `apps/web/src/constants/app-nav-items.constants.ts`
   - line 9: `{ to: '/notes', label: 'Notes' }, // <module:note>`
 - `packages/shared/src/index.ts`
-  - line 52: `export * from './notes/constants/note-error-codes.constants.js'; // <module:note>`
-  - line 53: `export * from './notes/enums/note-status.enum.js'; // <module:note>`
-  - line 54: `export * from './notes/interfaces/create-note-request.interface.js'; // <module:note>`
-  - line 55: `export * from './notes/interfaces/note-list-response.interface.js'; // <module:note>`
-  - line 56: `export * from './notes/interfaces/note-response.interface.js'; // <module:note>`
-  - line 57: `export * from './notes/interfaces/update-note-request.interface.js'; // <module:note>`
-  - line 58: `export * from './notes/types/note-error-code.type.js'; // <module:note>`
+  - line 56: `export * from './notes/constants/note-error-codes.constants.js'; // <module:note>`
+  - line 57: `export * from './notes/enums/note-status.enum.js'; // <module:note>`
+  - line 58: `export * from './notes/interfaces/create-note-request.interface.js'; // <module:note>`
+  - line 59: `export * from './notes/interfaces/note-list-response.interface.js'; // <module:note>`
+  - line 60: `export * from './notes/interfaces/note-response.interface.js'; // <module:note>`
+  - line 61: `export * from './notes/interfaces/update-note-request.interface.js'; // <module:note>`
+  - line 62: `export * from './notes/types/note-error-code.type.js'; // <module:note>`
 
 ### Not yet fence-marked (edit by hand)
 

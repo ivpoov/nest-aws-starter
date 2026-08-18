@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { buildPolicy } from '../../vite.config';
 
 // index.html is read from disk on purpose: the policy authorises the inline
@@ -42,5 +42,41 @@ describe('content security policy', () => {
 
     expect(policy).toContain('http://localhost:3000');
     expect(policy).toContain('ws://localhost:3000');
+  });
+
+  // The `https:` fallback is the policy's weakest point — it authorises every
+  // TLS origin there is. It exists only because presigned media origins are
+  // not known at build time, so a deployment that DOES know them must be able
+  // to spend that knowledge on a narrower policy.
+  describe('media origins', () => {
+    const ORIGINAL: string | undefined = process.env.VITE_MEDIA_ORIGINS;
+
+    afterEach(() => {
+      if (ORIGINAL === undefined) delete process.env.VITE_MEDIA_ORIGINS;
+      else process.env.VITE_MEDIA_ORIGINS = ORIGINAL;
+    });
+
+    it('falls back to the https: wildcard when no origins are configured', () => {
+      delete process.env.VITE_MEDIA_ORIGINS;
+
+      const policy: string = buildPolicy(html);
+
+      expect(policy).toContain("img-src 'self' data: blob: https:");
+    });
+
+    it('drops the wildcard from both directives once origins are configured', () => {
+      process.env.VITE_MEDIA_ORIGINS = 'https://cdn.example.com, https://bucket.example.com';
+
+      const policy: string = buildPolicy(html);
+      const imgSrc: string = policy.split('; ').find((d: string) => d.startsWith('img-src')) ?? '';
+      const connectSrc: string =
+        policy.split('; ').find((d: string) => d.startsWith('connect-src')) ?? '';
+
+      expect(imgSrc).toContain('https://cdn.example.com');
+      expect(imgSrc).toContain('https://bucket.example.com');
+      expect(imgSrc.split(' ')).not.toContain('https:');
+      expect(connectSrc).toContain('https://cdn.example.com');
+      expect(connectSrc.split(' ')).not.toContain('https:');
+    });
   });
 });
