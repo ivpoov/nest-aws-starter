@@ -2,25 +2,42 @@ name: codeql
 
 # Static analysis of the JavaScript/TypeScript in this repository.
 #
-# BUDGET: this is the most expensive gate here — a few minutes per run, and it
-# cannot reuse the pnpm cache — so it is deliberately NOT wired to `push`.
-# Pull requests plus one weekly sweep is the whole trigger set; the weekly run
-# exists because CodeQL's query packs improve over time, so yesterday's clean
-# analysis is not a permanent answer for code that has not changed.
+# WHY `push` IS HERE. Code scanning alerts only reach the Security tab from
+# analyses of a PUSH to the default branch. Pull-request runs gate the pull
+# request and are then discarded; without a push trigger CodeQL computes its
+# findings and throws them away, and the Security tab stays empty no matter
+# what it saw. GitHub says so itself, as a warning annotation on every run:
+# "Please specify an on.push hook to analyze and see code scanning alerts from
+# the default branch on the Security tab."
 #
-# VISIBILITY: uploading CodeQL results needs GitHub Code Security, which on a
-# personal Free/Pro account is available only while the repository is PUBLIC.
-# This repository is still private, and on a private repository the analyze
-# step fails with a 403 — which would paint every pull request red for a
-# reason nobody can fix from here. So the job is gated on the repository being
-# public: while private it skips cleanly, and the day visibility flips it
-# starts analysing by itself. There is nothing to remember to switch on.
+# `main` is here alongside the default branch because that is the released
+# tree, and an alert against what is tagged is worth more than one against what
+# is merely merged.
 #
-# The `paths` filter keeps docs-only and config-only pull requests from paying
-# for an analysis that has nothing to analyse. If this workflow is ever added
-# to branch protection as a required check, drop the filter first — a required
+# This job used to skip `push` deliberately, on the grounds that it is the most
+# expensive gate here and cannot reuse the pnpm cache. That was written while
+# the repository was private and Actions minutes were metered against a monthly
+# allowance — the allowance ran out mid-release once. Public repositories are
+# not metered, so the cost that argument rested on no longer exists.
+#
+# The weekly sweep stays: CodeQL's query packs improve over time, so yesterday's
+# clean analysis is not a permanent answer for code that has not changed.
+#
+# The `paths` filter keeps docs-only and config-only runs from paying for an
+# analysis that has nothing to analyse. If this workflow is ever added to
+# branch protection as a required check, drop the filter first — a required
 # check that is skipped by a path filter leaves pull requests waiting forever.
 on:
+  push:
+    branches: [dev, main]
+    paths:
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.js'
+      - '**/*.jsx'
+      - '**/*.mjs'
+      - '**/*.cjs'
+      - '.github/workflows/codeql.yml'
   pull_request:
     paths:
       - '**/*.ts'
@@ -43,6 +60,12 @@ permissions:
 
 jobs:
   analyze:
+    # Uploading CodeQL results needs GitHub Code Security, which on a personal
+    # Free/Pro account exists only while the repository is public — on a private
+    # one the analyze step fails with a 403. This repository is public, so the
+    # condition is satisfied; it stays because a private fork would otherwise
+    # inherit a job that reddens every pull request for a reason nobody in that
+    # fork can fix. Private: skips cleanly. Public: analyses by itself.
     if: github.event.repository.private == false
     runs-on: ubuntu-latest
     permissions:
