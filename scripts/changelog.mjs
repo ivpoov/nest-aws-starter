@@ -311,7 +311,15 @@ function main() {
 
   const sections = [];
 
-  if (values.release !== undefined) {
+  // `--release` names the version being cut, which in release.yml does not exist
+  // as a tag yet: the changelog is written first so the tag can cover it. Re-run
+  // the same command after that tag exists — regenerating the file, say — and
+  // the version would be rendered twice: once here from the unreleased range,
+  // and once by the loop below, the first of them an empty `vX...vX` section.
+  // Already tagged means already covered, so the loop alone is right.
+  const alreadyTagged = values.release !== undefined && tags.includes(values.release);
+
+  if (values.release !== undefined && !alreadyTagged) {
     const last = tags.at(-1) ?? null;
     sections.push(
       renderSection({
