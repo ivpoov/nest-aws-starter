@@ -61,17 +61,19 @@ export function buildPolicy(html: string): string {
     // granting it to one of them only.
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
-    // Avatars and file downloads are presigned S3/CloudFront URLs minted by
-    // the API at request time, so their origin is not a build input. Narrowing
-    // `https:` here and in connect-src to your own bucket/distribution is the
-    // single highest-value tightening left on this policy. A production build
-    // previewed locally against MinIO needs that http origin added by hand.
-    "img-src 'self' data: blob: https:",
+    // Avatars and file downloads are presigned S3/CloudFront URLs minted by the
+    // API at request time, so their origin is not a build input by default and
+    // the policy falls back to `https:` — any TLS origin, which is most of what
+    // CSP was protecting against. Set VITE_MEDIA_ORIGINS to your bucket or
+    // distribution (space- or comma-separated) and that wildcard disappears
+    // from both this directive and connect-src. A production build previewed
+    // locally against MinIO puts that http origin in the same variable.
+    `img-src 'self' data: blob: ${mediaSources().join(' ')}`,
     // The API origin is listed explicitly because a local preview talks to it
     // over http, which the `https:` fallback does not cover; `wss:` is the
     // Socket.IO upgrade, which browsers do not consider covered by an https
     // source.
-    `connect-src 'self' ${apiOrigins().join(' ')} https: wss:`,
+    `connect-src 'self' ${apiOrigins().join(' ')} ${mediaSources().join(' ')} wss:`,
   ].join('; ');
 }
 
@@ -85,6 +87,20 @@ function inlineScriptHashes(html: string): string[] {
   return inlineScripts.map(
     (body: string): string => `'sha256-${createHash('sha256').update(body).digest('base64')}'`,
   );
+}
+
+// The origins that serve presigned media. Unset means "unknown at build time",
+// and the only policy that still works is the `https:` wildcard the audit
+// called the highest-value tightening left here — so setting this variable is
+// how a deployment buys that back. Accepts space- or comma-separated origins.
+function mediaSources(): string[] {
+  const configured: string = process.env.VITE_MEDIA_ORIGINS ?? '';
+  const origins: string[] = configured
+    .split(/[\s,]+/)
+    .map((value: string): string => value.trim())
+    .filter((value: string): boolean => value.length > 0);
+
+  return origins.length > 0 ? origins : ['https:'];
 }
 
 // Both the http(s) and the ws(s) form of whatever VITE_API_BASE_URL points at
