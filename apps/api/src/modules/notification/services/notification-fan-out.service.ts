@@ -17,7 +17,7 @@ import {
   NotificationAudienceEnum,
   type NotificationResponseInterface,
 } from '@nest-aws-starter/shared';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
 
 // The event subscriber's fan-out orchestrator, extracted out of
 // NotificationEventSubscriberService so a future channel (e.g. PUSH) has one
@@ -27,8 +27,9 @@ import { Inject, Injectable } from '@nestjs/common';
 // constructor arguments moved (notificationRepository, gateway, emailService
 // instead of being reached through the event subscriber).
 @Injectable()
-export class NotificationFanOutService {
+export class NotificationFanOutService implements OnApplicationShutdown {
   private readonly logger = new CustomLoggerService(NotificationFanOutService.name);
+  private isShuttingDown: boolean = false;
 
   constructor(
     @Inject(websocketConfig.KEY) private readonly config: WebsocketConfig,
@@ -37,6 +38,26 @@ export class NotificationFanOutService {
     private readonly gateway: NotificationGateway,
     private readonly emailService: NotificationEmailService,
   ) {}
+
+  // Socket emission stops the moment shutdown begins, and this is the ONLY
+  // place it can be stopped. `server.to(...).emit(...)` returns synchronously,
+  // but under the Redis adapter it fires `pubClient.publish()` as a promise the
+  // library neither awaits nor catches — so once that call is made, a rejection
+  // is unreachable from here and the try/catch around the emit cannot see it.
+  // When the connection closes mid-publish the rejection lands as an unhandled
+  // one, which Node terminates the process for by default.
+  //
+  // That is a live shutdown hazard, not only a test annoyance: an event still
+  // in flight during a SIGTERM drain emits while Redis is closing, and the
+  // drain dies instead of finishing. It surfaced first as an intermittently
+  // red e2e run in which all 49 files passed and vitest still exited non-zero.
+  //
+  // Persistence and email are deliberately NOT gated on this flag — they are
+  // the channels whose loss would be silent data loss rather than a missed
+  // live update a reconnecting client re-fetches anyway.
+  public onApplicationShutdown(): void {
+    this.isShuttingDown = true;
+  }
 
   // Channel failures log a warning and never roll back the already-persisted
   // row (backend.md §11a's binding "persist-first" rule). Each step below is
@@ -55,7 +76,7 @@ export class NotificationFanOutService {
   // than emitting into a detached server, mirroring the EMAIL channel's own
   // MAIL_ENABLED gate: off means off, in-app rows and email still flow.
   private emitToRoom(notification: NotificationInterface): void {
-    if (!this.config.isEnabled) return;
+    if (!this.config.isEnabled || this.isShuttingDown) return;
 
     try {
       const room: string =
@@ -102,7 +123,7 @@ export class NotificationFanOutService {
   // (lazy receipts), so there is no single number to push to the whole
   // admins room.
   private async emitUnreadCount(userId: string): Promise<void> {
-    if (!this.config.isEnabled) return;
+    if (!this.config.isEnabled || this.isShuttingDown) return;
 
     try {
       const count: number = await this.notificationRepository.countUnread({
