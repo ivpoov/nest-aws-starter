@@ -33,14 +33,18 @@ export * from './auth/interfaces/register-request.interface.js';
 export * from './auth/interfaces/reset-password-request.interface.js';
 export * from './auth/interfaces/verify-email-request.interface.js';
 export * from './auth/types/auth-error-code.type.js';
+export * from './common/constants/common-error-codes.constants.js';
 export * from './common/enums/sort-order.enum.js';
 export * from './common/interfaces/api-error.interface.js';
 export * from './common/interfaces/cursor-pagination-query.interface.js';
+export * from './common/types/common-error-code.type.js';
+export * from './contact/constants/contact-error-codes.constants.js'; // <module:contact-us>
 export * from './contact/enums/contact-message-status.enum.js'; // <module:contact-us>
 export * from './contact/interfaces/contact-message-list-response.interface.js'; // <module:contact-us>
 export * from './contact/interfaces/contact-message-response.interface.js'; // <module:contact-us>
 export * from './contact/interfaces/create-contact-request.interface.js'; // <module:contact-us>
 export * from './contact/interfaces/update-contact-message-status-request.interface.js'; // <module:contact-us>
+export * from './contact/types/contact-error-code.type.js'; // <module:contact-us>
 export * from './files/constants/file-error-codes.constants.js'; // <module:file>
 export * from './files/enums/file-intent.enum.js';
 export * from './files/enums/file-status.enum.js'; // <module:file>
@@ -56,6 +60,7 @@ export * from './notes/interfaces/note-list-response.interface.js'; // <module:n
 export * from './notes/interfaces/note-response.interface.js'; // <module:note>
 export * from './notes/interfaces/update-note-request.interface.js'; // <module:note>
 export * from './notes/types/note-error-code.type.js'; // <module:note>
+export * from './notifications/constants/notification-error-codes.constants.js'; // <module:notification>
 export * from './notifications/enums/notification-audience.enum.js'; // <module:notification>
 export * from './notifications/enums/notification-channel.enum.js'; // <module:notification>
 export * from './notifications/enums/notification-type.enum.js'; // <module:notification>
@@ -67,6 +72,7 @@ export * from './notifications/interfaces/notifications-query-request.interface.
 export * from './notifications/interfaces/unread-count-response.interface.js'; // <module:notification>
 export * from './notifications/interfaces/update-notification-preference-request.interface.js'; // <module:notification>
 export * from './notifications/interfaces/update-notification-preferences-request.interface.js'; // <module:notification>
+export * from './notifications/types/notification-error-code.type.js'; // <module:notification>
 export * from './payments/constants/payment-error-codes.constants.js'; // <module:payment>
 export * from './payments/enums/subscription-status.enum.js'; // <module:payment>
 export * from './payments/enums/transaction-status.enum.js'; // <module:payment>
