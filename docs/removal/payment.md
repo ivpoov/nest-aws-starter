@@ -86,6 +86,8 @@ and the markers themselves.
   - line 39: `stripeConfig, // <module:payment>`
 - `apps/api/src/modules/common/constants/development-defaults.constants.ts`
   - lines 70-81 (block)
+- `apps/api/src/modules/common/errors/tests/error-code-contract.spec.ts`
+  - line 105: `'STRIPE_CHECKOUT_URL_MISSING', // <module:payment>`
 - `apps/api/src/modules/statistic/interfaces/statistic-repository.interface.ts`
   - lines 3-5 (block)
   - lines 13-17 (block)

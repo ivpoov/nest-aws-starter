@@ -1,8 +1,6 @@
 // Codes emitted by modules that are not optional and own no other wire
-// surface, so they have nowhere module-specific to live: authorization
-// refusals from the CASL guard, and the admin statistics gate.
-export const COMMON_ERROR_CODES = [
-  'CASL_FORBIDDEN',
-  'ADMIN_IMPERSONATION_FORBIDDEN',
-  'STATISTIC_REVENUE_UNAVAILABLE',
-] as const;
+// surface: authorization refusals from the CASL guard. Anything belonging to a
+// REMOVABLE module must not live here — this file has no fence markers, so a
+// code left behind would outlive the module that emits it and break the
+// contract check on a subtracted tree.
+export const COMMON_ERROR_CODES = ['CASL_FORBIDDEN', 'ADMIN_IMPERSONATION_FORBIDDEN'] as const;
