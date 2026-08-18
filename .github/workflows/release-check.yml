@@ -30,6 +30,14 @@ name: release-check
 on:
   push:
     branches: [main]
+    # The tag is what ANSWERS this check, so a tag arriving has to re-ask the
+    # question. Without this the workflow is guaranteed to fail on every single
+    # release: promotion pushes main, this runs and correctly reports "main is
+    # past its last tag", and the tag lands seconds later with nothing left to
+    # notice. Red for a reason that has already been fixed is indistinguishable
+    # from red for a reason that has not, so it was fixed by hand every time
+    # until somebody stopped bothering. Now the tag push clears it.
+    tags: ['v[0-9]*']
   # Catches a tag deleted, or a push that landed while Actions was degraded, and
   # keeps the badge honest on a repository that has not been touched in a while.
   schedule:
