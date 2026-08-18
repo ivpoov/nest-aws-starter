@@ -29,7 +29,7 @@ name: codeql
 # check that is skipped by a path filter leaves pull requests waiting forever.
 on:
   push:
-    branches: [dev, main]
+    branches: [dev, staging, main]
     paths:
       - '**/*.ts'
       - '**/*.tsx'
