@@ -51,13 +51,13 @@ and the markers themselves.
 - `apps/admin/src/constants/admin-nav-items.constants.ts`
   - line 9: `{ to: '/dashboard', label: 'Dashboard' }, // <module:statistic>`
 - `packages/shared/src/index.ts`
-  - line 90: `export * from './statistics/enums/statistics-metric.enum.js'; // <module:statistic>`
-  - line 91: `export * from './statistics/interfaces/statistics-count-breakdown.interface.js'; // <module:statistic>`
-  - line 92: `export * from './statistics/interfaces/statistics-overview-response.interface.js'; // <module:statistic>`
-  - line 93: `export * from './statistics/interfaces/statistics-revenue-by-plan.interface.js'; // <module:statistic>`
-  - line 94: `export * from './statistics/interfaces/statistics-series-point.interface.js'; // <module:statistic>`
-  - line 95: `export * from './statistics/interfaces/statistics-series-response.interface.js'; // <module:statistic>`
-  - line 96: `export * from './statistics/interfaces/statistics-totals.interface.js'; // <module:statistic>`
+  - line 96: `export * from './statistics/enums/statistics-metric.enum.js'; // <module:statistic>`
+  - line 97: `export * from './statistics/interfaces/statistics-count-breakdown.interface.js'; // <module:statistic>`
+  - line 98: `export * from './statistics/interfaces/statistics-overview-response.interface.js'; // <module:statistic>`
+  - line 99: `export * from './statistics/interfaces/statistics-revenue-by-plan.interface.js'; // <module:statistic>`
+  - line 100: `export * from './statistics/interfaces/statistics-series-point.interface.js'; // <module:statistic>`
+  - line 101: `export * from './statistics/interfaces/statistics-series-response.interface.js'; // <module:statistic>`
+  - line 102: `export * from './statistics/interfaces/statistics-totals.interface.js'; // <module:statistic>`
 
 ### Not yet fence-marked (edit by hand)
 

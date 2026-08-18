@@ -392,6 +392,23 @@ describe('SubscriptionLifecycleService', () => {
         periodEndsAt,
       );
     });
+
+    // Providers deliver out of order, so an UPDATED emitted before a
+    // cancellation can land after it. Extending the period on a terminal row
+    // hands back paid access nobody is paying for, and nothing repairs it —
+    // the expiry sweep only considers rows that are still ACTIVE.
+    it.each([
+      SubscriptionStatusEnum.CANCELED,
+      SubscriptionStatusEnum.EXPIRED,
+    ])('refuses to extend the period of a %s subscription', async (status: SubscriptionStatusEnum) => {
+      vi.mocked(subscriptionRepository.findByProviderRef).mockResolvedValue(
+        fakeSubscription({ status }),
+      );
+
+      await service.syncPeriodFromProvider('STRIPE', 'sub_1', new Date('2026-10-01T00:00:00Z'));
+
+      expect(subscriptionRepository.updatePeriodEnd).not.toHaveBeenCalled();
+    });
   });
 
   describe('expireOverdue', () => {

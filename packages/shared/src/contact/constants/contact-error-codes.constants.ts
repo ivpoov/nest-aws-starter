@@ -1,0 +1,1 @@
+export const CONTACT_ERROR_CODES = ['CONTACT_MESSAGE_NOT_FOUND'] as const;

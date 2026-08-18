@@ -60,13 +60,13 @@ and the markers themselves.
   - line 21: `const fileUpload: UseFileUploadResultInterface = useFileUpload(FileIntentEnum.ATTACHMENT); // <module:file>`
   - lines 72-80 (block)
 - `packages/shared/src/index.ts`
-  - line 44: `export * from './files/constants/file-error-codes.constants.js'; // <module:file>`
-  - line 46: `export * from './files/enums/file-status.enum.js'; // <module:file>`
-  - line 47: `export * from './files/interfaces/download-url-response.interface.js'; // <module:file>`
-  - line 48: `export * from './files/interfaces/file-response.interface.js'; // <module:file>`
-  - line 49: `export * from './files/interfaces/request-upload-request.interface.js'; // <module:file>`
-  - line 50: `export * from './files/interfaces/request-upload-response.interface.js'; // <module:file>`
-  - line 51: `export * from './files/types/file-error-code.type.js'; // <module:file>`
+  - line 48: `export * from './files/constants/file-error-codes.constants.js'; // <module:file>`
+  - line 50: `export * from './files/enums/file-status.enum.js'; // <module:file>`
+  - line 51: `export * from './files/interfaces/download-url-response.interface.js'; // <module:file>`
+  - line 52: `export * from './files/interfaces/file-response.interface.js'; // <module:file>`
+  - line 53: `export * from './files/interfaces/request-upload-request.interface.js'; // <module:file>`
+  - line 54: `export * from './files/interfaces/request-upload-response.interface.js'; // <module:file>`
+  - line 55: `export * from './files/types/file-error-code.type.js'; // <module:file>`
 
 ### Not yet fence-marked (edit by hand)
 

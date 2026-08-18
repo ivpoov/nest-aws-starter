@@ -1329,9 +1329,24 @@ appears in a response DTO, to build the nested array.
 **Entity** — a CASL permission subject, and nothing else. It is never serialized and
 never returned, so it carries **no decorators at all**: no `@Exclude()`, no `@Expose()`,
 no `@ApiProperty`. It is a bare class whose only jobs are to give CASL a metadata target
-and to `implements` the domain interface so the ability conditions (`{ userId: … }`)
-are type-checked against real fields. Fields use `declare readonly` — they are never
-assigned, because instances are never constructed:
+and to `implements` the domain interface so any ability conditions (`{ userId: … }`)
+are type-checked against real fields.
+
+> **Conditions do not authorize anything here, and must not be written as if they
+> did.** `AccessGuard` calls `ability.can(action, subject)` with the subject
+> **class**, never a loaded instance — it runs before the handler, so there is no
+> row to check against. CASL answers a class-level question as "could this user do
+> this to *some* instance", which is `true` the moment any rule matches the type.
+> A rule written `can(Actions.UPDATE, NoteEntity, { userId: user.id })` therefore
+> grants **every** note to **every** user through this guard, silently and with no
+> error to notice. No shipped permission uses conditions, which is the only reason
+> this is a trap rather than a hole. **Per-owner checks belong in the service, on
+> the loaded row** — read it, compare the owner, throw the module's own
+> `ForbiddenError`. The guard answers "may this role reach this route at all"; it
+> was never able to answer "may this user touch this row".
+
+Fields use `declare readonly` — they are never assigned, because instances are never
+constructed:
 
 ```typescript
 // entities/note.entity.ts
