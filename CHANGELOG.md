@@ -6,6 +6,27 @@ type. Promotion merge commits are omitted; the commits they carried are not.
 **Generated — do not edit by hand.** Regenerate with
 `node scripts/changelog.mjs --out CHANGELOG.md`; the release workflow does exactly that.
 
+## v1.3.1 (2026-08-18)
+
+[`v1.3.0...v1.3.1`](https://github.com/ivpoov/nest-aws-starter/compare/v1.3.0...v1.3.1)
+
+### Bug Fixes
+
+- **scripts:** stop the changelog duplicating an already-tagged release ([`3cad1bf`](https://github.com/ivpoov/nest-aws-starter/commit/3cad1bf4e3c47c165b95100a6be1903cc84a89a6))
+
+### CI
+
+- **release-check:** re-run when the tag that answers it arrives ([`07fb13a`](https://github.com/ivpoov/nest-aws-starter/commit/07fb13a44a58c97ca6bb0bc0cf4dff439f3a9582))
+- run on every branch of the promotion path ([`5cf1d4e`](https://github.com/ivpoov/nest-aws-starter/commit/5cf1d4eac5c1be019c74af7a8eecb481de8dae4e))
+
+### Tests
+
+- **scripts:** cover the changelog section builder ([`40ad774`](https://github.com/ivpoov/nest-aws-starter/commit/40ad77432014597f3703076ac676bdf5bb4f3cde))
+
+### Documentation
+
+- add the generated changelog ([`8619fec`](https://github.com/ivpoov/nest-aws-starter/commit/8619fec758c8714f65f126724805bf1bc3f97cff))
+
 ## v1.3.0 (2026-08-18)
 
 [`v1.2.1...v1.3.0`](https://github.com/ivpoov/nest-aws-starter/compare/v1.2.1...v1.3.0)
