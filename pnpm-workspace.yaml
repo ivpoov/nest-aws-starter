@@ -25,6 +25,26 @@ overrides:
   # postcss asks for ^3.3.11; 3.3.18 is the fix on that line. The advisory was
   # later widened to cover 3.3.17, which this pin previously held.
   nanoid: "3.3.18"
+  # Four fastify advisories (GHSA-5jgf-p345-68v8, -f65p-4m7j-42xc,
+  # -fph4-wmhf-6fwf, -jqff-g426-hqxp among them). fastify is a DIRECT
+  # dependency of apps/api, but @nestjs/platform-fastify pins `fastify: 5.8.5`
+  # exactly as a dependency of its own — so raising the direct entry alone
+  # leaves the framework resolving the vulnerable copy. The override is what
+  # actually moves it, and the direct entry is raised to match so the two never
+  # disagree.
+  fastify: "5.12.1"
+  # Reached through @fastify/ajv-compiler, which asks for a range spanning both
+  # major lines. Both carry the same advisories, so both are pinned forward.
+  fast-uri: "4.1.3"
+  # GHSA advisories against mysql2, reached ONLY through prisma, which bundles
+  # a driver per database and pins `mysql2: 3.15.3` exactly — still true on
+  # 7.10.0, the current latest, so upgrading Prisma does not help. This project
+  # is Postgres, so the MySQL driver is never loaded and the practical exposure
+  # is nil; it is pinned because the scanner gates on it.
+  mysql2: "3.23.1"
+  # Reached through supertest -> superagent, so test tooling only, never
+  # shipped. Pinned anyway for the same reason as mysql2.
+  qs: "6.16.0"
   # GHSA-ggr8-5vv4-36mx. Stack exhaustion when merging a self-referencing
   # object graph — availability only, no confidentiality or integrity impact.
   # It arrives through @prisma/config, which merges this repository's own

@@ -132,6 +132,94 @@ jobs:
           WEBSOCKET_ENABLED: "true"
           WEBSOCKET_HEARTBEAT_INTERVAL_MS: "200"
 
+  # The same e2e suite against Redis Cluster instead of a single instance.
+  #
+  # WHY A SECOND FULL RUN AND NOT A FLAG ON THE FIRST: cluster mode is not a
+  # configuration detail the code can be trusted to abstract over, and this
+  # repository has the scars to prove it. Four bugs were found the first time
+  # anyone ran the suite this way, and two of them were invisible in every
+  # single-instance run there had ever been — pub/sub fan-outs silently
+  # scanning zero nodes under `lazyConnect`, and `new Cluster([url])` dropping
+  # TLS and credentials for discovered nodes while Terraform hands production a
+  # `rediss://` URL. Both would have failed in production and nowhere else.
+  #
+  # Until this job existed, the only thing standing between those and a
+  # deployment was somebody choosing to run it by hand. It is a separate job
+  # rather than a second step so it runs in parallel with `test` and costs
+  # wall-clock nothing.
+  #
+  # Cluster has no logical databases — only index 0 exists — so the suite's
+  # usual trick of isolating onto database 1 does not apply here; the helpers
+  # detect the cluster URL and skip it (test/helpers/e2e-redis-url.helper.ts).
+  test-redis-cluster:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: docker compose up -d --wait
+      # The four cluster nodes use `network_mode: host`, so they are reachable
+      # on 127.0.0.1:7000-7003. `--wait` is not used here: redis-cluster-init
+      # is a one-shot that forms the cluster and exits, and `--wait` treats a
+      # completed one-shot as a failure.
+      - run: docker compose --profile cluster up -d
+      - name: wait for the cluster to finish forming
+        run: |
+          set -euo pipefail
+
+          # `cluster_state:ok` is the only signal that means the slots are
+          # assigned. A node answering PING says nothing: it answers before it
+          # has joined, which is exactly the window a fixed sleep lands in.
+          for attempt in $(seq 1 30); do
+            state="$(docker run --rm --network host redis:8 redis-cli -p 7000 cluster info 2>/dev/null | tr -d '\r' | awk -F: '/^cluster_state:/ {print $2}')"
+            if [ "${state:-}" = "ok" ]; then
+              echo "cluster formed after ${attempt} attempt(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "cluster never reached cluster_state:ok" >&2
+          docker run --rm --network host redis:8 redis-cli -p 7000 cluster info >&2 || true
+          exit 1
+      - run: pnpm --dir apps/api run db:migrate
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+      - run: pnpm run build
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+      - run: pnpm run test:e2e
+        env:
+          # The two variables this whole job exists for.
+          REDIS_IS_CLUSTER: "true"
+          REDIS_URL: redis://127.0.0.1:7000
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+          AWS_REGION: us-east-1
+          S3_ENABLED: "true"
+          S3_ENDPOINT: http://localhost:9010
+          S3_BUCKET_NAME: starter
+          S3_ACCESS_KEY: minioadmin
+          S3_SECRET_KEY: minioadmin
+          AWS_ENDPOINT_URL: http://localhost:4567
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          SQS_ENABLED: "true"
+          SQS_PAYMENT_WEBHOOK_QUEUE_URL: http://localhost:4567/000000000000/starter-payment-webhook-queue
+          SNS_ENABLED: "true"
+          MAIL_ENABLED: "true"
+          MAIL_FROM_ADDRESS: no-reply@example.com
+          LAMBDA_ENABLED: "true"
+          SCHEDULER_ENABLED: "false"
+          PAYMENT_WEBHOOK_CONSUMER_ENABLED: "false"
+          AUTH_JWT_SECRET: ci-only-secret-with-at-least-32-characters
+          TRUST_PROXY: "true"
+          WEBSOCKET_ENABLED: "true"
+          WEBSOCKET_HEARTBEAT_INTERVAL_MS: "200"
+
   # The README's headline "make it yours" command, on a pristine clone —
   # exactly what a newcomer runs first. It went unnoticed that a tracked
   # symlink added with the docs workspace crashed it (EISDIR) before it wrote

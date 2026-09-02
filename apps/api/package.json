@@ -47,7 +47,7 @@
     "class-validator": "0.15.1",
     "cron": "4.4.0",
     "dotenv": "17.4.2",
-    "fastify": "5.8.5",
+    "fastify": "5.12.1",
     "http-status-codes": "2.3.0",
     "ioredis": "6.0.0",
     "jose": "6.2.3",
