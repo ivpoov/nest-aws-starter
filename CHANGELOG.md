@@ -6,6 +6,18 @@ type. Promotion merge commits are omitted; the commits they carried are not.
 **Generated — do not edit by hand.** Regenerate with
 `node scripts/changelog.mjs --out CHANGELOG.md`; the release workflow does exactly that.
 
+## v1.3.2 (2026-09-02)
+
+[`v1.3.1...v1.3.2`](https://github.com/ivpoov/nest-aws-starter/compare/v1.3.1...v1.3.2)
+
+### Bug Fixes
+
+- **deps:** pin fastify, fast-uri, mysql2 and qs past their advisories ([`91ae9bb`](https://github.com/ivpoov/nest-aws-starter/commit/91ae9bb0f922e76de6741a38a41c464c2681e401))
+
+### CI
+
+- **api:** run the e2e suite against redis cluster as well ([`d0eff8c`](https://github.com/ivpoov/nest-aws-starter/commit/d0eff8ce851bb71494e8831e9e5d716144c37f57))
+
 ## v1.3.1 (2026-08-18)
 
 [`v1.3.0...v1.3.1`](https://github.com/ivpoov/nest-aws-starter/compare/v1.3.0...v1.3.1)
@@ -26,6 +38,10 @@ type. Promotion merge commits are omitted; the commits they carried are not.
 ### Documentation
 
 - add the generated changelog ([`8619fec`](https://github.com/ivpoov/nest-aws-starter/commit/8619fec758c8714f65f126724805bf1bc3f97cff))
+
+### Chores
+
+- bump the root package version to 1.3.1 ([`4dfbf30`](https://github.com/ivpoov/nest-aws-starter/commit/4dfbf301f0181531b3d0f1be0e70aabc67a57286))
 
 ## v1.3.0 (2026-08-18)
 
