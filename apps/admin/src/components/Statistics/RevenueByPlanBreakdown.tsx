@@ -56,25 +56,34 @@ function planKey(item: StatisticsRevenueByPlanInterface): string {
 // Same accessible-table companion pattern as AuthMethodBreakdown — recharts'
 // SVG category ticks aren't something a unit test (or a screen reader)
 // should have to depend on.
+// `sr-only` goes on a wrapping div, NOT on the <table>. CSS table layout
+// treats `height` as a MINIMUM, so a table ignores the 1px the utility sets and
+// sizes to its content — and because the utility also makes it
+// `position: absolute`, that full-height box still expands the document's
+// scrollable area while being invisible. On the admin dashboard that put
+// thousands of pixels of dead scroll under a page whose content ended at one
+// screen. A div is a block box and honours the height, so the clipping works.
 function renderAccessibleTable(items: StatisticsRevenueByPlanInterface[]): ReactElement {
   return (
-    <table className="sr-only">
-      <caption>Revenue by plan (trailing 30 days)</caption>
-      <thead>
-        <tr>
-          <th>Plan</th>
-          <th>Revenue</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item) => (
-          <tr key={planKey(item)}>
-            <th scope="row">{planLabel(item)}</th>
-            <td>{formatCents(item.amountCents)}</td>
+    <div className="sr-only">
+      <table>
+        <caption>Revenue by plan (trailing 30 days)</caption>
+        <thead>
+          <tr>
+            <th>Plan</th>
+            <th>Revenue</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={planKey(item)}>
+              <th scope="row">{planLabel(item)}</th>
+              <td>{formatCents(item.amountCents)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

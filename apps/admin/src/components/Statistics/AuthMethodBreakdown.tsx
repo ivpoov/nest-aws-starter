@@ -30,25 +30,34 @@ interface AuthMethodBreakdownPropsInterface {
 // tests get the real values without depending on SVG text metrics, which
 // jsdom doesn't implement (recharts' category ticks render, but their exact
 // layout is not something a unit test should assert against).
+// `sr-only` goes on a wrapping div, NOT on the <table>. CSS table layout
+// treats `height` as a MINIMUM, so a table ignores the 1px the utility sets and
+// sizes to its content — and because the utility also makes it
+// `position: absolute`, that full-height box still expands the document's
+// scrollable area while being invisible. On the admin dashboard that put
+// thousands of pixels of dead scroll under a page whose content ended at one
+// screen. A div is a block box and honours the height, so the clipping works.
 function renderAccessibleTable(items: StatisticsCountBreakdownInterface[]): ReactElement {
   return (
-    <table className="sr-only">
-      <caption>Auth methods by count</caption>
-      <thead>
-        <tr>
-          <th>Method</th>
-          <th>Count</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item) => (
-          <tr key={item.key}>
-            <th scope="row">{item.key}</th>
-            <td>{item.count}</td>
+    <div className="sr-only">
+      <table>
+        <caption>Auth methods by count</caption>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Count</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.key}>
+              <th scope="row">{item.key}</th>
+              <td>{item.count}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
