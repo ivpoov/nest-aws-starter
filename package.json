@@ -1,6 +1,6 @@
 {
   "name": "nest-aws-starter",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "private": true,
   "license": "MIT",
   "packageManager": "pnpm@11.9.0",

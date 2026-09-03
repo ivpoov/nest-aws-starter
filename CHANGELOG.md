@@ -6,7 +6,21 @@ type. Promotion merge commits are omitted; the commits they carried are not.
 **Generated — do not edit by hand.** Regenerate with
 `node scripts/changelog.mjs --out CHANGELOG.md`; the release workflow does exactly that.
 
-## v1.3.2 (2026-09-02)
+## v1.3.3 (2026-09-03)
+
+[`v1.3.2...v1.3.3`](https://github.com/ivpoov/nest-aws-starter/compare/v1.3.2...v1.3.3)
+
+### Bug Fixes
+
+- **admin:** hide the accessible chart tables with a wrapper so they stop extending the page ([`3061053`](https://github.com/ivpoov/nest-aws-starter/commit/30610531c78f5fb76c29c8b863bbb6e5b76b46b3))
+- **notification:** stop socket fan-out at module destroy, not application shutdown ([`c53caa2`](https://github.com/ivpoov/nest-aws-starter/commit/c53caa2225a013ece520f896ae073c096834c48d))
+
+### Tests
+
+- **admin:** assert the accessible tables are hidden by a wrapper ([`d1d7a8c`](https://github.com/ivpoov/nest-aws-starter/commit/d1d7a8c28ae49b96334d80191ba9dfd4ad68c1fa))
+- **notification:** cover both shutdown hooks on the fan-out guard ([`d0e937e`](https://github.com/ivpoov/nest-aws-starter/commit/d0e937e3671b1ea2edc6d5c1d3cf2f925de2d1ba))
+
+## v1.3.2 (2026-09-03)
 
 [`v1.3.1...v1.3.2`](https://github.com/ivpoov/nest-aws-starter/compare/v1.3.1...v1.3.2)
 
@@ -17,6 +31,10 @@ type. Promotion merge commits are omitted; the commits they carried are not.
 ### CI
 
 - **api:** run the e2e suite against redis cluster as well ([`d0eff8c`](https://github.com/ivpoov/nest-aws-starter/commit/d0eff8ce851bb71494e8831e9e5d716144c37f57))
+
+### Chores
+
+- bump the root package version to 1.3.2 ([`94980c1`](https://github.com/ivpoov/nest-aws-starter/commit/94980c120f92e5d4100460f8c9fb912bf58a6010))
 
 ## v1.3.1 (2026-08-18)
 
