@@ -17,7 +17,12 @@ import {
   NotificationAudienceEnum,
   type NotificationResponseInterface,
 } from '@nest-aws-starter/shared';
-import { Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  type OnApplicationShutdown,
+  type OnModuleDestroy,
+} from '@nestjs/common';
 
 // The event subscriber's fan-out orchestrator, extracted out of
 // NotificationEventSubscriberService so a future channel (e.g. PUSH) has one
@@ -27,7 +32,7 @@ import { Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
 // constructor arguments moved (notificationRepository, gateway, emailService
 // instead of being reached through the event subscriber).
 @Injectable()
-export class NotificationFanOutService implements OnApplicationShutdown {
+export class NotificationFanOutService implements OnModuleDestroy, OnApplicationShutdown {
   private readonly logger = new CustomLoggerService(NotificationFanOutService.name);
   private isShuttingDown: boolean = false;
 
@@ -55,6 +60,21 @@ export class NotificationFanOutService implements OnApplicationShutdown {
   // Persistence and email are deliberately NOT gated on this flag — they are
   // the channels whose loss would be silent data loss rather than a missed
   // live update a reconnecting client re-fetches anyway.
+  // BOTH hooks, and onModuleDestroy is the one that matters. Nest runs every
+  // module's onModuleDestroy before any onApplicationShutdown, and the Redis
+  // client closes in that first phase — so a service that only learned about
+  // shutdown at onApplicationShutdown learned too late, and an event still in
+  // flight emitted into a connection that had already gone. That is not a
+  // hypothesis: this class shipped with the later hook alone and the suite
+  // still failed with `Error: Connection is closed.` raised from this exact
+  // emit, with all 325 tests passing.
+  //
+  // onApplicationShutdown stays because it costs nothing and covers a shutdown
+  // that somehow reaches the later phase without the earlier one.
+  public onModuleDestroy(): void {
+    this.isShuttingDown = true;
+  }
+
   public onApplicationShutdown(): void {
     this.isShuttingDown = true;
   }
