@@ -64,10 +64,17 @@ describe('NotificationFanOutService', () => {
   // mid-publish rejects out of reach of any try/catch at the call site — and
   // Node terminates the process for an unhandled rejection. Not emitting at
   // all, once shutdown has begun, is the only place that is preventable.
-  it('stops emitting to sockets once shutdown has begun', async () => {
+  // Both hooks, because which one fires first is the whole bug: Nest runs every
+  // onModuleDestroy before any onApplicationShutdown, and Redis closes in that
+  // first phase. A guard wired only to the later hook is wired to a moment that
+  // arrives after the connection has already gone.
+  it.each([
+    ['onModuleDestroy' as const],
+    ['onApplicationShutdown' as const],
+  ])('stops emitting to sockets once %s has run', async (hook) => {
     const { service, emit } = createService();
 
-    service.onApplicationShutdown();
+    service[hook]();
     await service.fanOut(notification);
 
     expect(emit).not.toHaveBeenCalled();
@@ -80,7 +87,7 @@ describe('NotificationFanOutService', () => {
   it('still sends the email after shutdown has begun', async () => {
     const { service, sendIfEnabled } = createService();
 
-    service.onApplicationShutdown();
+    service.onModuleDestroy();
     await service.fanOut(notification);
 
     expect(sendIfEnabled).toHaveBeenCalledTimes(1);
