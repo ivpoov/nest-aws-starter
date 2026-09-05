@@ -150,7 +150,7 @@ and the markers themselves.
 - `apps/web/src/constants/app-nav-items.constants.ts`
   - line 13: `{ to: '/settings/billing', label: 'Billing' }, // <module:payment>`
 - `apps/web/src/pages/LoginPage.tsx`
-  - lines 65-70 (block)
+  - lines 67-72 (block)
 - `apps/web/src/pages/RegisterPage.tsx`
   - lines 63-68 (block)
 - `apps/web/src/tests/resolveNotificationLink.spec.ts`

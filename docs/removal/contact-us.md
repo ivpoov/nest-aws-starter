@@ -51,7 +51,7 @@ and the markers themselves.
 - `apps/web/src/components/Layout/AppLayout.tsx`
   - lines 48-54 (block)
 - `apps/web/src/pages/LoginPage.tsx`
-  - lines 71-76 (block)
+  - lines 73-78 (block)
 - `apps/web/src/pages/RegisterPage.tsx`
   - lines 69-74 (block)
 - `apps/admin/src/App.tsx`

@@ -121,8 +121,8 @@ and the markers themselves.
   - lines 37-39 (block)
   - lines 41-43 (block)
 - `apps/admin/src/components/Layout/AdminLayout.tsx`
-  - line 6: `import { NotificationBell } from '../Notifications/NotificationBell'; // <module:notification>`
-  - lines 51-53 (block)
+  - line 7: `import { NotificationBell } from '../Notifications/NotificationBell'; // <module:notification>`
+  - lines 52-54 (block)
 - `apps/admin/src/constants/admin-nav-items.constants.ts`
   - line 15: `{ to: '/notifications', label: 'Notifications' }, // <module:notification>`
 - `packages/shared/src/index.ts`
