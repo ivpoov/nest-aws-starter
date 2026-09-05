@@ -1,4 +1,5 @@
 import type { AuthConfig } from '@configs/auth.config.js';
+import { FAKE_RETENTION_CONFIG } from '@modules/common/constants/retention-test.constants.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js';
 import type { CreateSessionDataInterface } from '@modules/session/interfaces/create-session-data.interface.js';
@@ -125,6 +126,18 @@ class FakeSessionRepository implements SessionRepositoryInterface {
   public readonly sessions: Map<string, SessionInterface> = new Map();
   private counter = 0;
 
+  // Retention is exercised against Postgres in the e2e suite; this fake only
+  // has to satisfy the contract.
+  public async deleteExpiredBefore(cutoff: Date, limit: number): Promise<number> {
+    const expired: SessionInterface[] = [...this.sessions.values()]
+      .filter((session: SessionInterface): boolean => session.activeUntil < cutoff)
+      .slice(0, limit);
+
+    for (const session of expired) this.sessions.delete(session.id);
+
+    return expired.length;
+  }
+
   public async create(data: CreateSessionDataInterface): Promise<SessionInterface> {
     this.counter += 1;
 
@@ -201,6 +214,7 @@ function createService(): TestSetupInterface {
     tokens,
     tokenService,
     userService,
+    FAKE_RETENTION_CONFIG,
   );
 
   return { service, tokens, sessions };

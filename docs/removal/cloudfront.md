@@ -26,7 +26,7 @@ and the markers themselves.
   - line 61: `CloudFrontModule, // <module:cloudfront>`
 - `apps/api/src/configs/index.ts`
   - line 4: `import { cloudfrontConfig } from '@configs/cloudfront.config.js'; // <module:cloudfront>`
-  - line 26: `cloudfrontConfig, // <module:cloudfront>`
+  - line 27: `cloudfrontConfig, // <module:cloudfront>`
 - `apps/api/src/modules/common/errors/tests/error-code-contract.spec.ts`
   - line 96: `'CLOUDFRONT_SIGNER_DISABLED', // <module:cloudfront>`
 - `apps/api/src/modules/file/services/file.service.ts`

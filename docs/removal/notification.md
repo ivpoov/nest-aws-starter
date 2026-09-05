@@ -83,8 +83,8 @@ and the markers themselves.
   - line 15: `import { NotificationModule } from '@modules/notification/notification.module.js'; // <module:notification>`
   - line 78: `NotificationModule, // <module:notification>`
 - `apps/api/src/configs/index.ts`
-  - line 21: `import { websocketConfig } from '@configs/websocket.config.js'; // <module:notification>`
-  - line 43: `websocketConfig, // <module:notification>`
+  - line 22: `import { websocketConfig } from '@configs/websocket.config.js'; // <module:notification>`
+  - line 45: `websocketConfig, // <module:notification>`
 - `apps/api/src/main.ts`
   - line 9: `import { installWebsocketAdapter } from '@modules/notification/helpers/install-websocket-adapter.helper.js'; // <module:notification>`
   - lines 53-59 (block)
@@ -97,7 +97,7 @@ and the markers themselves.
   - line 46: `notificationPreferences NotificationPreference[] // <module:notification>`
   - line 47: `notifications           Notification[] // <module:notification>`
   - line 48: `notificationReceipts    NotificationReceipt[] // <module:notification>`
-  - lines 391-439 (block)
+  - lines 391-444 (block)
 - `apps/api/prisma/seed.ts`
   - lines 771-913 (block)
   - lines 941-943 (block)

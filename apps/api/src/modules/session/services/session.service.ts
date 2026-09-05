@@ -1,8 +1,10 @@
 import { type AuthConfig, authConfig } from '@configs/auth.config.js';
+import { type RetentionConfig, retentionConfig } from '@configs/retention.config.js';
 import { parseDevice } from '@helpers/parse-device.helper.js';
 import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import { UnauthorizedError } from '@modules/common/errors/unauthorized.error.js';
+import { purgeInBatches } from '@modules/common/helpers/purge-in-batches.helper.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import {
   IMPERSONATION_ACTIVE_TTL_SEC,
@@ -33,6 +35,8 @@ import { UserService } from '@modules/user/services/user.service.js';
 import { UserStatusEnum } from '@nest-aws-starter/shared';
 import { Inject, Injectable } from '@nestjs/common';
 
+const DAY_MS = 86_400_000;
+
 @Injectable()
 export class SessionService {
   private readonly logger = new CustomLoggerService(SessionService.name);
@@ -43,6 +47,7 @@ export class SessionService {
     @Inject(TOKEN_REPOSITORY) private readonly tokenRepository: TokenRepositoryInterface,
     private readonly tokenService: TokenService,
     private readonly userService: UserService,
+    @Inject(retentionConfig.KEY) private readonly retention: RetentionConfig,
   ) {}
 
   public async createSession(
@@ -379,5 +384,18 @@ export class SessionService {
     const ttlSec: number = Math.max(1, Math.ceil((activeUntil.getTime() - now) / 1000));
 
     return { activeUntil, ttlSec };
+  }
+
+  // Retention. Disabled by RETENTION_ENABLED, and otherwise deletes rows
+  // expired before the configured window in bounded batches — see
+  // purgeInBatches for why the loop is capped as well as batched.
+  public async purgeExpired(): Promise<number> {
+    if (!this.retention.isEnabled) return 0;
+
+    const cutoff: Date = new Date(Date.now() - this.retention.sessionDays * DAY_MS);
+
+    return purgeInBatches('session', this.retention.batchSize, this.logger, (limit: number) =>
+      this.sessionRepository.deleteExpiredBefore(cutoff, limit),
+    );
   }
 }

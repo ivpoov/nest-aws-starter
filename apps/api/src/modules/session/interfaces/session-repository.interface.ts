@@ -8,4 +8,7 @@ export interface SessionRepositoryInterface {
   touchLastActive(id: string, now: Date): Promise<void>;
   setActiveUntil(id: string, activeUntil: Date): Promise<boolean>;
   endAllByUserId(userId: string, now: Date): Promise<number>;
+  // Retention. `cutoff` is compared against activeUntil, not createdAt: a
+  // session is only ever deleted once it has already stopped being usable.
+  deleteExpiredBefore(cutoff: Date, limit: number): Promise<number>;
 }

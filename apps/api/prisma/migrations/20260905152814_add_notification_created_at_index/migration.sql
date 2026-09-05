@@ -1,0 +1,12 @@
+-- Backs the notification retention sweep, which deletes by age and by nothing
+-- else. The existing indexes lead with `userId` and `audience`, so an age-only
+-- predicate could use neither and the sweep would sequentially scan the very
+-- table it exists to keep small.
+--
+-- CONCURRENTLY is deliberately NOT used: Prisma runs each migration inside a
+-- transaction, and CREATE INDEX CONCURRENTLY cannot run in one. On a large
+-- existing table this takes a brief write lock on `notifications`; on a fresh
+-- deployment it is instant. A deployment with a large table that cannot take
+-- that lock should create the index out-of-band and mark this migration
+-- applied.
+CREATE INDEX "notifications_createdAt_idx" ON "notifications"("createdAt");
