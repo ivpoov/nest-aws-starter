@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { login } from '../apis/auth';
 import { ProviderButtons } from '../components/Auth/ProviderButtons';
+import { Brand } from '../components/Brand/Brand';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -37,6 +38,7 @@ export function LoginPage(): ReactElement {
 
   return (
     <div className="mx-auto mt-16 max-w-sm">
+      <Brand />
       <Card title="Log in">
         <form
           className="flex flex-col gap-4"
