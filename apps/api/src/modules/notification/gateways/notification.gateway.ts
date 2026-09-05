@@ -1,5 +1,5 @@
-import type { WebsocketConfig } from '@configs/websocket.config.js';
-import { websocketConfig } from '@configs/websocket.config.js';
+import { type AppConfig, appConfig } from '@configs/app.config.js';
+import { type WebsocketConfig, websocketConfig } from '@configs/websocket.config.js';
 import type { CurrentUserInterface } from '@interfaces/current-user.interface.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { NOTIFICATION_WS_AUTH_FAILED } from '@modules/notification/constants/notification-errors.constants.js';
@@ -7,6 +7,7 @@ import {
   ADMIN_ROOM,
   buildUserRoom,
 } from '@modules/notification/constants/notification-rooms.constants.js';
+import { WebsocketHandshakeLimiterService } from '@modules/notification/services/websocket-handshake-limiter.service.js';
 import type { AuthenticatedSocketType } from '@modules/notification/types/authenticated-socket.type.js';
 import { TokenService } from '@modules/token/services/token.service.js';
 import { UserRoleEnum } from '@nest-aws-starter/shared';
@@ -38,7 +39,10 @@ export class NotificationGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
 {
   private readonly logger = new CustomLoggerService(NotificationGateway.name);
-  private readonly sockets = new Set<AuthenticatedSocketType>();
+  // Keyed by user, not one flat set: the per-user cap needs a count per
+  // account, and the heartbeat needs every socket. One structure answers both,
+  // so the two can never disagree about what is connected.
+  private readonly socketsByUser = new Map<string, Set<AuthenticatedSocketType>>();
   private heartbeatIntervalHandle: NodeJS.Timeout | null = null;
 
   @WebSocketServer()
@@ -46,7 +50,9 @@ export class NotificationGateway
 
   constructor(
     @Inject(websocketConfig.KEY) private readonly config: WebsocketConfig,
+    @Inject(appConfig.KEY) private readonly app: AppConfig,
     private readonly tokenService: TokenService,
+    private readonly handshakeLimiter: WebsocketHandshakeLimiterService,
   ) {}
 
   // Shared sweep, not one setInterval per socket: at scale N per-socket
@@ -91,20 +97,37 @@ export class NotificationGateway
       return;
     }
 
+    // BEFORE the verify, not after: rejecting late still pays the JWT verify
+    // and the Redis allowlist read that make a connect flood expensive.
+    if (!(await this.handshakeLimiter.isWithinLimit(this.addressOf(client)))) {
+      this.rejectHandshake(client, 'handshake rate limit exceeded');
+
+      return;
+    }
+
     const user: CurrentUserInterface | null = await this.verify(client, token);
 
     if (!user) return;
 
+    if (this.isAtConnectionLimit(user.id)) {
+      this.rejectHandshake(
+        client,
+        `connection limit reached for user ${user.id} (${this.config.maxConnectionsPerUser})`,
+      );
+
+      return;
+    }
+
     client.data = { user, token };
     await this.joinRooms(client, user);
-    this.sockets.add(client);
+    this.track(user.id, client);
 
     // A client that dropped during the async verify/join windows has already
     // fired handleDisconnect (against a set it was never in) — without this
     // re-check its dead socket would sit in the set forever, paying one
     // token verify + Redis hit per sweep.
     if (!client.connected) {
-      this.sockets.delete(client);
+      this.untrack(client);
 
       return;
     }
@@ -113,7 +136,7 @@ export class NotificationGateway
   }
 
   public handleDisconnect(client: AuthenticatedSocketType): void {
-    this.sockets.delete(client);
+    this.untrack(client);
 
     this.logger.debug(`WS disconnected: socket=${client.id}`);
   }
@@ -161,17 +184,80 @@ export class NotificationGateway
     if (user.role === UserRoleEnum.ADMIN) await client.join(ADMIN_ROOM);
   }
 
+  // Bounded batches rather than one Promise.all over everything connected.
+  // Each revalidation is a JWT verify plus a Redis read, so an unbounded sweep
+  // turns every tick into as many concurrent Redis commands as there are
+  // sockets — the failure mode being that the heartbeat, not the traffic,
+  // becomes what saturates the connection pool.
   private async revalidateAll(): Promise<void> {
-    await Promise.all(
-      [...this.sockets].map((client: AuthenticatedSocketType) => this.revalidateOne(client)),
+    const clients: AuthenticatedSocketType[] = [...this.socketsByUser.values()].flatMap(
+      (sockets: Set<AuthenticatedSocketType>): AuthenticatedSocketType[] => [...sockets],
     );
+
+    for (let index = 0; index < clients.length; index += this.config.heartbeatConcurrency) {
+      const batch: AuthenticatedSocketType[] = clients.slice(
+        index,
+        index + this.config.heartbeatConcurrency,
+      );
+
+      await Promise.all(batch.map((client: AuthenticatedSocketType) => this.revalidateOne(client)));
+    }
+  }
+
+  private isAtConnectionLimit(userId: string): boolean {
+    const existing: Set<AuthenticatedSocketType> | undefined = this.socketsByUser.get(userId);
+
+    return (existing?.size ?? 0) >= this.config.maxConnectionsPerUser;
+  }
+
+  private track(userId: string, client: AuthenticatedSocketType): void {
+    const sockets: Set<AuthenticatedSocketType> = this.socketsByUser.get(userId) ?? new Set();
+
+    sockets.add(client);
+    this.socketsByUser.set(userId, sockets);
+  }
+
+  // Deletes the user's entry once their last socket goes, so the map does not
+  // become a permanent record of every account that has ever connected.
+  private untrack(client: AuthenticatedSocketType): void {
+    const userId: string | undefined = client.data?.user?.id;
+
+    if (!userId) return;
+
+    const sockets: Set<AuthenticatedSocketType> | undefined = this.socketsByUser.get(userId);
+
+    if (!sockets) return;
+
+    sockets.delete(client);
+
+    if (sockets.size === 0) this.socketsByUser.delete(userId);
+  }
+
+  // `x-forwarded-for` only when the proxy is trusted, which is the same
+  // condition the HTTP layer applies to the same header. Both halves matter:
+  // trusting it unconditionally lets any client set its own rate-limit bucket
+  // and opt out, while never trusting it makes the limit worthless in the
+  // deployment this project targets — behind an ALB every socket shares the
+  // load balancer's address, so one bucket would hold all traffic and the
+  // first thirty handshakes a minute would lock out everybody.
+  //
+  // The left-most entry is the original client; the rest are the proxies it
+  // passed through.
+  private addressOf(client: AuthenticatedSocketType): string {
+    if (!this.app.trustProxy) return client.handshake.address;
+
+    const forwarded: string | string[] | undefined = client.handshake.headers['x-forwarded-for'];
+    const header: string | undefined = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+    const original: string | undefined = header?.split(',')[0]?.trim();
+
+    return original && original.length > 0 ? original : client.handshake.address;
   }
 
   private async revalidateOne(client: AuthenticatedSocketType): Promise<void> {
     // Belt and braces for the handshake-window race above: a socket that is
     // already dead needs no re-verify, only eviction from the set.
     if (!client.connected) {
-      this.sockets.delete(client);
+      this.untrack(client);
 
       return;
     }

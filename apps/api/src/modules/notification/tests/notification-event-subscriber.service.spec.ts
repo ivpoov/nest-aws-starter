@@ -36,7 +36,14 @@ function createFakeNotification(
   };
 }
 
-const enabledWebsocketConfig: WebsocketConfig = { isEnabled: true, heartbeatIntervalMs: 60_000 };
+const enabledWebsocketConfig: WebsocketConfig = {
+  isEnabled: true,
+  heartbeatIntervalMs: 60_000,
+  maxConnectionsPerUser: 10,
+  handshakesPerMinutePerIp: 30,
+  heartbeatConcurrency: 25,
+  maxPayloadBytes: 8_192,
+};
 
 function createSubscriber(
   callOrder: string[] = [],
@@ -428,7 +435,14 @@ describe('NotificationEventSubscriberService', () => {
       const callOrder: string[] = [];
       const { subscriber, to, emit, countUnread, create, sendIfEnabled } = createSubscriber(
         callOrder,
-        { isEnabled: false, heartbeatIntervalMs: 60_000 },
+        {
+          isEnabled: false,
+          heartbeatIntervalMs: 60_000,
+          maxConnectionsPerUser: 10,
+          handshakesPerMinutePerIp: 30,
+          heartbeatConcurrency: 25,
+          maxPayloadBytes: 8_192,
+        },
       );
 
       await subscriber.onAuthNewDevice({ userId, ip: '127.0.0.1', device: 'Chrome on Fedora' });

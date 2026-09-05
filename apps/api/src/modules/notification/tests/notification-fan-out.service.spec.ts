@@ -9,7 +9,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 const userId = '01890a5d-0000-774b-bcce-b30209990001';
 
-const websocket: WebsocketConfig = { isEnabled: true, heartbeatIntervalMs: 60_000 };
+const websocket: WebsocketConfig = {
+  isEnabled: true,
+  heartbeatIntervalMs: 60_000,
+  maxConnectionsPerUser: 10,
+  handshakesPerMinutePerIp: 30,
+  heartbeatConcurrency: 25,
+  maxPayloadBytes: 8_192,
+};
 
 const notification: NotificationInterface = {
   id: '01890a5d-0000-774b-bcce-b30209990099',

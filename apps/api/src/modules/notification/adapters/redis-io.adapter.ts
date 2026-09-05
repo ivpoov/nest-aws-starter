@@ -1,4 +1,5 @@
 import type { AppConfig } from '@configs/app.config.js';
+import type { WebsocketConfig } from '@configs/websocket.config.js';
 import { createCorsOriginDelegate } from '@helpers/create-cors-origin-delegate.helper.js';
 import type { CorsOriginDelegateType } from '@modules/common/types/cors-origin-delegate.type.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
@@ -66,11 +67,21 @@ export class RedisIoAdapter extends IoAdapter {
     const server: Server = super.createIOServer(port, {
       ...options,
       cors: { origin: corsOrigin },
+      // Clients never send anything on this socket — every message is
+      // server-initiated (notification-events.constants.ts) — so socket.io's
+      // 1MB default frame buffer is attack surface with no legitimate user.
+      // Sized from config so a fork that does add an inbound event can raise
+      // it deliberately rather than discovering the limit in production.
+      maxHttpBufferSize: this.websocket().maxPayloadBytes,
     } as ServerOptions);
 
     if (this.adapterConstructor) server.adapter(this.adapterConstructor);
 
     return server;
+  }
+
+  private websocket(): WebsocketConfig {
+    return this.app.get(ConfigService).getOrThrow<WebsocketConfig>('websocket');
   }
 
   private resolveCorsOrigin(): CorsOriginDelegateType {
