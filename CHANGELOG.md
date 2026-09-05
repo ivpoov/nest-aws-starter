@@ -6,7 +6,30 @@ type. Promotion merge commits are omitted; the commits they carried are not.
 **Generated — do not edit by hand.** Regenerate with
 `node scripts/changelog.mjs --out CHANGELOG.md`; the release workflow does exactly that.
 
-## v1.3.3 (2026-09-03)
+## v1.4.0 (2026-09-05)
+
+[`v1.3.3...v1.4.0`](https://github.com/ivpoov/nest-aws-starter/compare/v1.3.3...v1.4.0)
+
+### Features
+
+- **api:** control log verbosity with LOG_LEVEL ([`62ef188`](https://github.com/ivpoov/nest-aws-starter/commit/62ef188a2c0c6a032f2ca73be50ed0967c796c16))
+- **api:** expire old activities, notifications, sessions and webhook events ([`396946a`](https://github.com/ivpoov/nest-aws-starter/commit/396946a531b7bb49f8f55de7a343761d0cd8631e))
+- **web,admin:** drive the product name from one env var ([`53cb439`](https://github.com/ivpoov/nest-aws-starter/commit/53cb439c8068065fde8d6b2058e564b7d533ef1f))
+
+### Bug Fixes
+
+- **notification:** cap socket connections and rate limit the handshake ([`eb7a12e`](https://github.com/ivpoov/nest-aws-starter/commit/eb7a12e253dace64fc8a081acffa94ec3aa78070))
+
+### CI
+
+- **api:** measure coverage over the unit and e2e suites together ([`e4c397c`](https://github.com/ivpoov/nest-aws-starter/commit/e4c397c5842cee77c03c9652e4a82c15d7b2e7e3))
+
+### Documentation
+
+- **removal:** refresh the recipes for the brand import ([`2409cfd`](https://github.com/ivpoov/nest-aws-starter/commit/2409cfdcd944dbc5859da0a6e0e42ad77c3f86cc))
+- **removal:** refresh the recipes for the log-level import ([`e9f62d7`](https://github.com/ivpoov/nest-aws-starter/commit/e9f62d720dccffb7f8c3623ef778513ac5605ebf))
+
+## v1.3.3 (2026-09-04)
 
 [`v1.3.2...v1.3.3`](https://github.com/ivpoov/nest-aws-starter/compare/v1.3.2...v1.3.3)
 
@@ -19,6 +42,10 @@ type. Promotion merge commits are omitted; the commits they carried are not.
 
 - **admin:** assert the accessible tables are hidden by a wrapper ([`d1d7a8c`](https://github.com/ivpoov/nest-aws-starter/commit/d1d7a8c28ae49b96334d80191ba9dfd4ad68c1fa))
 - **notification:** cover both shutdown hooks on the fan-out guard ([`d0e937e`](https://github.com/ivpoov/nest-aws-starter/commit/d0e937e3671b1ea2edc6d5c1d3cf2f925de2d1ba))
+
+### Chores
+
+- bump the root package version to 1.3.3 ([`af36d1d`](https://github.com/ivpoov/nest-aws-starter/commit/af36d1db8f38f01284f30a8fb6bb8b7c24a4c833))
 
 ## v1.3.2 (2026-09-03)
 
