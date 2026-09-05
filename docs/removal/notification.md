@@ -86,8 +86,8 @@ and the markers themselves.
   - line 21: `import { websocketConfig } from '@configs/websocket.config.js'; // <module:notification>`
   - line 43: `websocketConfig, // <module:notification>`
 - `apps/api/src/main.ts`
-  - line 8: `import { installWebsocketAdapter } from '@modules/notification/helpers/install-websocket-adapter.helper.js'; // <module:notification>`
-  - lines 52-58 (block)
+  - line 9: `import { installWebsocketAdapter } from '@modules/notification/helpers/install-websocket-adapter.helper.js'; // <module:notification>`
+  - lines 53-59 (block)
 - `apps/api/test/app.factory.ts`
   - line 2: `import { installWebsocketAdapter } from '@modules/notification/helpers/install-websocket-adapter.helper.js'; // <module:notification>`
   - lines 20-26 (block)
