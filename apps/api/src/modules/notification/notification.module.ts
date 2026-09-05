@@ -14,6 +14,7 @@ import { NotificationEmailService } from '@modules/notification/services/notific
 import { NotificationEventSubscriberService } from '@modules/notification/services/notification-event-subscriber.service.js';
 import { NotificationFanOutService } from '@modules/notification/services/notification-fan-out.service.js';
 import { NotificationPreferenceService } from '@modules/notification/services/notification-preference.service.js';
+import { WebsocketHandshakeLimiterService } from '@modules/notification/services/websocket-handshake-limiter.service.js';
 import { UserModule } from '@modules/user/user.module.js';
 import { Module } from '@nestjs/common';
 
@@ -36,6 +37,7 @@ import { Module } from '@nestjs/common';
   controllers: [NotificationController, NotificationPreferenceController],
   providers: [
     NotificationGateway,
+    WebsocketHandshakeLimiterService,
     NotificationEventSubscriberService,
     NotificationEmailService,
     NotificationFanOutService,

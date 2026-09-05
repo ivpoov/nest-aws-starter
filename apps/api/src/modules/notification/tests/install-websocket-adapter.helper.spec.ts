@@ -46,8 +46,22 @@ function createApp(websocket: WebsocketConfig): FakeAppInterface {
 // let the gateway drop handshakes after accepting them, i.e. it held two
 // Redis connections for the process lifetime and generated reconnect loops.
 describe('installWebsocketAdapter', () => {
-  const enabled: WebsocketConfig = { isEnabled: true, heartbeatIntervalMs: 60_000 };
-  const disabled: WebsocketConfig = { isEnabled: false, heartbeatIntervalMs: 60_000 };
+  const enabled: WebsocketConfig = {
+    isEnabled: true,
+    heartbeatIntervalMs: 60_000,
+    maxConnectionsPerUser: 10,
+    handshakesPerMinutePerIp: 30,
+    heartbeatConcurrency: 25,
+    maxPayloadBytes: 8_192,
+  };
+  const disabled: WebsocketConfig = {
+    isEnabled: false,
+    heartbeatIntervalMs: 60_000,
+    maxConnectionsPerUser: 10,
+    handshakesPerMinutePerIp: 30,
+    heartbeatConcurrency: 25,
+    maxPayloadBytes: 8_192,
+  };
 
   it('installs the Redis-backed adapter and connects its pub/sub pair when enabled', async () => {
     const fake: FakeAppInterface = createApp(enabled);
