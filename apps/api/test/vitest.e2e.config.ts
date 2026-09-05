@@ -2,6 +2,7 @@ import { config as loadEnv } from 'dotenv';
 import swc from 'unplugin-swc';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { defineConfig } from 'vitest/config';
+import { coverageConfig } from '../vitest.coverage.js';
 import { resolveE2eDatabaseUrl } from './helpers/e2e-database-url.helper.js';
 import { resolveE2eRedisUrl } from './helpers/e2e-redis-url.helper.js';
 
@@ -20,6 +21,11 @@ export default defineConfig({
   test: {
     include: ['test/**/*.e2e-spec.ts'],
     environment: 'node',
+    // Same include/exclude as the unit run, from the same file. These specs
+    // drive the real app in-process over HTTP, so what they reach is most of
+    // what the unit run cannot — and the two are only mergeable while they
+    // measure the same set of files.
+    coverage: coverageConfig,
     fileParallelism: false,
     setupFiles: ['./test/reflect-metadata.setup.ts'],
     hookTimeout: 30000,

@@ -33,3 +33,6 @@ backend.hcl
 # not reusable modules — committing the lock file pins exact provider versions
 # and checksums so CI, every contributor and the one real apply all resolve the
 # same providers.
+
+# Blob reports the unit and e2e runs leave for the merged coverage report.
+.vitest-reports/
