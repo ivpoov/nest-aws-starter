@@ -26,7 +26,7 @@ and the markers themselves.
   - line 74: `FacebookOauthModule, // <module:oauth-facebook>`
 - `apps/api/src/configs/index.ts`
   - line 7: `import { facebookOauthConfig } from '@configs/facebook-oauth.config.js'; // <module:oauth-facebook>`
-  - line 29: `facebookOauthConfig, // <module:oauth-facebook>`
+  - line 30: `facebookOauthConfig, // <module:oauth-facebook>`
 
 ### Not yet fence-marked (edit by hand)
 

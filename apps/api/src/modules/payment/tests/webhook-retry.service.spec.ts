@@ -1,4 +1,5 @@
 import type { PaymentConfig } from '@configs/payment.config.js';
+import { FAKE_RETENTION_CONFIG } from '@modules/common/constants/retention-test.constants.js';
 import { NormalizedEventTypeEnum } from '@modules/payment/enums/normalized-event-type.enum.js';
 import { WebhookEventStatusEnum } from '@modules/payment/enums/webhook-event-status.enum.js';
 import type { WebhookEventInterface } from '@modules/payment/interfaces/webhook-event.interface.js';
@@ -50,6 +51,7 @@ function createService(
     findRetryableFailed: vi.fn().mockResolvedValue(options.retryableFailed ?? []),
     findStaleReceived: vi.fn().mockResolvedValue(options.staleReceived ?? []),
     markRetryQueued: vi.fn(),
+    deleteTerminalOlderThan: vi.fn(),
   };
   const sqsProvider: SqsProviderInterface = {
     sendMessage: vi.fn().mockResolvedValue('message-id'),
@@ -60,6 +62,7 @@ function createService(
     webhookEventRepository,
     sqsProvider,
     payment,
+    FAKE_RETENTION_CONFIG,
   );
 
   return { service, webhookEventRepository, sqsProvider };
@@ -143,6 +146,7 @@ describe('WebhookRetryService.sweep', () => {
       findById: vi.fn(),
       markProcessed: vi.fn(),
       markSkipped: vi.fn(),
+      deleteTerminalOlderThan: vi.fn(),
       markFailed: vi.fn(),
       recordFailure: vi.fn(),
       findRetryableFailed: vi
@@ -170,7 +174,12 @@ describe('WebhookRetryService.sweep', () => {
       receiveMessages: vi.fn(),
       deleteMessage: vi.fn(),
     };
-    const service = new WebhookRetryService(webhookEventRepository, sqsProvider, payment);
+    const service = new WebhookRetryService(
+      webhookEventRepository,
+      sqsProvider,
+      payment,
+      FAKE_RETENTION_CONFIG,
+    );
 
     const result = await service.sweep();
 

@@ -13,6 +13,7 @@ import { WebhookController } from '@modules/payment/controllers/webhook.controll
 import { RequiresSubscriptionGuard } from '@modules/payment/guards/requires-subscription.guard.js';
 import type { SubscriptionLifecycleInterface } from '@modules/payment/interfaces/subscription-lifecycle.interface.js';
 import { SubscriptionExpiryJob } from '@modules/payment/jobs/subscription-expiry.job.js';
+import { WebhookEventRetentionJob } from '@modules/payment/jobs/webhook-event-retention.job.js';
 import { WebhookRetryJob } from '@modules/payment/jobs/webhook-retry.job.js';
 import { planPermissions } from '@modules/payment/permissions/plan.permissions.js';
 import { transactionPermissions } from '@modules/payment/permissions/transaction.permissions.js';
@@ -62,10 +63,23 @@ const webhookRetryJobRegistrationProvider: Provider = {
   },
 };
 
+// Same self-registration idiom as the other scheduled jobs — TaskSchedulerModule
+// is @Global(), so the registry is already resolvable here.
+const retentionJobRegistrationProvider: Provider = {
+  provide: Symbol('WEBHOOK_EVENT_RETENTION_JOB_REGISTRATION'),
+  inject: [ScheduledJobRegistryService, WebhookRetryService],
+  useFactory: (registry: ScheduledJobRegistryService, service: WebhookRetryService): boolean => {
+    registry.register(new WebhookEventRetentionJob(service));
+
+    return true;
+  },
+};
+
 // Global so provider modules (Stripe, others later) can inject
 // PaymentProviderRegistryService with a single import line in AppModule —
 // mirrors OauthModule.
 @Global()
+
 @Module({
   imports: [
     CaslModule.forFeature({ permissions: planPermissions }),
@@ -78,6 +92,7 @@ const webhookRetryJobRegistrationProvider: Provider = {
     TransactionAdminController,
   ],
   providers: [
+    retentionJobRegistrationProvider,
     PaymentProviderRegistryService,
     BillingService,
     SubscriptionService,
