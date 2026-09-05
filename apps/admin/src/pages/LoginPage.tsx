@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { login } from '../apis/auth';
+import { Brand } from '../components/Brand/Brand';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -36,6 +37,7 @@ export function LoginPage(): ReactElement {
 
   return (
     <div className="mx-auto mt-24 max-w-sm">
+      <Brand />
       <Card title="Admin login">
         <form
           className="flex flex-col gap-4"

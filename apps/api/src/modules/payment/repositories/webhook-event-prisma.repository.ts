@@ -1,4 +1,5 @@
 import { Prisma } from '@generated/prisma/client.js';
+import { WebhookEventStatus } from '@generated/prisma/enums.js';
 import type { WebhookEventModel } from '@generated/prisma/models.js';
 import type { TransactionContextInterface } from '@interfaces/transaction-context.interface.js';
 import { WebhookEventStatusEnum } from '@modules/payment/enums/webhook-event-status.enum.js';
@@ -150,5 +151,30 @@ export class WebhookEventPrismaRepository implements WebhookEventRepositoryInter
       createdAt: webhookEvent.createdAt,
       processedAt: webhookEvent.processedAt,
     };
+  }
+
+  // Deletes at most `limit` rows per call. The caller loops; this does not.
+  //
+  // Two statements rather than one `deleteMany`, because Prisma's deleteMany
+  // takes no `take` — an unbounded delete on a table that has grown for a year
+  // holds a lock long enough to be an outage of its own. Selecting the ids
+  // first bounds the write to exactly the rows chosen.
+  public async deleteTerminalOlderThan(cutoff: Date, limit: number): Promise<number> {
+    const doomed: { id: string }[] = await this.prisma.webhookEvent.findMany({
+      where: {
+        createdAt: { lt: cutoff },
+        status: { in: [WebhookEventStatus.PROCESSED, WebhookEventStatus.SKIPPED] },
+      },
+      select: { id: true },
+      take: limit,
+    });
+
+    if (doomed.length === 0) return 0;
+
+    const deleted = await this.prisma.webhookEvent.deleteMany({
+      where: { id: { in: doomed.map((row: { id: string }): string => row.id) } },
+    });
+
+    return deleted.count;
   }
 }

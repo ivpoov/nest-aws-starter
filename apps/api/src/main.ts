@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { AppConfig } from '@configs/app.config.js';
 import { configureApp } from '@helpers/configure-app.helper.js';
 import { setupSwagger } from '@helpers/setup-swagger.helper.js';
+import { resolveLogLevels } from '@modules/logger/helpers/resolve-log-levels.helper.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { RequestContextService } from '@modules/logger/services/request-context.service.js';
 import { installWebsocketAdapter } from '@modules/notification/helpers/install-websocket-adapter.helper.js'; // <module:notification>
@@ -57,7 +58,13 @@ async function bootstrap(): Promise<void> {
   await installWebsocketAdapter(app);
   // </module:notification>
 
-  app.useLogger(new CustomLoggerService('App'));
+  // LOG_LEVEL names a minimum severity; everything from it up is enabled.
+  // Unset, production drops debug and verbose and development keeps them.
+  app.useLogger(
+    new CustomLoggerService('App', {
+      logLevels: resolveLogLevels(process.env.LOG_LEVEL, process.env.NODE_ENV),
+    }),
+  );
   app.enableShutdownHooks();
   await configureApp(app);
 

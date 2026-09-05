@@ -1,7 +1,9 @@
+import { type RetentionConfig, retentionConfig } from '@configs/retention.config.js';
 import type { CurrentUserInterface } from '@interfaces/current-user.interface.js';
 import type { CursorPaginationInterface } from '@interfaces/cursor-pagination.interface.js';
 import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
+import { purgeInBatches } from '@modules/common/helpers/purge-in-batches.helper.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { NOTIFICATION_REPOSITORY } from '@modules/notification/constants/notification.constants.js';
 import {
@@ -18,6 +20,8 @@ import type { NotificationUnreadCountInterface } from '@modules/notification/int
 import { NotificationAudienceEnum, UserRoleEnum } from '@nest-aws-starter/shared';
 import { Inject, Injectable } from '@nestjs/common';
 
+const DAY_MS = 86_400_000;
+
 @Injectable()
 export class NotificationService {
   private readonly logger = new CustomLoggerService(NotificationService.name);
@@ -25,6 +29,7 @@ export class NotificationService {
   constructor(
     @Inject(NOTIFICATION_REPOSITORY)
     private readonly notificationRepository: NotificationRepositoryInterface,
+    @Inject(retentionConfig.KEY) private readonly retention: RetentionConfig,
   ) {}
 
   // The merged feed: own USER-audience rows, plus every ADMIN-audience row
@@ -98,5 +103,18 @@ export class NotificationService {
 
   private toScope(user: CurrentUserInterface): NotificationScopeFiltersInterface {
     return { userId: user.id, includeAdmin: user.role === UserRoleEnum.ADMIN };
+  }
+
+  // Retention. Disabled by RETENTION_ENABLED, and otherwise deletes rows
+  // created before the configured window in bounded batches — see
+  // purgeInBatches for why the loop is capped as well as batched.
+  public async purgeExpired(): Promise<number> {
+    if (!this.retention.isEnabled) return 0;
+
+    const cutoff: Date = new Date(Date.now() - this.retention.notificationDays * DAY_MS);
+
+    return purgeInBatches('notification', this.retention.batchSize, this.logger, (limit: number) =>
+      this.notificationRepository.deleteOlderThan(cutoff, limit),
+    );
   }
 }

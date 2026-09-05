@@ -42,4 +42,8 @@ export interface WebhookEventRepositoryInterface {
   // left untouched — the consumer's ceiling check reads it on the next
   // dispatch attempt.
   markRetryQueued(id: string): Promise<void>;
+  // Retention, and only for events that reached a terminal state. One still
+  // RECEIVED or FAILED is unfinished work or the evidence of a bug — deleting
+  // it would destroy the local record of a payment the provider says it sent.
+  deleteTerminalOlderThan(cutoff: Date, limit: number): Promise<number>;
 }

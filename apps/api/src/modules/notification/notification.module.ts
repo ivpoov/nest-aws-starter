@@ -5,6 +5,7 @@ import { NOTIFICATION_PREFERENCE_REPOSITORY } from '@modules/notification/consta
 import { NotificationController } from '@modules/notification/controllers/notification.controller.js';
 import { NotificationPreferenceController } from '@modules/notification/controllers/notification-preference.controller.js';
 import { NotificationGateway } from '@modules/notification/gateways/notification.gateway.js';
+import { NotificationRetentionJob } from '@modules/notification/jobs/notification-retention.job.js';
 import { notificationPermissions } from '@modules/notification/permissions/notification.permissions.js';
 import { NotificationEmailThrottleRedisRepository } from '@modules/notification/repositories/notification-email-throttle-redis.repository.js';
 import { NotificationPreferencePrismaRepository } from '@modules/notification/repositories/notification-preference-prisma.repository.js';
@@ -14,8 +15,10 @@ import { NotificationEmailService } from '@modules/notification/services/notific
 import { NotificationEventSubscriberService } from '@modules/notification/services/notification-event-subscriber.service.js';
 import { NotificationFanOutService } from '@modules/notification/services/notification-fan-out.service.js';
 import { NotificationPreferenceService } from '@modules/notification/services/notification-preference.service.js';
+import { WebsocketHandshakeLimiterService } from '@modules/notification/services/websocket-handshake-limiter.service.js';
+import { ScheduledJobRegistryService } from '@modules/task-scheduler/services/scheduled-job-registry.service.js';
 import { UserModule } from '@modules/user/user.module.js';
-import { Module } from '@nestjs/common';
+import { Module, type Provider } from '@nestjs/common';
 
 // TokenService is injected directly — TokenModule is @Global(), so no
 // import is needed here (same as JwtAuthGuard). NotificationEventSubscriberService
@@ -31,11 +34,26 @@ import { Module } from '@nestjs/common';
 // are @Global(), so CacheFactoryService/MAIL_TRANSPORT need no import here.
 // NotificationFanOutService is the event subscriber's fan-out orchestrator
 // (IN_APP/unread-count/EMAIL), extracted out of the event subscriber itself.
+
+// Same self-registration idiom as the other scheduled jobs — TaskSchedulerModule
+// is @Global(), so the registry is already resolvable here.
+const retentionJobRegistrationProvider: Provider = {
+  provide: Symbol('NOTIFICATION_RETENTION_JOB_REGISTRATION'),
+  inject: [ScheduledJobRegistryService, NotificationService],
+  useFactory: (registry: ScheduledJobRegistryService, service: NotificationService): boolean => {
+    registry.register(new NotificationRetentionJob(service));
+
+    return true;
+  },
+};
+
 @Module({
   imports: [CaslModule.forFeature({ permissions: notificationPermissions }), UserModule],
   controllers: [NotificationController, NotificationPreferenceController],
   providers: [
+    retentionJobRegistrationProvider,
     NotificationGateway,
+    WebsocketHandshakeLimiterService,
     NotificationEventSubscriberService,
     NotificationEmailService,
     NotificationFanOutService,

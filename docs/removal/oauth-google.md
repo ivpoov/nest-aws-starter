@@ -26,7 +26,7 @@ and the markers themselves.
   - line 73: `GoogleOauthModule, // <module:oauth-google>`
 - `apps/api/src/configs/index.ts`
   - line 8: `import { googleOauthConfig } from '@configs/google-oauth.config.js'; // <module:oauth-google>`
-  - line 30: `googleOauthConfig, // <module:oauth-google>`
+  - line 31: `googleOauthConfig, // <module:oauth-google>`
 
 ### Not yet fence-marked (edit by hand)
 
