@@ -11,6 +11,7 @@ import { mailConfig } from '@configs/mail.config.js';
 import { paymentConfig } from '@configs/payment.config.js'; // <module:payment>
 import { productionGuardConfig } from '@configs/production-guard.config.js';
 import { redisConfig } from '@configs/redis.config.js';
+import { retentionConfig } from '@configs/retention.config.js';
 import { s3Config } from '@configs/s3.config.js';
 import { schedulerConfig } from '@configs/scheduler.config.js';
 import { snsConfig } from '@configs/sns.config.js';
@@ -32,6 +33,7 @@ export const configs = [
   mailConfig,
   paymentConfig, // <module:payment>
   redisConfig,
+  retentionConfig,
   s3Config,
   schedulerConfig,
   snsConfig,

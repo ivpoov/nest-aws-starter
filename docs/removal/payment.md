@@ -81,9 +81,9 @@ and the markers themselves.
   - line 85: `StripeModule, // <module:payment>`
 - `apps/api/src/configs/index.ts`
   - line 11: `import { paymentConfig } from '@configs/payment.config.js'; // <module:payment>`
-  - line 18: `import { stripeConfig } from '@configs/stripe.config.js'; // <module:payment>`
-  - line 33: `paymentConfig, // <module:payment>`
-  - line 39: `stripeConfig, // <module:payment>`
+  - line 19: `import { stripeConfig } from '@configs/stripe.config.js'; // <module:payment>`
+  - line 34: `paymentConfig, // <module:payment>`
+  - line 41: `stripeConfig, // <module:payment>`
 - `apps/api/src/modules/common/constants/development-defaults.constants.ts`
   - lines 70-81 (block)
 - `apps/api/src/modules/common/errors/tests/error-code-contract.spec.ts`
@@ -150,7 +150,7 @@ and the markers themselves.
 - `apps/web/src/constants/app-nav-items.constants.ts`
   - line 13: `{ to: '/settings/billing', label: 'Billing' }, // <module:payment>`
 - `apps/web/src/pages/LoginPage.tsx`
-  - lines 65-70 (block)
+  - lines 67-72 (block)
 - `apps/web/src/pages/RegisterPage.tsx`
   - lines 63-68 (block)
 - `apps/web/src/tests/resolveNotificationLink.spec.ts`

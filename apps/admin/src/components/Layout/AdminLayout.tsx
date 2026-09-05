@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { ADMIN_NAV_ITEMS } from '../../constants/admin-nav-items.constants';
 import { useLogout } from '../../hooks/auth/useLogout';
+import { Brand } from '../Brand/Brand';
 import { NotificationBell } from '../Notifications/NotificationBell'; // <module:notification>
 import { ThemeToggle } from '../ui/ThemeToggle';
 
@@ -19,7 +20,7 @@ export function AdminLayout(): ReactElement {
       <aside
         className={`${isDrawerOpen ? 'block' : 'hidden'} fixed inset-y-0 left-0 z-10 w-56 border-r border-edge bg-surface-raised p-4 md:static md:block`}
       >
-        <p className="mb-6 text-sm font-semibold">Starter Admin</p>
+        <Brand isCompact />
         <nav className="flex flex-col gap-2 text-sm">
           {ADMIN_NAV_ITEMS.map((item) => (
             <NavLink

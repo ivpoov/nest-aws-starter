@@ -408,6 +408,11 @@ model Notification {
 
   @@index([userId, id])
   @@index([audience, id])
+  // Backs the retention sweep, which deletes by age and by nothing else. The
+  // two indexes above both lead with another column, so an age-only predicate
+  // could not use either and the sweep would seq-scan the table it exists to
+  // keep small.
+  @@index([createdAt])
   @@map("notifications")
 }
 

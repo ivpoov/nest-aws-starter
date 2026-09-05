@@ -84,12 +84,19 @@ jobs:
       - run: pnpm run test
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
-      # Coverage is measured, not just produced: vitest.config.ts carries
-      # thresholds set from the real figures, so a change that deletes tests or
-      # adds untested branches fails here instead of passing quietly behind a
-      # green suite. Runs after the plain suite so a genuine test failure is
-      # reported as a test failure rather than as a coverage shortfall.
-      - run: pnpm --dir apps/api run test:cov
+      # Coverage is measured over BOTH suites, not just the unit one. Each run
+      # writes a blob report and `test:cov` merges them, so the gate sees what
+      # the tests actually reach. Measured unit-only the figures are 75.11%
+      # statements and 67.49% functions; measured across both they are 96.03%
+      # and 98.03% — the difference is entirely the e2e specs, which drive the
+      # app over real HTTP and contribute nothing to a unit-only report. The
+      # old gate did worse than under-report: it aimed effort at files that
+      # were already covered.
+      #
+      # This re-runs the api unit specs that `pnpm run test` just ran, which
+      # costs about fifteen seconds and is what keeps `pnpm test` fast for a
+      # developer who wants a plain suite without coverage instrumentation.
+      - run: pnpm --dir apps/api run test:blob
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
       # `pnpm run build` type-checks src only (tsconfig.build.json excludes
@@ -107,7 +114,7 @@ jobs:
       # tsconfig.e2e.json still exists for scripts/subtraction-test.mjs, which
       # type-checks each subtracted tree without the unit specs.
       - run: pnpm --dir apps/api run typecheck
-      - run: pnpm run test:e2e
+      - run: pnpm --dir apps/api run test:e2e:blob
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
           AWS_REGION: us-east-1
@@ -131,6 +138,10 @@ jobs:
           TRUST_PROXY: "true"
           WEBSOCKET_ENABLED: "true"
           WEBSOCKET_HEARTBEAT_INTERVAL_MS: "200"
+      # Merges the two blob reports and applies the threshold. Last, so a real
+      # test failure is reported as a test failure rather than as a coverage
+      # shortfall.
+      - run: pnpm --dir apps/api run test:cov
 
   # The same e2e suite against Redis Cluster instead of a single instance.
   #

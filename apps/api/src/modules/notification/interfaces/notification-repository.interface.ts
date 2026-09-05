@@ -22,4 +22,7 @@ export interface NotificationRepositoryInterface {
   // existing eager USER receipt's readAt.
   markRead(notificationId: string, readerId: string): Promise<void>;
   markAllRead(filters: NotificationScopeFiltersInterface): Promise<void>;
+  // Retention. Receipts follow through the schema's cascade, so this deletes
+  // both tables and nothing has to keep them in step.
+  deleteOlderThan(cutoff: Date, limit: number): Promise<number>;
 }

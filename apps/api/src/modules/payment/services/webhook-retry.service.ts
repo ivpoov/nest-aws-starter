@@ -1,4 +1,6 @@
 import { type PaymentConfig, paymentConfig } from '@configs/payment.config.js';
+import { type RetentionConfig, retentionConfig } from '@configs/retention.config.js';
+import { purgeInBatches } from '@modules/common/helpers/purge-in-batches.helper.js';
 import { CustomLoggerService } from '@modules/logger/services/custom-logger.service.js';
 import { WEBHOOK_EVENT_REPOSITORY } from '@modules/payment/constants/payment.constants.js';
 import {
@@ -13,6 +15,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { SQS_PROVIDER } from '@providers/sqs/constants/sqs.constants.js';
 import type { SqsProviderInterface } from '@providers/sqs/interfaces/sqs-provider.interface.js';
 
+const DAY_MS = 86_400_000;
+
 @Injectable()
 export class WebhookRetryService {
   private readonly logger = new CustomLoggerService(WebhookRetryService.name);
@@ -24,6 +28,7 @@ export class WebhookRetryService {
     private readonly sqsProvider: SqsProviderInterface,
     @Inject(paymentConfig.KEY)
     private readonly payment: PaymentConfig,
+    @Inject(retentionConfig.KEY) private readonly retention: RetentionConfig,
   ) {}
 
   // Two independent sweeps sharing one staleness cutoff: FAILED events under
@@ -99,5 +104,18 @@ export class WebhookRetryService {
 
       this.logger.error(`Failed to re-enqueue webhook event ${webhookEventId}`, stack);
     }
+  }
+
+  // Retention. Disabled by RETENTION_ENABLED, and otherwise deletes rows
+  // created before the configured window in bounded batches — see
+  // purgeInBatches for why the loop is capped as well as batched.
+  public async purgeExpiredEvents(): Promise<number> {
+    if (!this.retention.isEnabled) return 0;
+
+    const cutoff: Date = new Date(Date.now() - this.retention.webhookEventDays * DAY_MS);
+
+    return purgeInBatches('webhook event', this.retention.batchSize, this.logger, (limit: number) =>
+      this.webhookEventRepository.deleteTerminalOlderThan(cutoff, limit),
+    );
   }
 }

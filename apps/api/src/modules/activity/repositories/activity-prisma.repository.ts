@@ -65,4 +65,26 @@ export class ActivityPrismaRepository implements ActivityRepositoryInterface {
       createdAt: activity.createdAt,
     };
   }
+
+  // Deletes at most `limit` rows per call. The caller loops; this does not.
+  //
+  // Two statements rather than one `deleteMany`, because Prisma's deleteMany
+  // takes no `take` — an unbounded delete on a table that has grown for a year
+  // holds a lock long enough to be an outage of its own. Selecting the ids
+  // first bounds the write to exactly the rows chosen.
+  public async deleteOlderThan(cutoff: Date, limit: number): Promise<number> {
+    const doomed: { id: string }[] = await this.prisma.activity.findMany({
+      where: { createdAt: { lt: cutoff } },
+      select: { id: true },
+      take: limit,
+    });
+
+    if (doomed.length === 0) return 0;
+
+    const deleted = await this.prisma.activity.deleteMany({
+      where: { id: { in: doomed.map((row: { id: string }): string => row.id) } },
+    });
+
+    return deleted.count;
+  }
 }

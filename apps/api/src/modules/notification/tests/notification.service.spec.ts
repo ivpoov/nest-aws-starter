@@ -1,4 +1,5 @@
 import type { CurrentUserInterface } from '@interfaces/current-user.interface.js';
+import { FAKE_RETENTION_CONFIG } from '@modules/common/constants/retention-test.constants.js';
 import { ForbiddenError } from '@modules/common/errors/forbidden.error.js';
 import { NotFoundError } from '@modules/common/errors/not-found.error.js';
 import type { NotificationInterface } from '@modules/notification/interfaces/notification.interface.js';
@@ -57,9 +58,10 @@ function createService(
     countUnread: vi.fn().mockResolvedValue(0),
     markRead: vi.fn().mockResolvedValue(undefined),
     markAllRead: vi.fn().mockResolvedValue(undefined),
+    deleteOlderThan: vi.fn(),
     ...overrides,
   };
-  const service: NotificationService = new NotificationService(repository);
+  const service: NotificationService = new NotificationService(repository, FAKE_RETENTION_CONFIG);
 
   return { service, repository };
 }
