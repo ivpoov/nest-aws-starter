@@ -50,6 +50,51 @@ services:
       interval: 5s
       retries: 20
 
+  # <module:stackport>
+  # A read/write browser for the AWS resources LocalStack is emulating —
+  # queues, topics, mail and functions — sitting beside LocalStack the way
+  # pgAdmin sits beside Postgres. It changes nothing about LocalStack; it is
+  # another client of the same AWS API.
+  #
+  # PROFILED, so `docker compose up -d` never starts it. It is a developer
+  # convenience with an unauthenticated UI and write access to the emulated
+  # account, which is fine on a laptop and has no business anywhere else.
+  #
+  #   docker compose --profile tools up -d stackport   # http://localhost:20015
+  #
+  # SCOPE: sqs, sns, ses and lambda — exactly what LocalStack is configured to
+  # emulate above. **S3 is NOT among them.** This project's S3 is MinIO
+  # (S3_ENDPOINT points at 20013), so StackPort's bucket list is empty by
+  # design and MinIO's own console on 20014 remains the tool for object
+  # storage. Nothing is broken when that list comes back empty.
+  #
+  # Pointing AWS_ENDPOINT_URL at a real AWS endpoint and supplying real
+  # credentials makes this work against a real account. Anyone who wants that
+  # should also set STACKPORT_READ_ONLY=true first.
+  stackport:
+    image: davireis/stackport:latest
+    profiles: ["tools"]
+    depends_on:
+      localstack:
+        condition: service_healthy
+    ports:
+      - "${STACKPORT_PORT:-20015}:8080"
+    # The container reaches LocalStack through the host's published port
+    # rather than the compose network, because the endpoint it is given is
+    # also the one it prints and links to — a service-name URL would be
+    # correct inside the container and meaningless in the browser.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      AWS_ENDPOINT_URL: http://host.docker.internal:${LOCALSTACK_PORT:-20012}
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      # Writes are allowed locally: purging a queue or re-sending a message is
+      # most of why the tool is useful. Set true for a read-only viewer.
+      STACKPORT_READ_ONLY: "false"
+  # </module:stackport>
+
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
