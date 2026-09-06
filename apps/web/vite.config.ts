@@ -125,7 +125,12 @@ export default defineConfig({
   // they happened to start in — and every bookmark, OAuth redirect and
   // CORS_ORIGINS entry pointing at the old one silently stops matching. The
   // whole stack sits in 20000-20023 so the URLs are stable.
-  server: { port: 20001 },
+  // `strictPort` is the half that enforces it: without it the port above is
+  // a preference, not a guarantee, and Vite silently relocates on a conflict
+  // — which is the exact failure the comment above describes. Fail loudly
+  // instead, so a taken port is something you fix rather than something you
+  // discover later through a CORS error.
+  server: { port: 20001, strictPort: true },
   test: {
     environment: 'jsdom',
     include: ['src/**/*.spec.ts', 'src/**/*.spec.tsx'],
