@@ -203,7 +203,7 @@ async function flushRedis(): Promise<void> {
 
   if (isCluster) return;
 
-  const url: string = resolveE2eRedisUrl(process.env.REDIS_URL ?? 'redis://localhost:6390', false);
+  const url: string = resolveE2eRedisUrl(process.env.REDIS_URL ?? 'redis://localhost:20011', false);
   const redis: Redis = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1 });
 
   try {

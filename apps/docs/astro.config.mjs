@@ -12,6 +12,9 @@ import { buildSidebar } from './src/repo-docs/sidebar.mjs';
 // not `/`. Every URL this workspace generates goes through routes.mjs, which
 // prefixes it — nothing here hard-codes the path a second time.
 export default defineConfig({
+  // Pinned for the same reason as the two Vite apps: Astro's default 4321 is
+  // not this project's to claim, and a stable URL is bookmarkable.
+  server: { port: 20003 },
   site: SITE.origin,
   base: SITE.base,
   markdown: {
@@ -62,7 +65,7 @@ export default defineConfig({
           // file in the repository has already been turned into an absolute
           // URL, so what is left is intentional.
           errorOnRelativeLinks: false,
-          // The README points at http://localhost:3000/docs, which is where the
+          // The README points at http://localhost:20000/docs, which is where the
           // API's Swagger UI is when you run it. That is the correct link.
           errorOnLocalLinks: false,
         }),

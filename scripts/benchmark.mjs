@@ -52,7 +52,7 @@ import autocannon from 'autocannon';
 
 const require = createRequire(import.meta.url);
 
-const DEFAULT_URL = 'http://127.0.0.1:3000';
+const DEFAULT_URL = 'http://127.0.0.1:20000';
 const DEFAULT_PREFIX = '/api/v1';
 const DEFAULT_CONNECTIONS = 50;
 const DEFAULT_DURATION = 10;

@@ -8,7 +8,7 @@ const enabledConfig = {
   isEnabled: true as const,
   clientId: 'discord-client',
   clientSecret: 'discord-secret',
-  redirectUri: 'http://localhost:3000/api/v1/auth/oauth/discord/callback',
+  redirectUri: 'http://localhost:20000/api/v1/auth/oauth/discord/callback',
 };
 
 describe('discordOauthConfig', () => {

@@ -3,7 +3,7 @@ import { CreateBucketCommand, S3Client } from '@aws-sdk/client-s3';
 export async function ensureBucket(): Promise<void> {
   const client: S3Client = new S3Client({
     region: process.env.AWS_REGION ?? 'us-east-1',
-    endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:9010',
+    endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:20013',
     forcePathStyle: true,
     credentials: {
       accessKeyId: process.env.S3_ACCESS_KEY ?? 'minioadmin',

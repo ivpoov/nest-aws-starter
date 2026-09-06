@@ -10,7 +10,7 @@ function clusterOptionsOf(client: RedisClientType): RedisOptions {
 
 describe('createRedisClient', () => {
   it('creates a single-node client when isCluster is false', async () => {
-    const config: RedisConfig = { url: 'redis://localhost:6390', isCluster: false };
+    const config: RedisConfig = { url: 'redis://localhost:20011', isCluster: false };
 
     const client: RedisClientType = createRedisClient(config);
 
@@ -20,7 +20,7 @@ describe('createRedisClient', () => {
   });
 
   it('creates a cluster client when isCluster is true', async () => {
-    const config: RedisConfig = { url: 'redis://localhost:7000', isCluster: true };
+    const config: RedisConfig = { url: 'redis://localhost:20020', isCluster: true };
 
     const client: RedisClientType = createRedisClient(config);
 
@@ -57,7 +57,7 @@ describe('createRedisClient', () => {
   });
 
   it('leaves tls and credentials unset for a plain redis:// cluster url', async () => {
-    const config: RedisConfig = { url: 'redis://localhost:7000', isCluster: true };
+    const config: RedisConfig = { url: 'redis://localhost:20020', isCluster: true };
 
     const client: RedisClientType = createRedisClient(config);
     const options: RedisOptions = clusterOptionsOf(client);

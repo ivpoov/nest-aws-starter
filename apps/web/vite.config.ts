@@ -107,7 +107,7 @@ function mediaSources(): string[] {
 // — apiClient fetches the former, the notification socket upgrades to the
 // latter. Falls back to the same default the app itself uses.
 function apiOrigins(): string[] {
-  const baseUrl: string = process.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api/v1';
+  const baseUrl: string = process.env.VITE_API_BASE_URL ?? 'http://localhost:20000/api/v1';
 
   try {
     const origin: string = new URL(baseUrl).origin;
@@ -120,6 +120,12 @@ function apiOrigins(): string[] {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), contentSecurityPolicy()],
+  // Pinned, not left to Vite's default. Vite falls back to 5173 and then walks
+  // upwards when that is taken, so two projects open at once get whichever port
+  // they happened to start in — and every bookmark, OAuth redirect and
+  // CORS_ORIGINS entry pointing at the old one silently stops matching. The
+  // whole stack sits in 20000-20023 so the URLs are stable.
+  server: { port: 20001 },
   test: {
     environment: 'jsdom',
     include: ['src/**/*.spec.ts', 'src/**/*.spec.tsx'],

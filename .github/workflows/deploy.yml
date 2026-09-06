@@ -128,7 +128,7 @@ jobs:
       # The host view of the compose Postgres, identical to ci.yml and
       # image.yml. Used by the migration that prepares the build's database and
       # by the BuildKit secret both image builds consume.
-      DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:20010/starter?connection_limit=10"
 
     steps:
       # Fails loudly when the environment's deployment branch rule is missing.
@@ -581,7 +581,7 @@ jobs:
       # the variables listed in turbo.json's `build.env` — which is
       # `["DATABASE_URL"]`. Every VITE_* variable would be stripped, both
       # frontends would silently build against their localhost defaults, and the
-      # deployed site would try to call http://localhost:3000. Calling each
+      # deployed site would try to call http://localhost:20000. Calling each
       # package's own script keeps the environment intact.
       #
       # packages/shared first, in dependency order: both apps import it and both

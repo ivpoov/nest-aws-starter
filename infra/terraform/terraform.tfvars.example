@@ -104,7 +104,7 @@ cost_profile = "demo"
 # which knows every hostname the frontends are actually served from, including
 # the CloudFront ones AWS only assigns at apply time. Set it to add an origin
 # this stack cannot know about, e.g. a local dev server.
-# cors_allowed_origins = ["http://localhost:5173"]
+# cors_allowed_origins = ["http://localhost:20001"]
 
 # Tag in the api ECR repository the service runs. "latest" is the bootstrap
 # value and the wrong one for a real deployment — the deploy workflow passes the

@@ -9,7 +9,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp } from './app.factory.js';
 
-const redirect = 'http://localhost:5173/auth/callback';
+const redirect = 'http://localhost:20001/auth/callback';
 
 const fakeProvider: OauthProviderInterface = {
   type: AuthMethodTypeEnum.GOOGLE,
@@ -166,30 +166,34 @@ describe('oauth flow (fake provider)', () => {
   // endpoint. `startsWith(WEB_APP_BASE_URL)` let every row below through.
   //
   // The `.evil.tld` row is rejected one layer earlier than the rest: with the
-  // suite's `WEB_APP_BASE_URL=http://localhost:5173` the suffix lands inside
+  // suite's `WEB_APP_BASE_URL=http://localhost:20001` the suffix lands inside
   // the port, so the value is not a parsable URL at all and the DTO's @IsUrl
   // returns the generic BAD_REQUEST. With a portless base URL
   // (`https://app.example.com`) the same shape IS a valid URL — that case is
-  // the `localhost:51730` row, which reaches the origin comparison.
+  // the `localhost:200010` row, which reaches the origin comparison.
   it.each([
     [
       'a host that only suffixes the allowed origin',
-      'http://localhost:5173.evil.tld/cb',
+      'http://localhost:20001.evil.tld/cb',
       'BAD_REQUEST',
     ],
     [
+      // 2000 is a prefix of the allowed 20001. The old fixture appended a digit
+      // instead (5173 -> 51730), which cannot be expressed against a five-digit
+      // port: 200010 is above 65535 and fails as a malformed URL long before the
+      // allowlist is consulted, which tests the parser rather than the check.
       'a port that only prefix-matches the allowed port',
-      'http://localhost:51730/auth/callback',
+      'http://localhost:2000/auth/callback',
       'OAUTH_REDIRECT_NOT_ALLOWED',
     ],
     [
       'userinfo that mimics the allowed origin',
-      'http://localhost:5173@evil.tld/cb',
+      'http://localhost:20001@evil.tld/cb',
       'OAUTH_REDIRECT_NOT_ALLOWED',
     ],
     [
       'an allowed origin with an unlisted path',
-      'http://localhost:5173/settings/methods',
+      'http://localhost:20001/settings/methods',
       'OAUTH_REDIRECT_NOT_ALLOWED',
     ],
     ['a wholly different origin', 'https://evil.example/cb', 'OAUTH_REDIRECT_NOT_ALLOWED'],

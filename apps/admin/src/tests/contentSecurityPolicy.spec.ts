@@ -40,8 +40,8 @@ describe('content security policy', () => {
   it('lets the app reach its own API over http and over the socket upgrade', () => {
     const policy: string = buildPolicy(html);
 
-    expect(policy).toContain('http://localhost:3000');
-    expect(policy).toContain('ws://localhost:3000');
+    expect(policy).toContain('http://localhost:20000');
+    expect(policy).toContain('ws://localhost:20000');
   });
 
   // The `https:` fallback is the policy's weakest point — it authorises every

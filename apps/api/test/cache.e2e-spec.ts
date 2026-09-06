@@ -7,7 +7,7 @@ import { createRedisClient } from '@providers/redis/helpers/create-redis-client.
 import type { RedisClientType } from '@providers/redis/types/redis-client.type.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-const redisUrl: string = process.env.REDIS_URL ?? 'redis://localhost:6390';
+const redisUrl: string = process.env.REDIS_URL ?? 'redis://localhost:20011';
 // Honour the same switch the application reads. Pinning `isCluster: false` here
 // built a plain client against a cluster node, which dies on the first MOVED
 // redirect it will not follow — so the one spec that covers the cluster-aware

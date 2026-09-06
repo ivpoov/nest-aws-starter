@@ -17,8 +17,8 @@ import type { UserService } from '@modules/user/services/user.service.js';
 import { AuthMethodTypeEnum, UserRoleEnum, UserStatusEnum } from '@nest-aws-starter/shared';
 import { describe, expect, it, vi } from 'vitest';
 
-const webApp: WebAppConfig = { baseUrl: 'http://localhost:5173' };
-const redirect = 'http://localhost:5173/auth/callback';
+const webApp: WebAppConfig = { baseUrl: 'http://localhost:20001' };
+const redirect = 'http://localhost:20001/auth/callback';
 
 const user: UserInterface = {
   id: 'user-1',
@@ -277,11 +277,11 @@ describe('OauthFlowService redirect allowlist', () => {
   // victim's session, so a redirect the origin comparison lets through is a
   // full account takeover with no password involved.
   it.each([
-    ['a host that only suffixes the allowed origin', 'http://localhost:5173.evil.tld/cb'],
-    ['a port that only prefix-matches the allowed port', 'http://localhost:51730/auth/callback'],
-    ['userinfo that mimics the allowed origin', 'http://localhost:5173@evil.tld/cb'],
-    ['a scheme swap of the allowed origin', 'https://localhost:5173/auth/callback'],
-    ['an allowed origin with an unlisted path', 'http://localhost:5173/settings/methods'],
+    ['a host that only suffixes the allowed origin', 'http://localhost:20001.evil.tld/cb'],
+    ['a port that only prefix-matches the allowed port', 'http://localhost:200010/auth/callback'],
+    ['userinfo that mimics the allowed origin', 'http://localhost:20001@evil.tld/cb'],
+    ['a scheme swap of the allowed origin', 'https://localhost:20001/auth/callback'],
+    ['an allowed origin with an unlisted path', 'http://localhost:20001/settings/methods'],
     ['a wholly different origin', 'https://evil.example/cb'],
     ['a protocol-relative target', '//evil.example/cb'],
     ['a relative target', '/auth/callback'],

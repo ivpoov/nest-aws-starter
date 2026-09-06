@@ -985,8 +985,8 @@ one greppable thread, across services, repositories, and providers.
   resolved `AppConfig.env`, so `NODE_ENV=production` gets the configured allowlist
   and nothing else, with no env var, header or pattern that re-enables the rule.
   The match is a parsed-`URL` hostname comparison — never `startsWith`, `includes`
-  or a regex — so `http://localhost.evil.tld`, `http://localhost:5173.evil.tld`,
-  `http://localhost:5173@evil.tld` and `http://evil.tld/?x=localhost` are all
+  or a regex — so `http://localhost.evil.tld`, `http://localhost:20001.evil.tld`,
+  `http://localhost:20001@evil.tld` and `http://evil.tld/?x=localhost` are all
   refused. `https://localhost:<port>` is refused too: a TLS-terminating dev server
   is a deliberate setup and its origin belongs in `CORS_ORIGINS`; the port is what
   Vite picks for you, the scheme is not.
@@ -1524,7 +1524,7 @@ export const appConfig = registerAs('app', (): AppConfig => {
     env: (process.env.NODE_ENV ?? 'development') as AppConfig['env'],
     apiPrefix: process.env.API_PREFIX ?? 'api',
     trustProxy: process.env.TRUST_PROXY === 'true',
-    corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:5174')
+    corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:20001,http://localhost:20002')
       .split(',')
       .map((origin: string): string => origin.trim())
       .filter((origin: string): boolean => origin.length > 0),

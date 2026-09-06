@@ -4,7 +4,7 @@ import { MemoryCacheStore } from '@providers/cache/services/memory-cache-store.s
 import type { RedisClientType } from '@providers/redis/types/redis-client.type.js';
 import { describe, expect, it, vi } from 'vitest';
 
-const config: RedisConfig = { url: 'redis://localhost:6390', isCluster: false };
+const config: RedisConfig = { url: 'redis://localhost:20011', isCluster: false };
 
 function createService(): { service: CacheInvalidationService; publish: ReturnType<typeof vi.fn> } {
   const publish = vi.fn().mockResolvedValue(1);

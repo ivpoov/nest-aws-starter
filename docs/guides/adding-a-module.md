@@ -268,7 +268,7 @@ Then set `DATABASE_URL` in `apps/api/.env` to that database for the duration of
 the work:
 
 ```
-DATABASE_URL=postgresql://postgres:postgres@localhost:5433/starter_scratch?connection_limit=10
+DATABASE_URL=postgresql://postgres:postgres@localhost:20010/starter_scratch?connection_limit=10
 ```
 
 and bring it up to date before you start:

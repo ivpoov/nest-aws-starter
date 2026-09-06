@@ -29,7 +29,7 @@ describe('assertProductionConfig', () => {
       assertProductionConfig(
         {
           AUTH_JWT_SECRET: 'local-development-secret-change-me-32chars',
-          CORS_ORIGINS: 'http://localhost:5173',
+          CORS_ORIGINS: 'http://localhost:20001',
           SWAGGER_ENABLED: 'true',
         },
         logger,
