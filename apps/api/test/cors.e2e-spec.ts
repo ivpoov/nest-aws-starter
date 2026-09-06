@@ -19,22 +19,22 @@ describe('cors', () => {
   it('answers preflight for an allowed origin', async () => {
     const response = await request(app.getHttpServer())
       .options('/api/v1/auth/register')
-      .set('origin', 'http://localhost:5173')
+      .set('origin', 'http://localhost:20001')
       .set('access-control-request-method', 'POST')
       .set('access-control-request-headers', 'content-type')
       .expect(204);
 
-    expect(response.headers['access-control-allow-origin']).toBe('http://localhost:5173');
+    expect(response.headers['access-control-allow-origin']).toBe('http://localhost:20001');
     expect(response.headers['access-control-allow-methods']).toContain('POST');
   });
 
   it('reflects the allowed origin on simple requests', async () => {
     const response = await request(app.getHttpServer())
       .get('/api/v1/auth/providers')
-      .set('origin', 'http://localhost:5174')
+      .set('origin', 'http://localhost:20002')
       .expect(200);
 
-    expect(response.headers['access-control-allow-origin']).toBe('http://localhost:5174');
+    expect(response.headers['access-control-allow-origin']).toBe('http://localhost:20002');
   });
 
   // The reason this rule exists: Vite silently falls back to the next free
@@ -82,7 +82,7 @@ describe('cors', () => {
 
   // The loopback rule is a parsed-hostname comparison, never a prefix or a
   // substring test — this project has already shipped one origin check that
-  // accepted `http://localhost:5173.evil.tld`. Each of these registers a
+  // accepted `http://localhost:20001.evil.tld`. Each of these registers a
   // domain an attacker can own while carrying the word "localhost" somewhere
   // a sloppy check would find it.
   it.each([
@@ -91,7 +91,7 @@ describe('cors', () => {
     'http://evil.tld/?x=localhost',
     'http://evil.tld#localhost',
     'http://127.0.0.1.evil.tld',
-    'http://localhost:5173@evil.tld',
+    'http://localhost:20001@evil.tld',
     'https://localhost:61234',
   ])('sends no allow-origin header for the localhost lookalike %s', async (origin: string) => {
     const response = await request(app.getHttpServer())
@@ -145,12 +145,12 @@ describe('cors', () => {
   it('never grants credentialed cross-origin requests', async () => {
     const simpleResponse = await request(app.getHttpServer())
       .get('/api/v1/auth/providers')
-      .set('origin', 'http://localhost:5173')
+      .set('origin', 'http://localhost:20001')
       .expect(200);
 
     const preflightResponse = await request(app.getHttpServer())
       .options('/api/v1/auth/register')
-      .set('origin', 'http://localhost:5173')
+      .set('origin', 'http://localhost:20001')
       .set('access-control-request-method', 'POST')
       .expect(204);
 
@@ -193,7 +193,7 @@ describe('cors (env: production)', () => {
   });
 
   it.each([
-    'http://localhost:5173',
+    'http://localhost:20001',
     'http://localhost:5175',
     'http://localhost:61234',
     'http://127.0.0.1:61234',

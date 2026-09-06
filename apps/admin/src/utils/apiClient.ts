@@ -3,7 +3,7 @@ import type { RequestOptionsInterface } from '../interfaces/request-options.inte
 import { useAuthStore } from '../stores/auth.store';
 
 const baseUrl: string =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:3000/api/v1';
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:20000/api/v1';
 
 // Single-flight: concurrent 401s share one refresh request.
 let refreshInFlight: Promise<boolean> | null = null;

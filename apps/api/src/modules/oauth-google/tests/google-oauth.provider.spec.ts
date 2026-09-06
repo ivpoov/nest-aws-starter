@@ -8,7 +8,7 @@ const enabledConfig = {
   isEnabled: true as const,
   clientId: 'client-1',
   clientSecret: 'secret-1',
-  redirectUri: 'http://localhost:3000/api/v1/auth/oauth/google/callback',
+  redirectUri: 'http://localhost:20000/api/v1/auth/oauth/google/callback',
 };
 
 describe('googleOauthConfig', () => {

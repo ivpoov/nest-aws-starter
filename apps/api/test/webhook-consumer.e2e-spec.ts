@@ -24,7 +24,7 @@ function sleep(ms: number): Promise<void> {
 
 const queueUrl: string =
   process.env.SQS_PAYMENT_WEBHOOK_QUEUE_URL ??
-  'http://localhost:4567/000000000000/starter-payment-webhook-queue';
+  'http://localhost:20012/000000000000/starter-payment-webhook-queue';
 
 interface SeededRowInterface {
   readonly id: string;

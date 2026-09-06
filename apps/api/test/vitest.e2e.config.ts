@@ -13,8 +13,8 @@ import { resolveE2eRedisUrl } from './helpers/e2e-redis-url.helper.js';
 loadEnv();
 
 const DEV_DATABASE_URL: string =
-  process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5433/starter';
-const DEV_REDIS_URL: string = process.env.REDIS_URL ?? 'redis://localhost:6390';
+  process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:20010/starter';
+const DEV_REDIS_URL: string = process.env.REDIS_URL ?? 'redis://localhost:20011';
 const IS_REDIS_CLUSTER: boolean = process.env.REDIS_IS_CLUSTER === 'true';
 
 export default defineConfig({

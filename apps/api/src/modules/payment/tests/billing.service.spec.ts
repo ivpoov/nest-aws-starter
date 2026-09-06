@@ -14,7 +14,7 @@ import { PaymentProviderRegistryService } from '@modules/payment/services/paymen
 import { SubscriptionStatusEnum } from '@nest-aws-starter/shared';
 import { describe, expect, it, vi } from 'vitest';
 
-const webApp: WebAppConfig = { baseUrl: 'http://localhost:5173' };
+const webApp: WebAppConfig = { baseUrl: 'http://localhost:20001' };
 
 const plan: PlanInterface = {
   id: '01890a5d-0000-774b-bcce-b302099a0001',

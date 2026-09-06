@@ -5,7 +5,7 @@ import type { SqsProviderInterface } from '@providers/sqs/interfaces/sqs-provide
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp } from './app.factory.js';
 
-const endpoint: string = process.env.AWS_ENDPOINT_URL ?? 'http://localhost:4567';
+const endpoint: string = process.env.AWS_ENDPOINT_URL ?? 'http://localhost:20012';
 const queueUrl: string = `${endpoint}/000000000000/starter-queue`;
 
 describe('SQS provider (LocalStack)', () => {

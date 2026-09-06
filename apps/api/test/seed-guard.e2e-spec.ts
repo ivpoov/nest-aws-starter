@@ -102,7 +102,7 @@ describe('demo seed production guard (e2e)', () => {
   it('accepts a loopback host whatever its case', () => {
     const result: SpawnSyncReturns<string> = runSeed({
       NODE_ENV: 'development',
-      DATABASE_URL: 'postgresql://postgres:postgres@LOCALHOST:5433/starter?connection_limit=10',
+      DATABASE_URL: 'postgresql://postgres:postgres@LOCALHOST:20010/starter?connection_limit=10',
     });
 
     expect(result.stderr).not.toContain('Refusing to seed');
