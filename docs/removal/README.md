@@ -31,6 +31,7 @@ with the markers. See `.github/workflows/subtraction.yml`.
 - [`cloudfront`](./cloudfront.md) — CloudFront signed download URLs (optional common provider).
 - [`payment`](./payment.md) — Plans, subscriptions, payment transactions, webhook events, and the Stripe provider (schema + core module + Stripe implementation).
 - [`notification`](./notification.md) — Notification/receipt/preference schema, WS gateway, the persist-first event subscriber (IN_APP + the per-type/per-channel EMAIL gate), the history API (list/unread-count/mark-read/read-all), and the preferences API (GET/PUT matrix).
+- [`stackport`](./stackport.md) — StackPort, a development-only browser for the AWS resources LocalStack emulates (compose service behind the `tools` profile).
 
 ## Coverage: what is proven vs. documented
 
