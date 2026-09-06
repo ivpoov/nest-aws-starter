@@ -81,12 +81,12 @@ describe('collectProductionViolations', () => {
   it('flags loopback cors origins one message at a time', () => {
     const violations: ErrorArgsInterface[] = collectProductionViolations(
       hardenedEnv({
-        CORS_ORIGINS: 'https://app.example.com,http://localhost:5173,http://127.0.0.1',
+        CORS_ORIGINS: 'https://app.example.com,http://localhost:20001,http://127.0.0.1',
       }),
     );
 
     expect(violations).toHaveLength(2);
-    expect(violations[0]?.details).toContain('http://localhost:5173');
+    expect(violations[0]?.details).toContain('http://localhost:20001');
     expect(violations[1]?.details).toContain('http://127.0.0.1');
   });
 
@@ -122,7 +122,7 @@ describe('collectProductionViolations', () => {
   it('reports every category in one pass so a bad deploy costs one round trip', () => {
     const violations: ErrorArgsInterface[] = collectProductionViolations({
       AUTH_JWT_SECRET: 'local-development-secret-change-me-32chars',
-      CORS_ORIGINS: 'http://localhost:5173',
+      CORS_ORIGINS: 'http://localhost:20001',
       SWAGGER_ENABLED: 'true',
     });
 

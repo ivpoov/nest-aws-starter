@@ -54,7 +54,7 @@ export default async function setup(): Promise<void> {
   // whatever a committed .env would say — there isn't one in CI anyway).
   loadEnv();
 
-  const endpoint: string = process.env.AWS_ENDPOINT_URL ?? 'http://localhost:4567';
+  const endpoint: string = process.env.AWS_ENDPOINT_URL ?? 'http://localhost:20012';
 
   await checkReachable(endpoint);
 

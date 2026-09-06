@@ -13,7 +13,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp } from './app.factory.js';
 import { ensureBucket } from './helpers/ensure-bucket.helper.js';
 
-const redirect = 'http://localhost:5173/auth/callback';
+const redirect = 'http://localhost:20001/auth/callback';
 const PNG_BYTES: Buffer = Buffer.from(
   '89504e470d0a1a0a0000000d494844520000000100000001080600000000000000',
   'hex',

@@ -14,7 +14,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-starter}
     ports:
-      - "${POSTGRES_PORT:-5433}:5432"
+      - "${POSTGRES_PORT:-20010}:5432"
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
@@ -25,7 +25,7 @@ services:
   redis:
     image: redis:8
     ports:
-      - "${REDIS_PORT:-6390}:6379"
+      - "${REDIS_PORT:-20011}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -41,7 +41,7 @@ services:
     environment:
       SERVICES: "sqs,sns,ses,lambda"
     ports:
-      - "${LOCALSTACK_PORT:-4567}:4566"
+      - "${LOCALSTACK_PORT:-20012}:4566"
     volumes:
       - ./docker/localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh:ro,z
       - /var/run/docker.sock:/var/run/docker.sock
@@ -57,8 +57,8 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "${MINIO_PORT:-9010}:9000"
-      - "${MINIO_CONSOLE_PORT:-9011}:9001"
+      - "${MINIO_PORT:-20013}:9000"
+      - "${MINIO_CONSOLE_PORT:-20014}:9001"
     volumes:
       - miniodata:/data
     healthcheck:
@@ -102,12 +102,12 @@ services:
   # network, under NODE_ENV=production.
   #
   #   docker compose up -d --wait                          # the services
-  #   DATABASE_URL=postgresql://postgres:postgres@localhost:5433/starter \
+  #   DATABASE_URL=postgresql://postgres:postgres@localhost:20010/starter \
   #     pnpm --dir apps/api run db:migrate                  # see build.secrets
   #   export API_JWT_SECRET="$(openssl rand -hex 48)"
-  #   DATABASE_URL=postgresql://postgres:postgres@localhost:5433/starter \
+  #   DATABASE_URL=postgresql://postgres:postgres@localhost:20010/starter \
   #     docker compose --profile full up -d --build
-  #   curl -s localhost:3080/api/v1/health/ready
+  #   curl -s localhost:20005/api/v1/health/ready
   #
   # See docs/guides/container.md.
   # --------------------------------------------------------------------------
@@ -122,7 +122,7 @@ services:
       # `prisma generate --sql` type-checks every TypedSQL query in
       # apps/api/prisma/sql against a *live, migrated* database, so the build
       # container has to reach one. network: host puts it on the host's stack,
-      # where the compose Postgres is published on ${POSTGRES_PORT:-5433} —
+      # where the compose Postgres is published on ${POSTGRES_PORT:-20010} —
       # the same trick, and the same reason, as the `docker build
       # --network=host` in docs/guides/container.md.
       network: host
@@ -139,7 +139,7 @@ services:
     ports:
       # 3080, not 3000 — so the containerized API and a `pnpm start:dev` on
       # the host can be compared side by side instead of fighting for a port.
-      - "${API_PORT:-3080}:3000"
+      - "${API_PORT:-20005}:3000"
     environment:
       # NODE_ENV=production is baked into the image and deliberately not
       # overridden here. It arms the boot guard, which refuses to start while
@@ -149,7 +149,7 @@ services:
       # instead of on a first deploy.
       #
       # Service names and native ports, not the shifted host ports: inside the
-      # compose network Postgres is postgres:5432, not localhost:5433.
+      # compose network Postgres is postgres:5432, not localhost:20010.
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-starter}?connection_limit=10
       REDIS_URL: redis://redis:6379
       # Deliberately without a working default:
@@ -201,33 +201,33 @@ services:
     image: redis:8
     profiles: ["cluster"]
     network_mode: host
-    command: redis-server --port 7000 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
+    command: redis-server --port 20020 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
     healthcheck:
-      test: ["CMD", "redis-cli", "-p", "7000", "ping"]
+      test: ["CMD", "redis-cli", "-p", "20020", "ping"]
       interval: 5s
       retries: 10
 
   redis-cluster-1:
     <<: *redis-cluster-node
-    command: redis-server --port 7001 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
+    command: redis-server --port 20021 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
     healthcheck:
-      test: ["CMD", "redis-cli", "-p", "7001", "ping"]
+      test: ["CMD", "redis-cli", "-p", "20021", "ping"]
       interval: 5s
       retries: 10
 
   redis-cluster-2:
     <<: *redis-cluster-node
-    command: redis-server --port 7002 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
+    command: redis-server --port 20022 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
     healthcheck:
-      test: ["CMD", "redis-cli", "-p", "7002", "ping"]
+      test: ["CMD", "redis-cli", "-p", "20022", "ping"]
       interval: 5s
       retries: 10
 
   redis-cluster-3:
     <<: *redis-cluster-node
-    command: redis-server --port 7003 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
+    command: redis-server --port 20023 --cluster-enabled yes --cluster-config-file nodes.conf --appendonly no --save ""
     healthcheck:
-      test: ["CMD", "redis-cli", "-p", "7003", "ping"]
+      test: ["CMD", "redis-cli", "-p", "20023", "ping"]
       interval: 5s
       retries: 10
 
@@ -244,7 +244,7 @@ services:
       - sh
       - -c
       - >
-        redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 127.0.0.1:7003
+        redis-cli --cluster create 127.0.0.1:20020 127.0.0.1:20021 127.0.0.1:20022 127.0.0.1:20023
         --cluster-replicas 0 --cluster-yes || true
 
 secrets:
@@ -253,7 +253,7 @@ secrets:
   # network: host — and migrate that database first, because TypedSQL is
   # type-checked against real tables, not just a reachable port:
   #
-  #   DATABASE_URL=postgresql://postgres:postgres@localhost:5433/starter \
+  #   DATABASE_URL=postgresql://postgres:postgres@localhost:20010/starter \
   #     pnpm --dir apps/api run db:migrate
   #
   # Compose only resolves this when a selected service references it, so the

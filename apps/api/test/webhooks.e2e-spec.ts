@@ -53,7 +53,7 @@ const fakeProvider: PaymentProviderInterface = {
 
 const queueUrl: string =
   process.env.SQS_PAYMENT_WEBHOOK_QUEUE_URL ??
-  'http://localhost:4567/000000000000/starter-payment-webhook-queue';
+  'http://localhost:20012/000000000000/starter-payment-webhook-queue';
 
 describe('webhooks (fake stripe provider)', () => {
   let app: NestFastifyApplication;

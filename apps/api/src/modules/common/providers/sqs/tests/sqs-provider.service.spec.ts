@@ -26,7 +26,7 @@ describe('sqsConfig', () => {
   it('accepts a complete enabled configuration', () => {
     vi.stubEnv('SQS_ENABLED', 'true');
     vi.stubEnv('AWS_REGION', 'us-east-1');
-    vi.stubEnv('AWS_ENDPOINT_URL', 'http://localhost:4567');
+    vi.stubEnv('AWS_ENDPOINT_URL', 'http://localhost:20012');
 
     expect(sqsConfig()).toMatchObject({ isEnabled: true, region: 'us-east-1' });
   });

@@ -47,7 +47,7 @@ jobs:
       # The host view of the compose Postgres. Used three times below — by the
       # migration, by the BuildKit secret the image build consumes, and
       # (through compose interpolation) by the build's `network: host`.
-      DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:20010/starter?connection_limit=10"
       # docker-compose.yml reads this for the `full` profile's tag. Set here so
       # the build step and the inspect step below cannot disagree about which
       # image was produced, and so a CI artefact is never mistaken for the
@@ -93,7 +93,7 @@ jobs:
       # carries them and docs/guides/container.md already documents them:
       #
       #   build.network: host       lets the build container reach the compose
-      #                             Postgres on localhost:5433
+      #                             Postgres on localhost:20010
       #   build.secrets: [database_url]
       #                             passes DATABASE_URL as a BuildKit secret
       #                             rather than a build arg, so it is mounted

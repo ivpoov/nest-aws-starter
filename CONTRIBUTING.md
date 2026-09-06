@@ -203,7 +203,7 @@ into the URLs the site needs. Edit the Markdown in place — never a copy under
 `apps/docs/`.
 
 ```bash
-pnpm --dir apps/docs run dev          # local preview on http://localhost:4321
+pnpm --dir apps/docs run dev          # local preview on http://localhost:20003
 pnpm --dir apps/docs run docs:build   # what CI runs
 ```
 

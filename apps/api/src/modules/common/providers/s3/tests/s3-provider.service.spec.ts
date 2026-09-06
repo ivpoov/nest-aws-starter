@@ -34,7 +34,7 @@ describe('s3Config', () => {
     vi.stubEnv('S3_BUCKET_NAME', 'starter');
     vi.stubEnv('S3_ACCESS_KEY', 'minioadmin');
     vi.stubEnv('S3_SECRET_KEY', 'minioadmin');
-    vi.stubEnv('S3_ENDPOINT', 'http://localhost:9010');
+    vi.stubEnv('S3_ENDPOINT', 'http://localhost:20013');
 
     expect(s3Config()).toMatchObject({
       isEnabled: true,

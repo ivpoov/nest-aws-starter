@@ -12,10 +12,10 @@ that is a bug in this document.
 ```bash
 docker compose up -d --wait
 
-DATABASE_URL="postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10" \
+DATABASE_URL="postgresql://postgres:postgres@localhost:20010/starter?connection_limit=10" \
   pnpm --dir apps/api run db:migrate
 
-DATABASE_URL="postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10" \
+DATABASE_URL="postgresql://postgres:postgres@localhost:20010/starter?connection_limit=10" \
   docker build \
     --network=host \
     --provenance=false \
@@ -55,7 +55,7 @@ So: bring the compose stack up, migrate it, and let the build reach it.
 ```bash
 docker compose up -d --wait
 
-DATABASE_URL="postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10" \
+DATABASE_URL="postgresql://postgres:postgres@localhost:20010/starter?connection_limit=10" \
   pnpm --dir apps/api run db:migrate
 ```
 
@@ -65,7 +65,7 @@ read it; a secret is mounted for the lifetime of one `RUN` and never written to
 a layer.
 
 ```bash
-DATABASE_URL="postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10" \
+DATABASE_URL="postgresql://postgres:postgres@localhost:20010/starter?connection_limit=10" \
   docker build \
     --network=host \
     -f apps/api/Dockerfile \
@@ -75,7 +75,7 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5433/starter?connection_l
 ```
 
 `--network=host` is what lets the build container reach the compose Postgres
-published on `localhost:5433`. Without it the build fails with `P1001 Can't
+published on `localhost:20010`. Without it the build fails with `P1001 Can't
 reach database server`. Any migrated, throwaway Postgres will do — it is read
 for type information only, and nothing from it ends up in the image.
 
@@ -203,7 +203,7 @@ both are the same stack.
 ```bash
 docker compose up -d --wait
 
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+export DATABASE_URL="postgresql://postgres:postgres@localhost:20010/starter?connection_limit=10"
 pnpm --dir apps/api run db:migrate
 
 export API_JWT_SECRET="$(openssl rand -hex 48)"
@@ -211,7 +211,7 @@ docker compose --profile full up -d --build
 ```
 
 ```bash
-curl -s http://localhost:3080/api/v1/health/ready
+curl -s http://localhost:20005/api/v1/health/ready
 ```
 
 ```json
@@ -291,7 +291,7 @@ native `5432`/`6379`, not the shifted host ports from `.env.example`.
 Readiness — Postgres and Redis, checked for real:
 
 ```bash
-curl -s http://localhost:3080/api/v1/health/ready
+curl -s http://localhost:20005/api/v1/health/ready
 ```
 
 ```json

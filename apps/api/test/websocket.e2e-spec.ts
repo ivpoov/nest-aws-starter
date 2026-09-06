@@ -267,11 +267,11 @@ describe('websocket notification gateway', () => {
     // where the loopback rule is off and this exact origin is refused, is
     // pinned in cors.e2e-spec.ts.
     it('answers the gateway’s former hard-coded localhost fallback identically on both transports', async () => {
-      const fromHttp: string | undefined = await httpAllowOrigin('http://localhost:5173');
-      const fromSocket: string | undefined = await socketAllowOrigin('http://localhost:5173');
+      const fromHttp: string | undefined = await httpAllowOrigin('http://localhost:20001');
+      const fromSocket: string | undefined = await socketAllowOrigin('http://localhost:20001');
 
       expect(fromSocket).toBe(fromHttp);
-      expect(fromSocket).toBe('http://localhost:5173');
+      expect(fromSocket).toBe('http://localhost:20001');
     });
 
     it('refuses a localhost lookalike host on both transports', async () => {

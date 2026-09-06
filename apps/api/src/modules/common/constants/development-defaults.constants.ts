@@ -17,12 +17,12 @@ export const DEVELOPMENT_DEFAULTS: readonly DevelopmentDefaultInterface[] = [
   },
   {
     variable: 'DATABASE_URL',
-    value: 'postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10',
+    value: 'postgresql://postgres:postgres@localhost:20010/starter?connection_limit=10',
     remedy: 'point it at the production database, with credentials of its own',
   },
   {
     variable: 'REDIS_URL',
-    value: 'redis://localhost:6390',
+    value: 'redis://localhost:20011',
     remedy: 'point it at the production Redis endpoint',
   },
   {
@@ -37,12 +37,12 @@ export const DEVELOPMENT_DEFAULTS: readonly DevelopmentDefaultInterface[] = [
   },
   {
     variable: 'AWS_ENDPOINT_URL',
-    value: 'http://localhost:4567',
+    value: 'http://localhost:20012',
     remedy: 'unset it so the AWS SDK talks to AWS instead of a local LocalStack',
   },
   {
     variable: 'S3_ENDPOINT',
-    value: 'http://localhost:9010',
+    value: 'http://localhost:20013',
     remedy: 'unset it for real S3, or set the endpoint of your own object storage',
   },
   {
@@ -59,7 +59,7 @@ export const DEVELOPMENT_DEFAULTS: readonly DevelopmentDefaultInterface[] = [
   },
   {
     variable: 'WEB_APP_BASE_URL',
-    value: 'http://localhost:5173',
+    value: 'http://localhost:20001',
     remedy: 'set the deployed web app origin, which verification and reset links point at',
   },
   {
@@ -70,12 +70,12 @@ export const DEVELOPMENT_DEFAULTS: readonly DevelopmentDefaultInterface[] = [
   // <module:payment>
   {
     variable: 'SQS_PAYMENT_WEBHOOK_QUEUE_URL',
-    value: 'http://localhost:4567/000000000000/starter-payment-webhook-queue',
+    value: 'http://localhost:20012/000000000000/starter-payment-webhook-queue',
     remedy: 'set the real queue URL (webhooks are dropped while it points at LocalStack)',
   },
   {
     variable: 'STRIPE_PORTAL_RETURN_URL',
-    value: 'http://localhost:5173',
+    value: 'http://localhost:20001',
     remedy: 'set the deployed web app origin, where Checkout redirects customers back to',
   },
   // </module:payment>
