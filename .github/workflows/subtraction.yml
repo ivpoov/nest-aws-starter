@@ -79,10 +79,10 @@ jobs:
       # running `prisma generate --sql` (and standing up a DB) per module.
       - run: pnpm --dir apps/api run db:migrate
         env:
-          DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:20010/starter?connection_limit=10"
       - run: pnpm run build
         env:
-          DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/starter?connection_limit=10"
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:20010/starter?connection_limit=10"
       # Fails loudly per module: the script logs `PASS`/`FAIL` per module as
       # it goes and exits non-zero if any module failed, so the job fails
       # and the log scrolls straight to the offending module's tsc/test output.

@@ -23,7 +23,7 @@ describe('production boot guard (e2e)', () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('AUTH_JWT_SECRET', 'local-development-secret-change-me-32chars');
     vi.stubEnv('AWS_ACCESS_KEY_ID', 'test');
-    vi.stubEnv('CORS_ORIGINS', 'http://localhost:5173,http://localhost:5174');
+    vi.stubEnv('CORS_ORIGINS', 'http://localhost:20001,http://localhost:20002');
     vi.stubEnv('SWAGGER_ENABLED', 'true');
     vi.stubEnv('SWAGGER_USER', '');
     vi.stubEnv('SWAGGER_PASSWORD', '');
@@ -35,7 +35,7 @@ describe('production boot guard (e2e)', () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('AUTH_JWT_SECRET', 'local-development-secret-change-me-32chars');
     vi.stubEnv('AWS_ACCESS_KEY_ID', 'test');
-    vi.stubEnv('CORS_ORIGINS', 'http://localhost:5173,http://localhost:5174');
+    vi.stubEnv('CORS_ORIGINS', 'http://localhost:20001,http://localhost:20002');
     vi.stubEnv('SWAGGER_ENABLED', 'true');
     vi.stubEnv('SWAGGER_USER', '');
     vi.stubEnv('SWAGGER_PASSWORD', '');
@@ -47,7 +47,7 @@ describe('production boot guard (e2e)', () => {
 
     expect(message).toContain('AUTH_JWT_SECRET');
     expect(message).toContain('AWS_ACCESS_KEY_ID');
-    expect(message).toContain('http://localhost:5173');
+    expect(message).toContain('http://localhost:20001');
     expect(message).toContain('SWAGGER_USER');
     expect(message).toContain('PRODUCTION_DEVELOPMENT_DEFAULT');
     expect(message).toContain('PRODUCTION_WEAK_JWT_SECRET');

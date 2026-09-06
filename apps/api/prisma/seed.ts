@@ -70,7 +70,7 @@ if (!connectionString) throw new Error('DATABASE_URL is not set');
 //
 // The cost is that seeding from *inside* a container against a sibling database
 // container is refused. That is not a workflow this repository documents — its
-// compose stack publishes Postgres on localhost:5433 and the seed is run from
+// compose stack publishes Postgres on localhost:20010 and the seed is run from
 // the host — and an operator who really wants it can port-forward.
 function isLoopbackHost(host: string): boolean {
   return host === 'localhost' || host === '::1' || host === '0.0.0.0' || /^127\.\d/.test(host);
@@ -924,7 +924,7 @@ function printCredentials(): void {
   }
 
   console.log(separator);
-  console.log(' Web app http://localhost:5173     Admin app http://localhost:5174\n');
+  console.log(' Web app http://localhost:20001     Admin app http://localhost:20002\n');
 }
 
 async function main(): Promise<void> {

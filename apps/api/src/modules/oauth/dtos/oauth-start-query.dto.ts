@@ -9,9 +9,9 @@ export class OauthStartQueryDto {
 
   // Shape check only — the redirect target is authorized in OauthFlowService,
   // which compares its origin to WEB_APP_BASE_URL exactly. `require_tld: false`
-  // is required or `http://localhost:5173` (the default web app URL, and every
+  // is required or `http://localhost:20001` (the default web app URL, and every
   // developer's) fails validation before that comparison ever runs.
-  @ApiProperty({ type: String, example: 'http://localhost:5173/auth/callback' })
+  @ApiProperty({ type: String, example: 'http://localhost:20001/auth/callback' })
   @IsNotEmpty()
   @IsString()
   @MaxLength(2048)

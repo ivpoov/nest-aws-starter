@@ -11,7 +11,7 @@ export type RedisConfig = z.infer<typeof configSchema>;
 
 export const redisConfig = registerAs('redis', (): RedisConfig => {
   return validateConfigSchema(configSchema, {
-    url: process.env.REDIS_URL ?? 'redis://localhost:6390',
+    url: process.env.REDIS_URL ?? 'redis://localhost:20011',
     isCluster: process.env.REDIS_IS_CLUSTER === 'true',
   });
 });

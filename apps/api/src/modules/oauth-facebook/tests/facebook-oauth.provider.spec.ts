@@ -8,7 +8,7 @@ const enabledConfig = {
   isEnabled: true as const,
   clientId: 'fb-client',
   clientSecret: 'fb-secret',
-  redirectUri: 'http://localhost:3000/api/v1/auth/oauth/facebook/callback',
+  redirectUri: 'http://localhost:20000/api/v1/auth/oauth/facebook/callback',
 };
 
 describe('facebookOauthConfig', () => {

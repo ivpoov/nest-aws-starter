@@ -49,8 +49,8 @@ export function createCorsOriginDelegate(config: AppConfig): CorsOriginDelegateT
 
 // Parsed and compared as an authority, never matched as a string. A
 // `startsWith`/`includes`/loose-regex check here would accept
-// `http://localhost.evil.tld`, `http://localhost:5173.evil.tld` or
-// `http://localhost:5173@evil.tld` — all domains an attacker can register or
+// `http://localhost.evil.tld`, `http://localhost:20001.evil.tld` or
+// `http://localhost:20001@evil.tld` — all domains an attacker can register or
 // point anywhere. `URL` resolves each of those to a hostname that is not in
 // the table above. This project has already shipped that bug once in an
 // origin check; it does not ship it twice.

@@ -154,7 +154,7 @@ pnpm --dir apps/api run db:migrate         # apply the 17 committed migrations
 pnpm run build                             # generates the Prisma client + shared contracts
 pnpm --dir apps/api run db:seed            # demo accounts and data
 
-pnpm --dir apps/api run start:dev          # API on http://localhost:3000
+pnpm --dir apps/api run start:dev          # API on http://localhost:20000
 ```
 
 Run `pnpm run build` **after** `db:migrate` and before anything else: Prisma
@@ -162,15 +162,15 @@ TypedSQL type-checks its queries against a live, migrated database, and both the
 seed and the API import `packages/shared`, which does not exist until it is
 built.
 
-The API answers on `http://localhost:3000` — Swagger UI at
-[`/docs`](http://localhost:3000/docs), probes at `/api/v1/health/live` and
+The API answers on `http://localhost:20000` — Swagger UI at
+[`/docs`](http://localhost:20000/docs), probes at `/api/v1/health/live` and
 `/api/v1/health/ready`.
 
 Then, in two more terminals:
 
 ```bash
-pnpm --dir apps/web run dev      # user app  → http://localhost:5173
-pnpm --dir apps/admin run dev    # admin app → http://localhost:5174
+pnpm --dir apps/web run dev      # user app  → http://localhost:20001
+pnpm --dir apps/admin run dev    # admin app → http://localhost:20002
 ```
 
 Vite quietly falls back to the next free port when 5173/5174 are taken, which is

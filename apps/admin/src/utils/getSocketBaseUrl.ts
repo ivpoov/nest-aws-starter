@@ -1,5 +1,5 @@
 const apiBaseUrl: string =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:3000/api/v1';
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:20000/api/v1';
 
 // The gateway binds to the same Fastify server as the REST API, but on the
 // default Socket.IO namespace/path (`/socket.io`) at the server root — the

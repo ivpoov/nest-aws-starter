@@ -199,7 +199,7 @@ describe('RedisIoAdapter', () => {
     const options: ServerOptions | undefined = createIOServerSpy.mock.calls[0]?.[1];
 
     expect(askDelegate('http://localhost:61234', options)).toBe(false);
-    expect(askDelegate('http://127.0.0.1:5173', options)).toBe(false);
+    expect(askDelegate('http://127.0.0.1:20001', options)).toBe(false);
   });
 
   it('closes the io server then quits both duplicated Redis clients', async () => {

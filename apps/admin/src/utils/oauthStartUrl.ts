@@ -1,5 +1,5 @@
 const baseUrl: string =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:3000/api/v1';
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:20000/api/v1';
 
 export function oauthStartUrl(provider: string, intent: 'login' | 'link'): string {
   const redirect: string = `${window.location.origin}/auth/callback`;

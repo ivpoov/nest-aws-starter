@@ -11,7 +11,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp } from './app.factory.js';
 
-const redirect = 'http://localhost:5173/auth/callback';
+const redirect = 'http://localhost:20001/auth/callback';
 
 const fakeProvider: OauthProviderInterface = {
   type: AuthMethodTypeEnum.GOOGLE,

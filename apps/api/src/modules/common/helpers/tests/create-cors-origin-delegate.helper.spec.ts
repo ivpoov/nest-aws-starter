@@ -47,7 +47,7 @@ describe('createCorsOriginDelegate', () => {
     // The whole reason this rule exists: Vite falls back to the next free
     // port without saying so, and 5175 (or 61234) must not be a dead end.
     it.each([
-      'http://localhost:5173',
+      'http://localhost:20001',
       'http://localhost:5175',
       'http://localhost:61234',
       'http://localhost',
@@ -65,8 +65,8 @@ describe('createCorsOriginDelegate', () => {
     it.each([
       'http://localhost.evil.tld',
       'http://localhost.evil.tld:61234',
-      'http://localhost:5173.evil.tld',
-      'http://localhost:5173@evil.tld',
+      'http://localhost:20001.evil.tld',
+      'http://localhost:20001@evil.tld',
       'http://evil.tld/?x=localhost',
       'http://evil.tld#localhost',
       'http://notlocalhost',
@@ -114,7 +114,7 @@ describe('createCorsOriginDelegate', () => {
     });
 
     it.each([
-      'http://localhost:5173',
+      'http://localhost:20001',
       'http://localhost:61234',
       'http://127.0.0.1:61234',
       'http://[::1]:61234',
@@ -136,11 +136,11 @@ describe('createCorsOriginDelegate', () => {
     // configured loopback entry buys exactly itself and no other port.
     it('grants a configured loopback entry itself but still no other port', () => {
       const looseDelegate: CorsOriginDelegateType = createCorsOriginDelegate(
-        buildConfig('production', ['http://localhost:5173']),
+        buildConfig('production', ['http://localhost:20001']),
       );
 
-      expect(isAllowed(looseDelegate, 'http://localhost:5173')).toBe(true);
-      expect(isAllowed(looseDelegate, 'http://localhost:5174')).toBe(false);
+      expect(isAllowed(looseDelegate, 'http://localhost:20001')).toBe(true);
+      expect(isAllowed(looseDelegate, 'http://localhost:20002')).toBe(false);
     });
   });
 });
