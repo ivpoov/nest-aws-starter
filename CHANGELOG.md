@@ -6,6 +6,14 @@ type. Promotion merge commits are omitted; the commits they carried are not.
 **Generated — do not edit by hand.** Regenerate with
 `node scripts/changelog.mjs --out CHANGELOG.md`; the release workflow does exactly that.
 
+## v1.5.1 (2026-09-06)
+
+[`v1.5.0...v1.5.1`](https://github.com/ivpoov/nest-aws-starter/compare/v1.5.0...v1.5.1)
+
+### Features
+
+- **web,admin:** let a password be revealed and flag stray whitespace ([`4c0843a`](https://github.com/ivpoov/nest-aws-starter/commit/4c0843a1348b0c35748c620ab1308f00e0a58c9e))
+
 ## v1.5.0 (2026-09-06)
 
 [`v1.4.0...v1.5.0`](https://github.com/ivpoov/nest-aws-starter/compare/v1.4.0...v1.5.0)
@@ -21,6 +29,7 @@ type. Promotion merge commits are omitted; the commits they carried are not.
 ### Chores
 
 - move every local service onto a dedicated 20000-20023 port band ([`33a3f08`](https://github.com/ivpoov/nest-aws-starter/commit/33a3f08feab41deaef0eb9d553dfe465edc45b48))
+- bump the root package version to 1.5.0 ([`8e42b82`](https://github.com/ivpoov/nest-aws-starter/commit/8e42b8233372f0af7b659222ef083b3888c7d614))
 
 ## v1.4.0 (2026-09-05)
 
