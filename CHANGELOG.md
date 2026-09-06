@@ -6,6 +6,22 @@ type. Promotion merge commits are omitted; the commits they carried are not.
 **Generated — do not edit by hand.** Regenerate with
 `node scripts/changelog.mjs --out CHANGELOG.md`; the release workflow does exactly that.
 
+## v1.5.0 (2026-09-06)
+
+[`v1.4.0...v1.5.0`](https://github.com/ivpoov/nest-aws-starter/compare/v1.4.0...v1.5.0)
+
+### Bug Fixes
+
+- **web,admin:** make the pinned dev port strict ([`33e3b34`](https://github.com/ivpoov/nest-aws-starter/commit/33e3b3421b67a991f4dda14a74843379718f9eaa))
+
+### CI
+
+- point the cluster readiness probe at the new node port ([`651041b`](https://github.com/ivpoov/nest-aws-starter/commit/651041bc6c509ecca30d1d643f6278a3300c0439))
+
+### Chores
+
+- move every local service onto a dedicated 20000-20023 port band ([`33a3f08`](https://github.com/ivpoov/nest-aws-starter/commit/33a3f08feab41deaef0eb9d553dfe465edc45b48))
+
 ## v1.4.0 (2026-09-05)
 
 [`v1.3.3...v1.4.0`](https://github.com/ivpoov/nest-aws-starter/compare/v1.3.3...v1.4.0)
@@ -28,6 +44,10 @@ type. Promotion merge commits are omitted; the commits they carried are not.
 
 - **removal:** refresh the recipes for the brand import ([`2409cfd`](https://github.com/ivpoov/nest-aws-starter/commit/2409cfdcd944dbc5859da0a6e0e42ad77c3f86cc))
 - **removal:** refresh the recipes for the log-level import ([`e9f62d7`](https://github.com/ivpoov/nest-aws-starter/commit/e9f62d720dccffb7f8c3623ef778513ac5605ebf))
+
+### Chores
+
+- bump the root package version to 1.4.0 ([`5c03ea3`](https://github.com/ivpoov/nest-aws-starter/commit/5c03ea37f62f54f39c5d69c3b75d877b89f9208e))
 
 ## v1.3.3 (2026-09-04)
 
