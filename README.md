@@ -173,10 +173,12 @@ pnpm --dir apps/web run dev      # user app  → http://localhost:20001
 pnpm --dir apps/admin run dev    # admin app → http://localhost:20002
 ```
 
-Vite quietly falls back to the next free port when 5173/5174 are taken, which is
-harmless here: outside production the API accepts any `http://localhost:<port>`
-or `http://127.0.0.1:<port>` origin, so a web app that landed on 5175 still
-reaches it. That latitude is development-only — under `NODE_ENV=production` the
+Both dev servers pin their port and refuse to start if it is taken, rather than
+sliding to the next free one — a relocated app silently invalidates every
+bookmark, OAuth redirect URI and `CORS_ORIGINS` entry pointing at the old URL.
+Outside production the API does accept any `http://localhost:<port>` or
+`http://127.0.0.1:<port>` origin, so a deliberately relocated app still reaches
+it. That latitude is development-only — under `NODE_ENV=production` the
 `CORS_ORIGINS` list is the entire allowlist, and the app refuses to boot if it
 holds a wildcard or a loopback address.
 
