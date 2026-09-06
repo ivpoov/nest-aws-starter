@@ -174,7 +174,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: docker compose up -d --wait
       # The four cluster nodes use `network_mode: host`, so they are reachable
-      # on 127.0.0.1:20020-7003. `--wait` is not used here: redis-cluster-init
+      # on 127.0.0.1:20020-20023. `--wait` is not used here: redis-cluster-init
       # is a one-shot that forms the cluster and exits, and `--wait` treats a
       # completed one-shot as a failure.
       - run: docker compose --profile cluster up -d
@@ -186,7 +186,7 @@ jobs:
           # assigned. A node answering PING says nothing: it answers before it
           # has joined, which is exactly the window a fixed sleep lands in.
           for attempt in $(seq 1 30); do
-            state="$(docker run --rm --network host redis:8 redis-cli -p 7000 cluster info 2>/dev/null | tr -d '\r' | awk -F: '/^cluster_state:/ {print $2}')"
+            state="$(docker run --rm --network host redis:8 redis-cli -p 20020 cluster info 2>/dev/null | tr -d '\r' | awk -F: '/^cluster_state:/ {print $2}')"
             if [ "${state:-}" = "ok" ]; then
               echo "cluster formed after ${attempt} attempt(s)"
               exit 0
@@ -195,7 +195,7 @@ jobs:
           done
 
           echo "cluster never reached cluster_state:ok" >&2
-          docker run --rm --network host redis:8 redis-cli -p 7000 cluster info >&2 || true
+          docker run --rm --network host redis:8 redis-cli -p 20020 cluster info >&2 || true
           exit 1
       - run: pnpm --dir apps/api run db:migrate
         env:
