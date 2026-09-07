@@ -173,10 +173,12 @@ pnpm --dir apps/web run dev      # user app  → http://localhost:20001
 pnpm --dir apps/admin run dev    # admin app → http://localhost:20002
 ```
 
-Vite quietly falls back to the next free port when 5173/5174 are taken, which is
-harmless here: outside production the API accepts any `http://localhost:<port>`
-or `http://127.0.0.1:<port>` origin, so a web app that landed on 5175 still
-reaches it. That latitude is development-only — under `NODE_ENV=production` the
+Both dev servers pin their port and refuse to start if it is taken, rather than
+sliding to the next free one — a relocated app silently invalidates every
+bookmark, OAuth redirect URI and `CORS_ORIGINS` entry pointing at the old URL.
+Outside production the API does accept any `http://localhost:<port>` or
+`http://127.0.0.1:<port>` origin, so a deliberately relocated app still reaches
+it. That latitude is development-only — under `NODE_ENV=production` the
 `CORS_ORIGINS` list is the entire allowlist, and the app refuses to boot if it
 holds a wildcard or a loopback address.
 
@@ -208,15 +210,59 @@ pnpm exec biome ci . # lint + format check
 
 CI runs lint, build, both suites and a dependency audit on every pull request.
 
-Host ports are shifted off the standard ones so the stack coexists with services
-you already run — Postgres `5433`, Redis `6390`, LocalStack `4567`, MinIO
-`9010`/`9011` — and each is overridable from a root `.env` (see
-[`.env.example`](.env.example)). Two optional compose profiles:
+### Ports
+
+Everything local lives in one band, **20000-20023**, so the stack coexists with
+whatever else you run and the URLs stay stable enough to bookmark. Each is
+overridable from a root `.env` (see [`.env.example`](.env.example)).
+
+| Port | | |
+|---|---|---|
+| `20000` | API | Swagger at [`/docs`](http://localhost:20000/docs) |
+| `20001` | web app | |
+| `20002` | admin app | |
+| `20003` | docs site | `pnpm --dir apps/docs run dev` |
+| `20005` | API in Docker | `--profile full`, separate from 20000 so both can run at once |
+| `20010` | Postgres | |
+| `20011` | Redis | |
+| `20012` | LocalStack | SQS, SNS, SES, Lambda |
+| `20013` | MinIO | the S3 API |
+| `20014` | MinIO console | **the S3 browser** |
+| `20015` | StackPort | `--profile tools`, see below |
+| `20020`-`20023` | Redis cluster | `--profile cluster` |
+
+Three optional compose profiles:
 
 ```bash
-docker compose --profile init up minio-init   # create the S3 bucket once
-docker compose --profile cluster up -d        # 4-node Redis cluster on 7000-7003
+docker compose --profile init up minio-init      # create the S3 bucket once
+docker compose --profile cluster up -d           # 4-node Redis cluster on 20020-20023
+docker compose --profile tools up -d stackport   # AWS resource browser on 20015
 ```
+
+### Browsing the emulated AWS resources
+
+[StackPort](https://github.com/DaviReisVieira/stackport) (MIT) is a UI for the
+AWS resources LocalStack is emulating — it sits beside LocalStack the way
+pgAdmin sits beside Postgres, and changes nothing about it.
+
+```bash
+docker compose --profile tools up -d stackport   # http://localhost:20015
+```
+
+It covers **SQS, SNS, SES and Lambda** — exactly what LocalStack is configured
+to emulate here. Queues list with their depth, and polling peeks messages with a
+visibility timeout of 0, so reading a queue does not consume it.
+
+**It is not the S3 browser.** This project's S3 is MinIO, not LocalStack, so
+StackPort's bucket list is empty by design; the MinIO console on
+`http://localhost:20014` remains the tool for objects.
+
+It is development-only and opt-in for a reason: the UI is unauthenticated and
+has write access to the emulated account. That is fine on a laptop and belongs
+nowhere else, which is why it sits behind a profile and never starts with a
+plain `docker compose up`. Pointing `AWS_ENDPOINT_URL` at a real endpoint with
+real credentials makes it work against a real account — set
+`STACKPORT_READ_ONLY=true` first if you do.
 
 If `test:e2e` aborts with `E2E PREFLIGHT: LocalStack is up but still missing
 ...`, LocalStack was started before `docker/localstack/init-aws.sh` provisioned

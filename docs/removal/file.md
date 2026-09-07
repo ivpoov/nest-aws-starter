@@ -72,7 +72,7 @@ and the markers themselves.
 
 These references are **not** fenced, so `scripts/subtraction-test.mjs` neither strips
 them nor proves they were handled. Every one of them is a hole in the proof: the
-subtracted tree was type-checked and unit-tested *without* these edits applied, so it is
+subtracted tree was verified (see section 5) *without* these edits applied, so it is
 on you to make them and to re-run the suites afterwards. Work through the list by hand:
 
 _None — every cross-module reference for this module is fence-marked._
