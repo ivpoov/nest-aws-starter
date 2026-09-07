@@ -54,6 +54,12 @@ const FENCE_SCAN_ROOTS = [
   'apps/web/src',
   'apps/admin/src',
   'packages/shared/src',
+  // Not source, and deliberately included anyway: an optional piece can be a
+  // compose service and its env vars rather than a TypeScript module, and
+  // "removable" has to mean those come out cleanly too. Both are single files,
+  // which listFilesRecursive returns regardless of extension.
+  'docker-compose.yml',
+  '.env.example',
 ];
 const FENCE_FILE_EXTENSIONS = new Set(['.ts', '.tsx', '.prisma']);
 const SKIP_DIR_NAMES = new Set(['node_modules', 'dist', 'generated', '.git']);
@@ -521,6 +527,31 @@ export const MODULES = [
       ],
     ],
   },
+  {
+    id: 'stackport',
+    summary:
+      'StackPort, a development-only browser for the AWS resources LocalStack emulates ' +
+      '(compose service behind the `tools` profile).',
+    // Nothing to delete: the whole piece is a fenced service block in
+    // docker-compose.yml plus its env vars in .env.example.
+    paths: [],
+    // No TypeScript anywhere in it, so nothing the frontends could import.
+    frontendFenced: true,
+    // The usual proof — tsc and the unit suites — cannot say anything about a
+    // compose service: removing one cannot break a type-check, so those steps
+    // would pass whether the strip worked or not, and a green run would mean
+    // nothing. What CAN break is the compose file itself, so that is what this
+    // module is verified against instead. See composeOnly in subtractionSteps.
+    composeOnly: true,
+    envVars: ['STACKPORT_PORT'],
+    cosmeticSteps: [
+      [
+        'README.md',
+        'the ports table and the "Browsing the emulated AWS resources" section still ' +
+          'mention StackPort; both are prose and nothing reads them.',
+      ],
+    ],
+  },
 ];
 
 // Documented for docs/removal/README.md — investigated and found not
@@ -759,9 +790,19 @@ function fenceError(filePath, line, message) {
 export function stripFencesInFile(filePath, moduleId, write) {
   // `//` fences cover .ts/.prisma; the `{/* */}` variants exist because a
   // line comment is a syntax error inside JSX children, which is exactly
-  // where a frontend cross-reference lives (a <Bell /> inside a layout).
-  const startMarkers = [`// <module:${moduleId}>`, `{/* <module:${moduleId}> */}`];
-  const endMarkers = [`// </module:${moduleId}>`, `{/* </module:${moduleId}> */}`];
+  // where a frontend cross-reference lives (a <Bell /> inside a layout); and
+  // `#` covers docker-compose.yml and .env.example, where an optional piece
+  // can be a service block and a handful of variables rather than code.
+  const startMarkers = [
+    `// <module:${moduleId}>`,
+    `{/* <module:${moduleId}> */}`,
+    `# <module:${moduleId}>`,
+  ];
+  const endMarkers = [
+    `// </module:${moduleId}>`,
+    `{/* </module:${moduleId}> */}`,
+    `# </module:${moduleId}>`,
+  ];
   const original = readFileSync(filePath, 'utf8');
   const lines = original.split('\n');
   const kept = [];
@@ -912,6 +953,20 @@ function frontendSteps(worktreeDir, appDir) {
 }
 
 function subtractionSteps(worktreeDir, module) {
+  // A piece that is only a compose service gets the one check that can
+  // actually fail for it: does the file still parse with its block gone.
+  // Running install, build, tsc and two test suites for it would cost minutes
+  // and prove nothing, and a PASS earned that way would be worse than no
+  // entry at all — it would look like the same guarantee the code modules get.
+  if (module.composeOnly) {
+    return [
+      [
+        'docker compose config',
+        () => run('docker', ['compose', 'config', '--quiet'], { cwd: worktreeDir }),
+      ],
+    ];
+  }
+
   return [
     ['install', () => run('pnpm', ['install', '--frozen-lockfile'], { cwd: worktreeDir })],
     [
@@ -1100,21 +1155,39 @@ should happen to the existing tables. Pick one:
 
 function renderModuleDoc(module) {
   const fenceResults = scanFences(REPO_ROOT, module.id, false);
-  const pathsSection = [
+  const pathsEntries = [
     ...module.paths.map((p) => `- \`${p}\` (delete)`),
     ...(module.manualPaths ?? []).map(
       (p) => `- \`${p}\` (delete **by hand** — see the note under section 2)`,
     ),
-  ].join('\n');
-  const proof = module.frontendFenced
-    ? `\`scripts/subtraction-test.mjs --module ${module.id}\` runs this whole recipe nightly, in an
+  ];
+  // A module can own no files at all — a compose service is entirely fenced
+  // blocks inside files that stay. Say so, rather than leaving a blank section
+  // that reads like the generator failed.
+  const pathsSection =
+    pathsEntries.length > 0
+      ? pathsEntries.join('\n')
+      : '_This module owns no files of its own — it is fence-marked blocks inside files that stay. Go straight to section 2._';
+  const proof = module.composeOnly
+    ? `\`scripts/subtraction-test.mjs --module ${module.id}\` runs this recipe nightly in an isolated
+worktree, and verifies exactly one thing: that \`docker compose config\` still parses once the
+fenced block is gone.
+
+**That is the whole proof, and it is deliberately narrow.** This piece is a compose service,
+not code — no TypeScript imports it, so the type-checks and unit suites the other recipes
+lean on would pass whether the strip worked or not. A green run earned that way would look
+like the guarantee the code modules get and would not be one. The commands above are still
+worth running if you have changed anything else; for this module alone, \`docker compose
+config\` is the check that can actually fail.`
+    : module.frontendFenced
+      ? `\`scripts/subtraction-test.mjs --module ${module.id}\` runs this whole recipe nightly, in an
 isolated worktree — API, both frontends and \`packages/shared\`. It proves everything the
 first six commands above cover: the subtracted tree type-checks (\`apps/api/src\` *and* the
 e2e suite) and its unit tests pass in all three packages. The last command is the one gap —
 the e2e suite needs a live Postgres/Redis/LocalStack, which a throwaway worktree has no
 access to, so the specs are type-checked but not executed. Run it yourself once, after
 following section 2.`
-    : `\`scripts/subtraction-test.mjs --module ${module.id}\` proves the \`apps/api\` half of this
+      : `\`scripts/subtraction-test.mjs --module ${module.id}\` proves the \`apps/api\` half of this
 recipe nightly, in an isolated worktree. It deletes the frontend and
 \`packages/shared\` paths in section 1 too, but it cannot yet *verify* them, because
 the cross-references under "not yet fence-marked" above have no fence markers to
@@ -1148,7 +1221,7 @@ ${renderFenceSection(fenceResults)}
 
 These references are **not** fenced, so \`scripts/subtraction-test.mjs\` neither strips
 them nor proves they were handled. Every one of them is a hole in the proof: the
-subtracted tree was type-checked and unit-tested *without* these edits applied, so it is
+subtracted tree was verified (see section 5) *without* these edits applied, so it is
 on you to make them and to re-run the suites afterwards. Work through the list by hand:
 
 ${renderManualStepsSection(module.manualSteps)}

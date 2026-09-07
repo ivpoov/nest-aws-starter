@@ -6,6 +6,24 @@ type. Promotion merge commits are omitted; the commits they carried are not.
 **Generated — do not edit by hand.** Regenerate with
 `node scripts/changelog.mjs --out CHANGELOG.md`; the release workflow does exactly that.
 
+## v1.6.0 (2026-09-07)
+
+[`v1.5.1...v1.6.0`](https://github.com/ivpoov/nest-aws-starter/compare/v1.5.1...v1.6.0)
+
+### Features
+
+- **scripts:** let the subtraction test verify compose-only modules ([`d8d340d`](https://github.com/ivpoov/nest-aws-starter/commit/d8d340d71ff36d7504abc951956c2860b6cd746f))
+
+### Documentation
+
+- **removal:** add the stackport recipe and refresh the proof wording ([`7d0b62f`](https://github.com/ivpoov/nest-aws-starter/commit/7d0b62f5946bc741923a84730b384e1757eae3e3))
+- correct the stale vite port-fallback note now that ports are pinned ([`41b0728`](https://github.com/ivpoov/nest-aws-starter/commit/41b0728602a04a6d55e6935e5ef164655b6fd01a))
+- add the local port table and the stackport browser section ([`7a0f1e8`](https://github.com/ivpoov/nest-aws-starter/commit/7a0f1e8f97d922af75f029367b19fb17587b7e8a))
+
+### Chores
+
+- **compose:** add stackport as an opt-in localstack resource browser ([`db2da3b`](https://github.com/ivpoov/nest-aws-starter/commit/db2da3b718ee9ca97a158a079958dde655ac02c1))
+
 ## v1.5.1 (2026-09-06)
 
 [`v1.5.0...v1.5.1`](https://github.com/ivpoov/nest-aws-starter/compare/v1.5.0...v1.5.1)
@@ -13,6 +31,10 @@ type. Promotion merge commits are omitted; the commits they carried are not.
 ### Features
 
 - **web,admin:** let a password be revealed and flag stray whitespace ([`4c0843a`](https://github.com/ivpoov/nest-aws-starter/commit/4c0843a1348b0c35748c620ab1308f00e0a58c9e))
+
+### Chores
+
+- bump the root package version to 1.5.1 ([`d98f126`](https://github.com/ivpoov/nest-aws-starter/commit/d98f1262a4fc7041d46669c8b435cd3a8a7605d2))
 
 ## v1.5.0 (2026-09-06)
 
